@@ -100,3 +100,20 @@
 - **Patrón**: MVVM + Clean Architecture / Repository Pattern.
 - **Persistencia**: Room Database con soporte offline 100%, transacciones ACID (`@Transaction`), y flujos reactivos con Kotlin Coroutines `Flow`.
 - **Inyección de dependencias**: Arquitectura modular desacoplada con Singleton Database y Repository.
+
+---
+
+## 8. Mejoras Recientes de Operación y Estética Corporativa
+1. **Estética Corporativa de Logística y Fintech**:
+   - Paleta de colores ejecutiva de alto contraste: Azul Marino Profundo (`#0F172A`), Azul Corporativo (`#0284C7`), Cian Técnico (`#06B6D4`), Verde Financiero (`#16A34A`), Ámbar Sobrio (`#D97706`), Rojo Alerta (`#DC2626`), fondos `#F8FAFC` y bordes sutiles de `1.dp`.
+2. **Cálculo Preciso del Calendario Semanal**:
+   - Cada día de la semana (`LUNES` a `SABADO`) calcula su fecha real (`YYYY-MM-DD`). Los días futuros marcan los clientes como `PROGRAMADO`, y solo se marcan como `ATENDIDO` si existen ventas reales en esa fecha específica.
+3. **Edición y Eliminación de Entregas con Rollback Atómico**:
+   - Permite corregir o eliminar ventas del día con reversión atómica (`@Transaction`) del impacto en el inventario del camión y en el saldo/envases del cliente.
+4. **Gráfico Donut de Ventas y Reporte de WhatsApp Refinado**:
+   - Gráfico de dona en `Canvas` en la pantalla de Inventario mostrando porcentajes de `Transparentes`, `Azules` y `Marcados` vendidos, junto a barras de `Galones`, `Pacas` y `Minis`.
+   - Reporte de WhatsApp actualizado: excluye el stock restante en camión e incluye el desglose exacto de botellones vendidos.
+5. **Foto de Fachada / Casa del Cliente**:
+   - Captura vía cámara (`FileProvider`) y selección desde galería.
+   - Guardado y compresión automática JPEG en almacenamiento interno (`filesDir/fotos_clientes/`).
+   - Miniatura en tarjetas de clientes y vista ampliada con diálogo modal de zoom.

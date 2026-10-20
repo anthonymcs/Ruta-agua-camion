@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
         TransaccionVentaEntity::class,
         GastoExtraEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

@@ -39,6 +39,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,8 +54,11 @@ import androidx.compose.ui.unit.sp
 import com.rutaagua.camion.data.local.model.DiaSemana
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.ui.components.BidonIllustration
+import com.rutaagua.camion.ui.components.DialogoVistaPreviaFoto
+import com.rutaagua.camion.ui.components.FotoReferenciaThumbnail
 import com.rutaagua.camion.ui.screens.clientes.ClienteRutaItem
 import com.rutaagua.camion.ui.screens.clientes.ClientesViewModel
+import com.rutaagua.camion.ui.screens.clientes.EstadoEntregaRuta
 import com.rutaagua.camion.ui.theme.AguaPrimary
 import com.rutaagua.camion.ui.theme.AguaPrimaryDark
 import com.rutaagua.camion.ui.theme.AguaPrimaryLight
@@ -79,7 +85,10 @@ fun CalendarioRutaScreen(
     val conteoPorDia by viewModel.conteoPorDiaSemanaState.collectAsState()
     val diaActualHoy = ClientesViewModel.obtenerDiaSemanaActual()
 
-    val atendidos = clientesRuta.count { it.entregadoHoy }
+    var fotoZoomPath by remember { mutableStateOf<String?>(null) }
+    var fotoZoomNombre by remember { mutableStateOf("") }
+
+    val atendidos = clientesRuta.count { it.estado == EstadoEntregaRuta.ATENDIDO }
     val totalClientes = clientesRuta.size
     val progreso = if (totalClientes > 0) atendidos.toFloat() / totalClientes else 0f
 
@@ -128,7 +137,11 @@ fun CalendarioRutaScreen(
                     items(clientesRuta, key = { it.cliente.id }) { item ->
                         TarjetaClienteRutaProgramado(
                             item = item,
-                            onClick = { onRegistrarEntregaCliente?.invoke(item.cliente) }
+                            onClick = { onRegistrarEntregaCliente?.invoke(item.cliente) },
+                            onVerFoto = { path, nombre ->
+                                fotoZoomPath = path
+                                fotoZoomNombre = nombre
+                            }
                         )
                     }
                     item {
@@ -137,6 +150,15 @@ fun CalendarioRutaScreen(
                 }
             }
         }
+    }
+
+    // Diálogo para ampliar foto de fachada
+    if (fotoZoomPath != null) {
+        DialogoVistaPreviaFoto(
+            fotoPath = fotoZoomPath!!,
+            nombreCliente = fotoZoomNombre,
+            onDismiss = { fotoZoomPath = null }
+        )
     }
 }
 
@@ -366,25 +388,26 @@ private fun ResumenBotellonesRequeridos(clientesRuta: List<ClienteRutaItem>) {
 }
 
 /**
- * Tarjeta individual para cliente en la ruta del día.
+ * Tarjeta individual para cliente en la ruta del día con foto de fachada y estado real.
  */
 @Composable
 private fun TarjetaClienteRutaProgramado(
     item: ClienteRutaItem,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    onVerFoto: ((path: String, nombre: String) -> Unit)? = null
 ) {
     val cliente = item.cliente
-    val entregado = item.entregadoHoy
+    val esAtendido = item.estado == EstadoEntregaRuta.ATENDIDO
 
     Card(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (entregado) Color(0xFFF8FAFC) else MaterialTheme.colorScheme.surface
+            containerColor = if (esAtendido) Color(0xFFF8FAFC) else MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (entregado) 1.dp else 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (esAtendido) 1.dp else 2.dp),
         border = androidx.compose.foundation.BorderStroke(
             width = 1.dp,
-            color = if (entregado) VerdeEfectivo.copy(alpha = 0.5f) else Color(0xFFE2E8F0)
+            color = if (esAtendido) VerdeEfectivo.copy(alpha = 0.5f) else Color(0xFFE2E8F0)
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -397,6 +420,19 @@ private fun TarjetaClienteRutaProgramado(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            // Foto de fachada del cliente
+            FotoReferenciaThumbnail(
+                fotoPath = cliente.fotoReferenciaPath,
+                onClick = {
+                    if (!cliente.fotoReferenciaPath.isNullOrBlank()) {
+                        onVerFoto?.invoke(cliente.fotoReferenciaPath!!, cliente.nombre)
+                    }
+                },
+                size = 48.dp
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
             // Datos del cliente
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -404,7 +440,7 @@ private fun TarjetaClienteRutaProgramado(
                         text = cliente.nombre,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
-                        color = if (entregado) Color(0xFF64748B) else TextoOscuro
+                        color = if (esAtendido) Color(0xFF64748B) else TextoOscuro
                     )
                 }
 
@@ -468,13 +504,34 @@ private fun TarjetaClienteRutaProgramado(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Estado de Entrega (Atendido vs Pendiente)
+            // Estado de Entrega (Atendido vs Pendiente vs Programado)
+            val (fondoBadge, colorBadge, textoBadge, iconoBadge) = when (item.estado) {
+                EstadoEntregaRuta.ATENDIDO -> listOf(
+                    VerdeEfectivoFondo,
+                    VerdeEfectivo,
+                    if (item.bidonesEntregados > 0) "Atendido (${item.bidonesEntregados})" else "Atendido",
+                    Icons.Default.CheckCircle
+                )
+                EstadoEntregaRuta.PENDIENTE -> listOf(
+                    Color(0xFFFFFBEB),
+                    AmbarAdvertencia,
+                    "Pendiente",
+                    Icons.Default.HourglassTop
+                )
+                EstadoEntregaRuta.PROGRAMADO -> listOf(
+                    Color(0xFFF1F5F9),
+                    Color(0xFF64748B),
+                    "Programado",
+                    Icons.Default.CalendarMonth
+                )
+            }
+
             Surface(
-                color = if (entregado) VerdeEfectivoFondo else Color(0xFFFFFBEB),
+                color = fondoBadge as Color,
                 shape = RoundedCornerShape(8.dp),
                 border = androidx.compose.foundation.BorderStroke(
                     width = 1.dp,
-                    color = if (entregado) VerdeEfectivo else AmbarAdvertencia
+                    color = colorBadge as Color
                 )
             ) {
                 Row(
@@ -482,15 +539,15 @@ private fun TarjetaClienteRutaProgramado(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = if (entregado) Icons.Default.CheckCircle else Icons.Default.HourglassTop,
+                        imageVector = iconoBadge as androidx.compose.ui.graphics.vector.ImageVector,
                         contentDescription = null,
-                        tint = if (entregado) VerdeEfectivo else AmbarAdvertencia,
+                        tint = colorBadge,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (entregado) "Atendido" else "Pendiente",
-                        color = if (entregado) VerdeEfectivo else AmbarAdvertencia,
+                        text = textoBadge as String,
+                        color = colorBadge,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Black
                     )

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
 import com.rutaagua.camion.data.local.entity.RecargaPlantaEntity
+import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.RecargaCalculada
 import com.rutaagua.camion.data.local.model.StockAlertas
 import com.rutaagua.camion.data.repository.RutaAguaRepository
@@ -58,6 +59,15 @@ class InventarioCamionViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
+        )
+
+    // Estadísticas de ventas de hoy por tipo de bidón y producto
+    val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = repository
+        .obtenerEstadisticasVentasPorTipo(fechaHoyTexto)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = EstadisticasVentasTipo()
         )
 
     // Control de diálogos UI

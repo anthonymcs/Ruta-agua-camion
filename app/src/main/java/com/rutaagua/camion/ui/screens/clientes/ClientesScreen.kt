@@ -79,6 +79,9 @@ import com.rutaagua.camion.data.local.model.DiaSemana
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.model.TipoCliente
 import com.rutaagua.camion.ui.components.BidonIllustration
+import com.rutaagua.camion.ui.components.DialogoVistaPreviaFoto
+import com.rutaagua.camion.ui.components.FotoReferenciaThumbnail
+import com.rutaagua.camion.ui.components.SelectorFotoReferencia
 import com.rutaagua.camion.ui.theme.AguaPrimary
 import com.rutaagua.camion.ui.theme.AguaPrimaryDark
 import com.rutaagua.camion.ui.theme.AguaPrimaryLight
@@ -111,6 +114,9 @@ fun ClientesScreen(
     val clienteEnEdicion by viewModel.clienteEnEdicion.collectAsState()
     val clienteAEliminar by viewModel.clienteAEliminar.collectAsState()
     val mensajeSnackbar by viewModel.mensajeSnackbar.collectAsState()
+
+    var fotoZoomPath by remember { mutableStateOf<String?>(null) }
+    var fotoZoomNombre by remember { mutableStateOf("") }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -182,7 +188,11 @@ fun ClientesScreen(
                         TarjetaClienteItem(
                             cliente = cliente,
                             onEditarClick = { viewModel.abrirEditarCliente(cliente) },
-                            onEliminarClick = { viewModel.solicitarEliminarCliente(cliente) }
+                            onEliminarClick = { viewModel.solicitarEliminarCliente(cliente) },
+                            onVerFoto = { path, nombre ->
+                                fotoZoomPath = path
+                                fotoZoomNombre = nombre
+                            }
                         )
                     }
                     item {
@@ -201,7 +211,7 @@ fun ClientesScreen(
         ) {
             ModalFormularioCliente(
                 clienteExistente = clienteEnEdicion,
-                onGuardar = { id, nom, tel, ubi, tipo, dias, tBidon, precio, deuda, prestados ->
+                onGuardar = { id, nom, tel, ubi, tipo, dias, tBidon, precio, deuda, prestados, foto ->
                     viewModel.guardarCliente(
                         id = id,
                         nombre = nom,
@@ -212,12 +222,22 @@ fun ClientesScreen(
                         tipoBidonPreferido = tBidon,
                         precioHabitual = precio,
                         deudaInicial = deuda,
-                        bidonesPrestadosInicial = prestados
+                        bidonesPrestadosInicial = prestados,
+                        fotoReferenciaPath = foto
                     )
                 },
                 onCancelar = { viewModel.cerrarModalCliente() }
             )
         }
+    }
+
+    // Diálogo para ampliar foto de fachada
+    if (fotoZoomPath != null) {
+        DialogoVistaPreviaFoto(
+            fotoPath = fotoZoomPath!!,
+            nombreCliente = fotoZoomNombre,
+            onDismiss = { fotoZoomPath = null }
+        )
     }
 
     // Diálogo de Confirmación de Eliminación
@@ -331,7 +351,8 @@ private fun FilaFiltrosClientes(
 private fun TarjetaClienteItem(
     cliente: ClienteEntity,
     onEditarClick: () -> Unit,
-    onEliminarClick: () -> Unit
+    onEliminarClick: () -> Unit,
+    onVerFoto: (path: String, nombre: String) -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -340,75 +361,90 @@ private fun TarjetaClienteItem(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Fila Superior: Nombre, Tipo (RUTA/LLAMADA) y Botones
+            // Fila Superior: Foto Fachada, Nombre, Tipo (RUTA/LLAMADA) y Botones
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = cliente.nombre,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Black,
-                            color = TextoOscuro
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        // Badge Tipo Cliente
-                        Surface(
-                            color = if (cliente.tipoCliente == TipoCliente.RUTA) Color(0xFFE0F2FE) else Color(0xFFF0FDF4),
-                            shape = RoundedCornerShape(6.dp)
-                        ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    FotoReferenciaThumbnail(
+                        fotoPath = cliente.fotoReferenciaPath,
+                        onClick = {
+                            if (!cliente.fotoReferenciaPath.isNullOrBlank()) {
+                                onVerFoto(cliente.fotoReferenciaPath!!, cliente.nombre)
+                            }
+                        },
+                        size = 52.dp
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = cliente.tipoCliente.name,
-                                color = if (cliente.tipoCliente == TipoCliente.RUTA) AguaPrimaryDark else VerdeEfectivo,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                text = cliente.nombre,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                color = TextoOscuro
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            // Badge Tipo Cliente
+                            Surface(
+                                color = if (cliente.tipoCliente == TipoCliente.RUTA) Color(0xFFE0F2FE) else Color(0xFFF0FDF4),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = cliente.tipoCliente.name,
+                                    color = if (cliente.tipoCliente == TipoCliente.RUTA) AguaPrimaryDark else VerdeEfectivo,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
                         }
-                    }
 
-                    // Ubicación / Referencia
-                    if (cliente.ubicacion.isNotBlank()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = null,
-                                tint = TextoSecundario,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = cliente.ubicacion,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextoSecundario
-                            )
+                        // Ubicación / Referencia
+                        if (cliente.ubicacion.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = TextoSecundario,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = cliente.ubicacion,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextoSecundario
+                                )
+                            }
                         }
-                    }
 
-                    // Teléfono
-                    if (cliente.telefono.isNotBlank()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(top = 2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Phone,
-                                contentDescription = null,
-                                tint = TextoSecundario,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = cliente.telefono,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextoSecundario
-                            )
+                        // Teléfono
+                        if (cliente.telefono.isNotBlank()) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = null,
+                                    tint = TextoSecundario,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = cliente.telefono,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextoSecundario
+                                )
+                            }
                         }
                     }
                 }
@@ -574,7 +610,8 @@ private fun ModalFormularioCliente(
         tipoBidon: TipoBidon,
         precioHabitual: Double,
         deudaInicial: Double,
-        bidonesPrestados: Int
+        bidonesPrestados: Int,
+        fotoReferenciaPath: String?
     ) -> Unit,
     onCancelar: () -> Unit
 ) {
@@ -582,6 +619,7 @@ private fun ModalFormularioCliente(
     var telefono by remember { mutableStateOf(clienteExistente?.telefono ?: "") }
     var ubicacion by remember { mutableStateOf(clienteExistente?.ubicacion ?: "") }
     var tipoCliente by remember { mutableStateOf(clienteExistente?.tipoCliente ?: TipoCliente.RUTA) }
+    var fotoReferenciaPath by remember { mutableStateOf(clienteExistente?.fotoReferenciaPath) }
 
     // Días de visita
     val diasSeleccionados = remember {
@@ -830,6 +868,14 @@ private fun ModalFormularioCliente(
             }
         }
 
+        // Foto de fachada o casa de referencia
+        item {
+            SelectorFotoReferencia(
+                fotoPathActual = fotoReferenciaPath,
+                onFotoCambiada = { fotoReferenciaPath = it }
+            )
+        }
+
         // Botones de acción
         item {
             Spacer(modifier = Modifier.height(10.dp))
@@ -848,7 +894,8 @@ private fun ModalFormularioCliente(
                         tipoBidonPreferido,
                         precio,
                         deuda,
-                        prestados
+                        prestados,
+                        fotoReferenciaPath
                     )
                 },
                 modifier = Modifier

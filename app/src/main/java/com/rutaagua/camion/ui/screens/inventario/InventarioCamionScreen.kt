@@ -1,6 +1,7 @@
 package com.rutaagua.camion.ui.screens.inventario
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,12 +63,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
+import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.RecargaCalculada
 import com.rutaagua.camion.data.local.model.StockAlertas
 import com.rutaagua.camion.data.local.model.TipoBidon
@@ -102,6 +105,7 @@ fun InventarioCamionScreen(
     val inventario by viewModel.inventarioState.collectAsState()
     val calculoRecarga by viewModel.calculoRecargaState.collectAsState()
     val alertasStock by viewModel.alertasStockState.collectAsState()
+    val estadisticasVentas by viewModel.estadisticasVentasHoyState.collectAsState()
     val mostrarDialogoCapacidad by viewModel.mostrarDialogoAjusteCapacidad.collectAsState()
     val mostrarModalRecarga by viewModel.mostrarModalRecargaPlanta.collectAsState()
     val mensajeSnackbar by viewModel.mensajeSnackbar.collectAsState()
@@ -187,6 +191,19 @@ fun InventarioCamionScreen(
                 inventario?.let { inv ->
                     FilaOtrosProductos(inv)
                 }
+            }
+
+            // 6. Estadísticas de Ventas y Proporción de Productos (Gráfico Donut)
+            item {
+                Text(
+                    text = "PROPORCIÓN DE VENTAS HOY",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TextoSecundario
+                )
+            }
+
+            item {
+                SeccionEstadisticasVentasHoy(estadisticas = estadisticasVentas)
             }
         }
     }
@@ -1129,4 +1146,241 @@ private fun DialogoAjustarCapacidad(
             }
         }
     )
+}
+
+/**
+ * Gráfico tipo Donut en Canvas que muestra la proporción de bidones vendidos hoy
+ * y tarjetas de resumen para otros productos.
+ */
+@Composable
+private fun SeccionEstadisticasVentasHoy(
+    estadisticas: EstadisticasVentasTipo
+) {
+    val totalBidones = estadisticas.totalBidonesVendidos
+    val pctTrans = if (totalBidones > 0) estadisticas.transparentesVendidos.toFloat() / totalBidones else 0f
+    val pctAzul = if (totalBidones > 0) estadisticas.azulesVendidos.toFloat() / totalBidones else 0f
+    val pctMarc = if (totalBidones > 0) estadisticas.marcadosVendidos.toFloat() / totalBidones else 0f
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Desglose por Tipo de Bidón",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                color = TextoOscuro
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Gráfico Donut y Leyenda
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                // Donut Chart en Canvas
+                Box(
+                    modifier = Modifier.size(130.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Canvas(modifier = Modifier.size(120.dp)) {
+                        val strokeWidth = 22.dp.toPx()
+                        if (totalBidones == 0) {
+                            drawArc(
+                                color = Color(0xFFE2E8F0),
+                                startAngle = 0f,
+                                sweepAngle = 360f,
+                                useCenter = false,
+                                style = Stroke(width = strokeWidth)
+                            )
+                        } else {
+                            var currentAngle = -90f
+
+                            if (pctTrans > 0f) {
+                                val sweep = pctTrans * 360f
+                                drawArc(
+                                    color = BidonTransparenteColor,
+                                    startAngle = currentAngle,
+                                    sweepAngle = sweep,
+                                    useCenter = false,
+                                    style = Stroke(width = strokeWidth)
+                                )
+                                currentAngle += sweep
+                            }
+
+                            if (pctAzul > 0f) {
+                                val sweep = pctAzul * 360f
+                                drawArc(
+                                    color = BidonAzulColor,
+                                    startAngle = currentAngle,
+                                    sweepAngle = sweep,
+                                    useCenter = false,
+                                    style = Stroke(width = strokeWidth)
+                                )
+                                currentAngle += sweep
+                            }
+
+                            if (pctMarc > 0f) {
+                                val sweep = pctMarc * 360f
+                                drawArc(
+                                    color = BidonMarcadoColor,
+                                    startAngle = currentAngle,
+                                    sweepAngle = sweep,
+                                    useCenter = false,
+                                    style = Stroke(width = strokeWidth)
+                                )
+                            }
+                        }
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "$totalBidones",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = TextoOscuro
+                        )
+                        Text(
+                            text = "Bidones",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextoSecundario,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+
+                // Leyenda con porcentajes
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    ElementoLeyendaDonut(
+                        color = BidonTransparenteColor,
+                        nombre = "PET Transparente",
+                        cantidad = estadisticas.transparentesVendidos,
+                        porcentaje = estadisticas.porcentajeTransparentes.toInt()
+                    )
+                    ElementoLeyendaDonut(
+                        color = BidonAzulColor,
+                        nombre = "Azul Normal",
+                        cantidad = estadisticas.azulesVendidos,
+                        porcentaje = estadisticas.porcentajeAzules.toInt()
+                    )
+                    ElementoLeyendaDonut(
+                        color = BidonMarcadoColor,
+                        nombre = "Marcado / Sello",
+                        cantidad = estadisticas.marcadosVendidos,
+                        porcentaje = estadisticas.porcentajeMarcados.toInt()
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Mini resumen de Galones, Pacas y Minis
+            Text(
+                text = "Otros Productos Vendidos Hoy",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = TextoSecundario
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TarjetaMiniEstadistica(
+                    titulo = "Galones (4L)",
+                    cantidad = estadisticas.galonesVendidos,
+                    ilustracion = { GalonIllustration(size = 24.dp) },
+                    modifier = Modifier.weight(1f)
+                )
+                TarjetaMiniEstadistica(
+                    titulo = "Pacas (24x)",
+                    cantidad = estadisticas.pacasVendidas,
+                    ilustracion = { PacaIllustration(size = 24.dp) },
+                    modifier = Modifier.weight(1f)
+                )
+                TarjetaMiniEstadistica(
+                    titulo = "Minis (12x)",
+                    cantidad = estadisticas.minisVendidas,
+                    ilustracion = { MiniIllustration(size = 24.dp) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ElementoLeyendaDonut(
+    color: Color,
+    nombre: String,
+    cantidad: Int,
+    porcentaje: Int
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .background(color, CircleShape)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column {
+            Text(
+                text = nombre,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = TextoOscuro
+            )
+            Text(
+                text = "$cantidad un. ($porcentaje%)",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextoSecundario,
+                fontSize = 11.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun TarjetaMiniEstadistica(
+    titulo: String,
+    cantidad: Int,
+    ilustracion: @Composable () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xFFF8FAFC),
+        shape = RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            ilustracion()
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "$cantidad un.",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                color = TextoOscuro
+            )
+            Text(
+                text = titulo,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextoSecundario,
+                fontSize = 10.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }

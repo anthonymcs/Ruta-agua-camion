@@ -1,13 +1,11 @@
 package com.rutaagua.camion.ui.screens.registro
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,7 +33,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rutaagua.camion.data.local.entity.ClienteEntity
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
+import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
 import com.rutaagua.camion.data.local.model.FormaPago
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.ui.components.BidonIllustration
@@ -72,11 +68,7 @@ import com.rutaagua.camion.ui.theme.AguaPrimaryDark
 import com.rutaagua.camion.ui.theme.AguaPrimaryLight
 import com.rutaagua.camion.ui.theme.AmbarAdvertencia
 import com.rutaagua.camion.ui.theme.AmbarFondo
-import com.rutaagua.camion.ui.theme.BidonAzulColor
-import com.rutaagua.camion.ui.theme.BidonMarcadoColor
-import com.rutaagua.camion.ui.theme.BidonTransparenteColor
 import com.rutaagua.camion.ui.theme.RojoAlerta
-import com.rutaagua.camion.ui.theme.RojoAlertaFondo
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 import com.rutaagua.camion.ui.theme.VerdeEfectivo
@@ -87,6 +79,7 @@ import java.util.Locale
 fun NuevaVentaSheet(
     clientes: List<ClienteEntity>,
     clientePreseleccionado: ClienteEntity?,
+    transaccionAEditar: TransaccionVentaEntity? = null,
     inventario: InventarioCamionEntity?,
     onConfirmarVenta: (
         clienteId: Long?,
@@ -110,39 +103,74 @@ fun NuevaVentaSheet(
     // ------------------------------------------------------------------
     // SECCIÓN 1: CLIENTE
     // ------------------------------------------------------------------
-    var clienteSeleccionado by remember { mutableStateOf(clientePreseleccionado) }
-    var textoBusquedaCliente by remember { mutableStateOf(clientePreseleccionado?.nombre ?: "") }
-    var esClienteDePaso by remember { mutableStateOf(clientePreseleccionado == null) }
+    val clienteInicial = clientePreseleccionado ?: transaccionAEditar?.clienteId?.let { id ->
+        clientes.find { it.id == id }
+    }
+
+    var clienteSeleccionado by remember { mutableStateOf(clienteInicial) }
+    var textoBusquedaCliente by remember {
+        mutableStateOf(clienteInicial?.nombre ?: transaccionAEditar?.nombreClientePaso ?: "")
+    }
+    var esClienteDePaso by remember { mutableStateOf(clienteInicial == null) }
 
     // ------------------------------------------------------------------
     // SECCIÓN 2: PRODUCTOS Y MOVIMIENTO
     // ------------------------------------------------------------------
     var tipoBidonSeleccionado by remember {
-        mutableStateOf(clientePreseleccionado?.tipoBidonPreferido ?: TipoBidon.AZUL)
+        mutableStateOf(transaccionAEditar?.tipoBidon ?: clienteInicial?.tipoBidonPreferido ?: TipoBidon.AZUL)
     }
 
     var precioUnitarioBidon by remember {
-        mutableDoubleStateOf(clientePreseleccionado?.precioHabitual ?: 1.00)
+        mutableDoubleStateOf(transaccionAEditar?.precioUnitarioBidon ?: clienteInicial?.precioHabitual ?: 1.00)
     }
 
-    // Cantidades
-    var cantRecarga by remember { mutableIntStateOf(1) }
-    var cantVendidosEnvase by remember { mutableIntStateOf(0) }
-    var precioEnvaseVendido by remember { mutableDoubleStateOf(5.50) } // $5.50 o $6.00
+    var cantRecarga by remember {
+        mutableIntStateOf(transaccionAEditar?.cantidadBidonesRecarga ?: 1)
+    }
+    var cantVendidosEnvase by remember {
+        mutableIntStateOf(transaccionAEditar?.cantidadBidonesVendidosEnvase ?: 0)
+    }
+    var precioEnvaseVendido by remember {
+        mutableDoubleStateOf(
+            if (transaccionAEditar != null && transaccionAEditar.precioUnitarioBidonVendido > 0)
+                transaccionAEditar.precioUnitarioBidonVendido
+            else 5.50
+        )
+    }
 
-    var cantPrestados by remember { mutableIntStateOf(0) }
-    var cantDevueltos by remember { mutableIntStateOf(0) }
+    var cantPrestados by remember {
+        mutableIntStateOf(transaccionAEditar?.cantidadBidonesPrestados ?: 0)
+    }
+    var cantDevueltos by remember {
+        mutableIntStateOf(transaccionAEditar?.cantidadBidonesDevueltos ?: 0)
+    }
 
-    var cantGalones by remember { mutableIntStateOf(0) }
-    var cantPacas by remember { mutableIntStateOf(0) }
-    var cantMinis by remember { mutableIntStateOf(0) }
+    var cantGalones by remember {
+        mutableIntStateOf(transaccionAEditar?.cantidadGalones ?: 0)
+    }
+    var cantPacas by remember {
+        mutableIntStateOf(transaccionAEditar?.cantidadPacas ?: 0)
+    }
+    var cantMinis by remember {
+        mutableIntStateOf(transaccionAEditar?.cantidadMinis ?: 0)
+    }
 
     // ------------------------------------------------------------------
     // SECCIÓN 3: PAGO
     // ------------------------------------------------------------------
-    var formaPago by remember { mutableStateOf(FormaPago.EFECTIVO) }
-    var montoAbonoTexto by remember { mutableStateOf("") }
-    var nota by remember { mutableStateOf("") }
+    var formaPago by remember {
+        mutableStateOf(transaccionAEditar?.formaPagoPrincipal ?: FormaPago.EFECTIVO)
+    }
+    var montoAbonoTexto by remember {
+        mutableStateOf(
+            when (transaccionAEditar?.formaPagoPrincipal) {
+                FormaPago.ABONO -> transaccionAEditar.montoAbono.toString()
+                FormaPago.CANCELADO -> transaccionAEditar.montoCanceladoDeuda.toString()
+                else -> ""
+            }
+        )
+    }
+    var nota by remember { mutableStateOf(transaccionAEditar?.nota ?: "") }
 
     // Cálculos de Total
     val totalRecarga = cantRecarga * precioUnitarioBidon
@@ -151,6 +179,8 @@ fun NuevaVentaSheet(
     val totalPacas = cantPacas * 3.75
     val totalMinis = cantMinis * 1.75
     val totalGeneral = totalRecarga + totalEnvaseVendido + totalGalones + totalPacas + totalMinis
+
+    val esEdicion = transaccionAEditar != null
 
     LazyColumn(
         modifier = Modifier
@@ -167,13 +197,13 @@ fun NuevaVentaSheet(
             ) {
                 Column {
                     Text(
-                        text = "GUARDAR ENTREGA / VENTA",
+                        text = if (esEdicion) "EDITAR ENTREGA REGISTRADA" else "GUARDAR ENTREGA / VENTA",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Black,
                         color = AguaPrimaryDark
                     )
                     Text(
-                        text = "Registro rápido en ruta física",
+                        text = if (esEdicion) "Modifica los datos y se recalculará el inventario y saldos" else "Registro rápido en ruta física",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextoSecundario
                     )
@@ -216,7 +246,6 @@ fun NuevaVentaSheet(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Lista de sugerencias de autocompletado si está escribiendo
             val sugerencias = remember(textoBusquedaCliente, clientes, clienteSeleccionado) {
                 if (clienteSeleccionado == null && textoBusquedaCliente.isNotBlank()) {
                     clientes.filter {
@@ -263,7 +292,6 @@ fun NuevaVentaSheet(
                 }
             }
 
-            // Banner informativo si el cliente tiene deuda monetaria o envases prestados
             clienteSeleccionado?.let { cliente ->
                 val tieneDeuda = cliente.deudaMonetaria > 0.0
                 val tienePrestados = cliente.bidonesPrestados > 0
@@ -317,7 +345,6 @@ fun NuevaVentaSheet(
             )
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Selector de los 3 Tipos con existencias en vivo
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -351,7 +378,6 @@ fun NuevaVentaSheet(
             }
         }
 
-        // Cantidad de Recargas y Precio Unitario
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -379,7 +405,6 @@ fun NuevaVentaSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Chips rápidos de precio habitual ($0.75, $0.85, $1.00, $1.25)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -414,7 +439,6 @@ fun NuevaVentaSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    // Envases Prestados
                     FilaContadorMovimiento(
                         titulo = "Bidón Prestado (No deja vacío)",
                         subtitulo = "Baja lleno, queda debiendo envase",
@@ -425,7 +449,6 @@ fun NuevaVentaSheet(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Envases Devueltos
                     FilaContadorMovimiento(
                         titulo = "Bidón Devuelto (Devuelve vacío)",
                         subtitulo = "Sube vacío, resta deuda de envase",
@@ -436,7 +459,6 @@ fun NuevaVentaSheet(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Venta de Envase Nuevo ($5.50 / $6.00)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -559,7 +581,6 @@ fun NuevaVentaSheet(
             )
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Selector con Iconos Grandes
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -616,7 +637,6 @@ fun NuevaVentaSheet(
                 )
             }
 
-            // Si es Abono o Cancelado, pedir el monto abonado
             if (formaPago == FormaPago.ABONO || formaPago == FormaPago.CANCELADO) {
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
@@ -630,7 +650,7 @@ fun NuevaVentaSheet(
             }
         }
 
-        // Botón Confirmar Venta
+        // Botón Confirmar
         item {
             Spacer(modifier = Modifier.height(10.dp))
             Button(
@@ -672,7 +692,7 @@ fun NuevaVentaSheet(
                 Icon(imageVector = Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "CONFIRMAR ENTREGA ($${String.format(Locale.US, "%.2f", totalGeneral)})",
+                    text = if (esEdicion) "GUARDAR CAMBIOS ($${String.format(Locale.US, "%.2f", totalGeneral)})" else "CONFIRMAR ENTREGA ($${String.format(Locale.US, "%.2f", totalGeneral)})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Black
                 )

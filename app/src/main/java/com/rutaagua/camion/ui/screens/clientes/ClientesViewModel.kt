@@ -30,10 +30,16 @@ enum class FiltroCliente(val etiqueta: String) {
     CON_BIDONES_PRESTADOS("Deben Envases")
 }
 
+enum class EstadoEntregaRuta {
+    ATENDIDO,
+    PENDIENTE,
+    PROGRAMADO
+}
+
 data class ClienteRutaItem(
     val cliente: ClienteEntity,
-    val entregadoHoy: Boolean,
-    val bidonesEntregadosHoy: Int = 0
+    val estado: EstadoEntregaRuta,
+    val bidonesEntregados: Int = 0
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -41,8 +47,8 @@ class ClientesViewModel(
     private val repository: RutaAguaRepository
 ) : ViewModel() {
 
-    private val formatoFecha = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val fechaHoyTexto: String = formatoFecha.format(Date())
+    private val formatoFechaIso = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val fechaHoyIso: String = formatoFechaIso.format(Date())
 
     // -------------------------------------------------------------
     // DIRECTORIO DE CLIENTES
@@ -56,13 +62,11 @@ class ClientesViewModel(
         filtroSeleccionado
     ) { lista, query, filtro ->
         lista.filter { cliente ->
-            // Filtro por búsqueda (nombre o ubicación)
             val coincideTexto = query.isBlank() ||
                     cliente.nombre.contains(query, ignoreCase = true) ||
                     cliente.ubicacion.contains(query, ignoreCase = true) ||
                     cliente.telefono.contains(query, ignoreCase = true)
 
-            // Filtro por categoría o saldo
             val coincideFiltro = when (filtro) {
                 FiltroCliente.TODOS -> true
                 FiltroCliente.RUTA -> cliente.tipoCliente == TipoCliente.RUTA
@@ -93,24 +97,35 @@ class ClientesViewModel(
     // -------------------------------------------------------------
     val diaSeleccionadoCalendario = MutableStateFlow(obtenerDiaSemanaActual())
 
-    // Clientes asignados al día seleccionado cruzados con las ventas de hoy
+    // Clientes asignados al día seleccionado con su fecha exacta correspondiente
     val clientesRutaDiaState: StateFlow<List<ClienteRutaItem>> = diaSeleccionadoCalendario
         .flatMapLatest { dia ->
+            val fechaDia = obtenerFechaParaDiaSemana(dia)
+            val esDiaFuturo = fechaDia > fechaHoyIso
+
             combine(
                 repository.obtenerClientesPorDiaRuta(dia.name),
-                repository.obtenerTransaccionesPorFecha(fechaHoyTexto)
-            ) { clientesRuta, transaccionesHoy ->
+                repository.obtenerTransaccionesPorFecha(fechaDia)
+            ) { clientesRuta, transaccionesDelDia ->
                 clientesRuta.map { cliente ->
-                    val transaccionesCliente = transaccionesHoy.filter { it.clienteId == cliente.id }
-                    val entregado = transaccionesCliente.isNotEmpty()
-                    val bidonesHoy = transaccionesCliente.sumOf {
-                        it.cantidadBidonesRecarga + it.cantidadBidonesPrestados + it.cantidadBidonesVendidosEnvase
+                    if (esDiaFuturo) {
+                        ClienteRutaItem(
+                            cliente = cliente,
+                            estado = EstadoEntregaRuta.PROGRAMADO,
+                            bidonesEntregados = 0
+                        )
+                    } else {
+                        val transaccionesCliente = transaccionesDelDia.filter { it.clienteId == cliente.id }
+                        val fueAtendido = transaccionesCliente.isNotEmpty()
+                        val bidones = transaccionesCliente.sumOf {
+                            it.cantidadBidonesRecarga + it.cantidadBidonesPrestados + it.cantidadBidonesVendidosEnvase
+                        }
+                        ClienteRutaItem(
+                            cliente = cliente,
+                            estado = if (fueAtendido) EstadoEntregaRuta.ATENDIDO else EstadoEntregaRuta.PENDIENTE,
+                            bidonesEntregados = bidones
+                        )
                     }
-                    ClienteRutaItem(
-                        cliente = cliente,
-                        entregadoHoy = entregado,
-                        bidonesEntregadosHoy = bidonesHoy
-                    )
                 }
             }
         }.stateIn(
@@ -119,7 +134,7 @@ class ClientesViewModel(
             initialValue = emptyList()
         )
 
-    // Conteo de clientes asignados a cada día de la semana (para badges en el encabezado)
+    // Conteo de clientes asignados a cada día de la semana
     val conteoPorDiaSemanaState: StateFlow<Map<DiaSemana, Int>> = repository
         .obtenerTodosLosClientes()
         .map { clientes ->
@@ -187,7 +202,8 @@ class ClientesViewModel(
         tipoBidonPreferido: TipoBidon,
         precioHabitual: Double,
         deudaInicial: Double = 0.0,
-        bidonesPrestadosInicial: Int = 0
+        bidonesPrestadosInicial: Int = 0,
+        fotoReferenciaPath: String? = null
     ) {
         if (nombre.isBlank()) {
             mensajeSnackbar.value = "El nombre del cliente no puede estar vacío"
@@ -210,6 +226,7 @@ class ClientesViewModel(
                 precioHabitual = precioHabitual,
                 deudaMonetaria = deudaInicial,
                 bidonesPrestados = bidonesPrestadosInicial,
+                fotoReferenciaPath = fotoReferenciaPath,
                 activo = true
             )
 
@@ -220,9 +237,6 @@ class ClientesViewModel(
         }
     }
 
-    // -------------------------------------------------------------
-    // MÉTODOS DE CALENDARIO
-    // -------------------------------------------------------------
     fun seleccionarDiaCalendario(dia: DiaSemana) {
         diaSeleccionadoCalendario.value = dia
     }
@@ -241,8 +255,26 @@ class ClientesViewModel(
                 Calendar.THURSDAY -> DiaSemana.JUEVES
                 Calendar.FRIDAY -> DiaSemana.VIERNES
                 Calendar.SATURDAY -> DiaSemana.SABADO
-                else -> DiaSemana.LUNES // Domingo apunta a inicio de semana
+                else -> DiaSemana.LUNES
             }
+        }
+
+        /**
+         * Calcula la fecha exacta (YYYY-MM-DD) del día de la semana actual.
+         */
+        fun obtenerFechaParaDiaSemana(dia: DiaSemana): String {
+            val cal = Calendar.getInstance()
+            val dayOfWeekTarget = when (dia) {
+                DiaSemana.LUNES -> Calendar.MONDAY
+                DiaSemana.MARTES -> Calendar.TUESDAY
+                DiaSemana.MIERCOLES -> Calendar.WEDNESDAY
+                DiaSemana.JUEVES -> Calendar.THURSDAY
+                DiaSemana.VIERNES -> Calendar.FRIDAY
+                DiaSemana.SABADO -> Calendar.SATURDAY
+            }
+            cal.set(Calendar.DAY_OF_WEEK, dayOfWeekTarget)
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            return sdf.format(cal.time)
         }
     }
 }

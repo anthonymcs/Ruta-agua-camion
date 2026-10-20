@@ -2,38 +2,40 @@ package com.rutaagua.camion.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Paleta Corporativa Ruta Agua - Alto Contraste para Luz Solar
-val AguaPrimary = Color(0xFF006699)
-val AguaPrimaryDark = Color(0xFF004366)
-val AguaPrimaryLight = Color(0xFF4DA6E8)
+// Paleta Corporativa Moderna de Logística / Fintech - Alto Contraste y Seriedad
+val NavyDeep = Color(0xFF0F172A) // Azul Marino Profundo para textos y acentos sobrios
+val AguaPrimary = Color(0xFF0284C7) // Azul Corporativo Logística
+val AguaPrimaryDark = Color(0xFF0369A1)
+val AguaPrimaryLight = Color(0xFF38BDF8)
 
-val AguaSecondary = Color(0xFF00838F)
-val AguaSecondaryLight = Color(0xFFE0F7FA)
+val AguaSecondary = Color(0xFF06B6D4) // Cian Técnico
+val AguaSecondaryLight = Color(0xFFCFFAFE)
 
-// Colores específicos para tipos de bidones (Reconocimiento visual inmediato)
-val BidonTransparenteColor = Color(0xFF29B6F6) // Cian cristalino / PET
-val BidonTransparenteReflejo = Color(0xFFB3E5FC)
-val BidonTransparenteFondo = Color(0xFFE1F5FE)
+// Colores específicos para tipos de bidones (Sobrios y distinguibles)
+val BidonTransparenteColor = Color(0xFF0284C7) // Cian Técnico / PET
+val BidonTransparenteReflejo = Color(0xFFBAE6FD)
+val BidonTransparenteFondo = Color(0xFFF0F9FF)
 
-val BidonAzulColor = Color(0xFF1565C0) // Azul fuerte / material opaco
-val BidonAzulReflejo = Color(0xFF64B5F6)
-val BidonAzulFondo = Color(0xFFE3F2FD)
+val BidonAzulColor = Color(0xFF1D4ED8) // Azul Royal Fuerte
+val BidonAzulReflejo = Color(0xFF93C5FD)
+val BidonAzulFondo = Color(0xFFEFF6FF)
 
-val BidonMarcadoColor = Color(0xFFE65100) // Naranja distintivo para bidón marcado
-val BidonMarcadoTapa = Color(0xFFD50000) // Sello / Tapa roja llamativa
-val BidonMarcadoFondo = Color(0xFFFFF3E0)
+val BidonMarcadoColor = Color(0xFFD97706) // Ámbar Sobrio
+val BidonMarcadoTapa = Color(0xFFDC2626) // Rojo Alerta
+val BidonMarcadoFondo = Color(0xFFFFFBEB)
 
-// Estados Financieros y Alertas
-val VerdeEfectivo = Color(0xFF2E7D32)
-val VerdeEfectivoFondo = Color(0xFFE8F5E9)
-val RojoAlerta = Color(0xFFC62828)
-val RojoAlertaFondo = Color(0xFFFFEBEE)
-val AmbarAdvertencia = Color(0xFFF57F17)
-val AmbarFondo = Color(0xFFFFFDE7)
+// Estados Financieros y Auditoría
+val VerdeEfectivo = Color(0xFF16A34A) // Verde Financiero
+val VerdeEfectivoFondo = Color(0xFFF0FDF4)
+val RojoAlerta = Color(0xFFDC2626) // Rojo Alerta Financiero
+val RojoAlertaFondo = Color(0xFFFEF2F2)
+val AmbarAdvertencia = Color(0xFFD97706) // Ámbar Sobrio
+val AmbarFondo = Color(0xFFFFFBEB)
 
-// Superficies y Textos de Alto Contraste
+// Superficies y Fondos Ejecutivos
 val SuperficieClara = Color(0xFFF8FAFC)
 val SuperficieTarjeta = Color(0xFFFFFFFF)
+val FondoNeutralSuave = Color(0xFFF1F5F9)
 val TextoOscuro = Color(0xFF0F172A)
 val TextoSecundario = Color(0xFF475569)
 val BordeSuave = Color(0xFFE2E8F0)

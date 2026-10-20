@@ -27,6 +27,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
@@ -111,6 +112,8 @@ fun RegistroDiaScreen(
 
     val mostrarModalVenta by viewModel.mostrarModalNuevaVenta.collectAsState()
     val clientePreseleccionado by viewModel.clientePreseleccionado.collectAsState()
+    val transaccionEnEdicion by viewModel.transaccionEnEdicion.collectAsState()
+    val transaccionAEliminar by viewModel.transaccionAEliminar.collectAsState()
     val mostrarDialogoGasto by viewModel.mostrarDialogoGasto.collectAsState()
     val mensajeSnackbar by viewModel.mensajeSnackbar.collectAsState()
 
@@ -229,7 +232,9 @@ fun RegistroDiaScreen(
                     TarjetaRegistroItem(
                         transaccion = transaccion,
                         nombreCliente = cliente?.nombre ?: transaccion.nombreClientePaso ?: "Cliente de Paso",
-                        ubicacion = cliente?.ubicacion ?: ""
+                        ubicacion = cliente?.ubicacion ?: "",
+                        onEditar = { viewModel.abrirEditarVenta(transaccion, cliente) },
+                        onEliminar = { viewModel.solicitarEliminarVenta(transaccion) }
                     )
                 }
             }
@@ -255,7 +260,7 @@ fun RegistroDiaScreen(
         }
     }
 
-    // Modal BottomSheet de Guardar Venta
+    // Modal BottomSheet de Guardar / Editar Venta
     if (mostrarModalVenta) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.cerrarModalNuevaVenta() },
@@ -264,9 +269,10 @@ fun RegistroDiaScreen(
             NuevaVentaSheet(
                 clientes = todosLosClientes,
                 clientePreseleccionado = clientePreseleccionado,
+                transaccionAEditar = transaccionEnEdicion,
                 inventario = inventario,
                 onConfirmarVenta = { cId, nomPaso, tipoB, cRec, pBidon, cPrest, cDev, cVendEnv, pEnv, cGal, cPac, cMin, fPago, mPag, nota ->
-                    viewModel.registrarNuevaVenta(
+                    viewModel.registrarOEditarVenta(
                         clienteId = cId,
                         nombreClientePaso = nomPaso,
                         tipoBidon = tipoB,
@@ -287,6 +293,37 @@ fun RegistroDiaScreen(
                 onCancelar = { viewModel.cerrarModalNuevaVenta() }
             )
         }
+    }
+
+    // Diálogo de Confirmación para Eliminar Entrega
+    if (transaccionAEliminar != null) {
+        val cliente = todosLosClientes.find { it.id == transaccionAEliminar?.clienteId }
+        val nombre = cliente?.nombre ?: transaccionAEliminar?.nombreClientePaso ?: "Cliente de Paso"
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelarEliminarVenta() },
+            title = { Text("¿Eliminar esta entrega?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    text = "Se eliminará la entrega de \"$nombre\" ($${String.format(Locale.US, "%.2f", transaccionAEliminar?.totalImporte ?: 0.0)}).\n\n" +
+                            "El stock de bidones volverá inmediatamente al camión y la deuda o envases del cliente serán restaurados a su estado previo.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextoOscuro
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.confirmarEliminarVenta() },
+                    colors = ButtonDefaults.buttonColors(containerColor = RojoAlerta)
+                ) {
+                    Text("Eliminar Entrega", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { viewModel.cancelarEliminarVenta() }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     // Diálogo de Agregar Gasto Extra
@@ -512,13 +549,15 @@ private fun TarjetaMetricaCuadre(
 }
 
 /**
- * Tarjeta individual para cada venta registrada en el día.
+ * Tarjeta individual para cada venta registrada en el día con opciones de editar y eliminar.
  */
 @Composable
 private fun TarjetaRegistroItem(
     transaccion: TransaccionVentaEntity,
     nombreCliente: String,
-    ubicacion: String
+    ubicacion: String,
+    onEditar: () -> Unit,
+    onEliminar: () -> Unit
 ) {
     val formatoHora = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val horaTexto = formatoHora.format(Date(transaccion.fecha))
@@ -532,13 +571,16 @@ private fun TarjetaRegistroItem(
             .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Fila 1: Hora, Nombre de Cliente y Badge de Pago
+            // Fila 1: Hora, Nombre de Cliente, Badge y Botones de Editar/Eliminar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Surface(
                         color = Color(0xFFF1F5F9),
                         shape = RoundedCornerShape(6.dp)
@@ -556,12 +598,31 @@ private fun TarjetaRegistroItem(
                         text = nombreCliente,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
-                        color = TextoOscuro
+                        color = TextoOscuro,
+                        maxLines = 1
                     )
                 }
 
-                // Badge Forma de Pago
-                BadgeFormaPago(formaPago = transaccion.formaPagoPrincipal)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BadgeFormaPago(formaPago = transaccion.formaPagoPrincipal)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(onClick = onEditar, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Editar entrega",
+                            tint = AguaPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    IconButton(onClick = onEliminar, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Eliminar entrega",
+                            tint = RojoAlerta,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
 
             if (ubicacion.isNotBlank()) {

@@ -6,6 +6,7 @@ import com.rutaagua.camion.data.local.entity.ClienteEntity
 import com.rutaagua.camion.data.local.entity.GastoExtraEntity
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
+import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.FormaPago
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.TipoBidon
@@ -70,6 +71,15 @@ class RegistroDiaViewModel(
             initialValue = ResumenCierreDia(fechaTexto = fechaHoyTexto)
         )
 
+    // Estadísticas detalladas de ventas por tipo de bidón y producto
+    val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = repository
+        .obtenerEstadisticasVentasPorTipo(fechaHoyTexto)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = EstadisticasVentasTipo()
+        )
+
     // Lista de clientes para autocompletado en el modal de venta
     val todosLosClientesState: StateFlow<List<ClienteEntity>> = repository
         .obtenerTodosLosClientes()
@@ -88,6 +98,12 @@ class RegistroDiaViewModel(
     private val _clientePreseleccionado = MutableStateFlow<ClienteEntity?>(null)
     val clientePreseleccionado: StateFlow<ClienteEntity?> = _clientePreseleccionado.asStateFlow()
 
+    private val _transaccionEnEdicion = MutableStateFlow<TransaccionVentaEntity?>(null)
+    val transaccionEnEdicion: StateFlow<TransaccionVentaEntity?> = _transaccionEnEdicion.asStateFlow()
+
+    private val _transaccionAEliminar = MutableStateFlow<TransaccionVentaEntity?>(null)
+    val transaccionAEliminar: StateFlow<TransaccionVentaEntity?> = _transaccionAEliminar.asStateFlow()
+
     private val _mostrarDialogoGasto = MutableStateFlow(false)
     val mostrarDialogoGasto: StateFlow<Boolean> = _mostrarDialogoGasto.asStateFlow()
 
@@ -96,12 +112,37 @@ class RegistroDiaViewModel(
 
     fun abrirModalNuevaVenta(cliente: ClienteEntity? = null) {
         _clientePreseleccionado.value = cliente
+        _transaccionEnEdicion.value = null
+        _mostrarModalNuevaVenta.value = true
+    }
+
+    fun abrirEditarVenta(transaccion: TransaccionVentaEntity, cliente: ClienteEntity?) {
+        _clientePreseleccionado.value = cliente
+        _transaccionEnEdicion.value = transaccion
         _mostrarModalNuevaVenta.value = true
     }
 
     fun cerrarModalNuevaVenta() {
         _clientePreseleccionado.value = null
+        _transaccionEnEdicion.value = null
         _mostrarModalNuevaVenta.value = false
+    }
+
+    fun solicitarEliminarVenta(transaccion: TransaccionVentaEntity) {
+        _transaccionAEliminar.value = transaccion
+    }
+
+    fun cancelarEliminarVenta() {
+        _transaccionAEliminar.value = null
+    }
+
+    fun confirmarEliminarVenta() {
+        val transaccion = _transaccionAEliminar.value ?: return
+        viewModelScope.launch {
+            repository.eliminarVenta(transaccion)
+            _transaccionAEliminar.value = null
+            _mensajeSnackbar.value = "Entrega eliminada y stock/saldo revertido correctamente"
+        }
     }
 
     fun abrirDialogoGasto() {
@@ -121,9 +162,9 @@ class RegistroDiaViewModel(
     // -------------------------------------------------------------
 
     /**
-     * Registra una venta, descuenta del inventario atómicamente y actualiza saldo del cliente.
+     * Registra o edita una venta, descontando o ajustando el inventario atómicamente.
      */
-    fun registrarNuevaVenta(
+    fun registrarOEditarVenta(
         clienteId: Long?,
         nombreClientePaso: String?,
         tipoBidon: TipoBidon,
@@ -143,10 +184,17 @@ class RegistroDiaViewModel(
         viewModelScope.launch {
             val totalBidonesSalen = cantidadRecarga + cantidadPrestados + cantidadVendidosEnvase
             val inv = inventarioCamionState.value
+            val transaccionPrevia = _transaccionEnEdicion.value
 
-            // Validación de existencia de botellones en camión
+            // Validación de existencia de botellones en camión (considerando si es edición)
             if (inv != null && totalBidonesSalen > 0) {
-                val disponibleTipo = inv.stockPorTipo(tipoBidon)
+                var disponibleTipo = inv.stockPorTipo(tipoBidon)
+                if (transaccionPrevia != null && transaccionPrevia.tipoBidon == tipoBidon) {
+                    val antesBajaron = transaccionPrevia.cantidadBidonesRecarga +
+                            transaccionPrevia.cantidadBidonesPrestados +
+                            transaccionPrevia.cantidadBidonesVendidosEnvase
+                    disponibleTipo += antesBajaron
+                }
                 if (disponibleTipo < totalBidonesSalen) {
                     _mensajeSnackbar.value = "Stock insuficiente: solo quedan $disponibleTipo bidones ${tipoBidon.name} en el camión"
                     return@launch
@@ -172,22 +220,21 @@ class RegistroDiaViewModel(
                 FormaPago.TRANSFERENCIA -> transferencia = totalVentaHoy
                 FormaPago.CREDITO -> credito = totalVentaHoy
                 FormaPago.ABONO -> {
-                    // El cliente entrega agua y paga parte de deuda previa o paga una parte
                     efectivo = montoPagado
                     abono = montoPagado
                 }
                 FormaPago.CANCELADO -> {
-                    // El cliente liquida la deuda completa
                     efectivo = montoPagado
                     cancelado = montoPagado
                 }
             }
 
-            val transaccion = TransaccionVentaEntity(
+            val nuevaTransaccion = TransaccionVentaEntity(
+                id = transaccionPrevia?.id ?: 0L,
                 clienteId = clienteId,
                 nombreClientePaso = nombreClientePaso,
-                fecha = System.currentTimeMillis(),
-                fechaTexto = fechaHoyTexto,
+                fecha = transaccionPrevia?.fecha ?: System.currentTimeMillis(),
+                fechaTexto = transaccionPrevia?.fechaTexto ?: fechaHoyTexto,
                 tipoBidon = tipoBidon,
                 cantidadBidonesRecarga = cantidadRecarga,
                 precioUnitarioBidon = precioUnitarioBidon,
@@ -211,16 +258,20 @@ class RegistroDiaViewModel(
                 nota = nota
             )
 
-            repository.registrarVenta(transaccion)
+            if (transaccionPrevia != null) {
+                repository.editarVenta(transaccionPrevia, nuevaTransaccion)
+                _mensajeSnackbar.value = "Entrega actualizada correctamente"
+            } else {
+                repository.registrarVenta(nuevaTransaccion)
+                _mensajeSnackbar.value = "Venta guardada (Total: $${String.format(Locale.US, "%.2f", totalVentaHoy)})"
+            }
+
             _mostrarModalNuevaVenta.value = false
             _clientePreseleccionado.value = null
-            _mensajeSnackbar.value = "Venta registrada con éxito (Total: $${String.format(Locale.US, "%.2f", totalVentaHoy)})"
+            _transaccionEnEdicion.value = null
         }
     }
 
-    /**
-     * Registra un gasto extra en ruta (almuerzo, colas, comida, taller).
-     */
     fun registrarGastoExtra(
         concepto: String,
         monto: Double,
@@ -253,60 +304,11 @@ class RegistroDiaViewModel(
     }
 
     /**
-     * Genera el reporte oficial de cierre del día con formato listo para WhatsApp.
+     * Genera el reporte oficial de cierre del día con formato listo para WhatsApp (sin stock y con desglose por tipo).
      */
     fun generarTextoReporteWhatsApp(): String {
         val resumen = resumenCierreDiaState.value
-        val inv = inventarioCamionState.value
-
-        return buildString {
-            appendLine("💧 *REPORTE RUTA AGUA - CAMIÓN* 🚚")
-            appendLine("📅 *Fecha:* $fechaHoyDisplay")
-            appendLine("─────────────────────────")
-            appendLine("📦 *PRODUCTOS VENDIDOS:*")
-            appendLine("• Bidones Vendidos (20L): *${resumen.totalBidonesVendidos}*")
-            if (resumen.totalBidonesPrestados > 0) {
-                appendLine("• Bidones Prestados (deben envase): *${resumen.totalBidonesPrestados}*")
-            }
-            if (resumen.totalBidonesDevueltos > 0) {
-                appendLine("• Envases Recuperados/Devueltos: *${resumen.totalBidonesDevueltos}*")
-            }
-            if (resumen.totalGalonesVendidos > 0) {
-                appendLine("• Galones (4L): *${resumen.totalGalonesVendidos}*")
-            }
-            if (resumen.totalPacasVendidas > 0) {
-                appendLine("• Pacas (24x500ml): *${resumen.totalPacasVendidas}*")
-            }
-            if (resumen.totalMinisVendidas > 0) {
-                appendLine("• Minis (12x500ml): *${resumen.totalMinisVendidas}*")
-            }
-            appendLine("─────────────────────────")
-            appendLine("💰 *CONTABILIDAD DEL DÍA:*")
-            appendLine("• Venta Total: *$${String.format(Locale.US, "%.2f", resumen.granTotalVenta)}*")
-            appendLine("• Cobro en Efectivo: *$${String.format(Locale.US, "%.2f", resumen.totalIngresoEfectivo)}*")
-            if (resumen.totalIngresoTransferencia > 0) {
-                appendLine("• Transferencias: *$${String.format(Locale.US, "%.2f", resumen.totalIngresoTransferencia)}*")
-            }
-            if (resumen.totalCreditosOtorgados > 0) {
-                appendLine("• Créditos Otorgados (Fiado): *$${String.format(Locale.US, "%.2f", resumen.totalCreditosOtorgados)}*")
-            }
-            if (resumen.totalAbonosRecibidos > 0) {
-                appendLine("• Abonos a Deudas Previas: *$${String.format(Locale.US, "%.2f", resumen.totalAbonosRecibidos)}*")
-            }
-            if (resumen.totalDeudasCanceladas > 0) {
-                appendLine("• Deudas Liquidadas: *$${String.format(Locale.US, "%.2f", resumen.totalDeudasCanceladas)}*")
-            }
-            appendLine("─────────────────────────")
-            appendLine("🧾 *GASTOS EN RUTA:* *$${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}*")
-            appendLine("💵 *EFECTIVO NETO A ENTREGAR:* *$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}*")
-            if (inv != null) {
-                appendLine("─────────────────────────")
-                appendLine("🚚 *STOCK RESTANTE EN CAMIÓN:*")
-                appendLine("• Transparentes: ${inv.bidonesLlenosTransparentes} | Azules: ${inv.bidonesLlenosAzules} | Marcados: ${inv.bidonesLlenosMarcados}")
-                appendLine("• Vacíos en camión: ${inv.bidonesVacios}")
-            }
-            appendLine("─────────────────────────")
-            appendLine("Sistema Móvil Ruta Agua 100% Offline")
-        }
+        val estadisticas = estadisticasVentasHoyState.value
+        return repository.formatearReporteWhatsApp(resumen, estadisticas, fechaHoyDisplay)
     }
 }

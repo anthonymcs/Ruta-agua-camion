@@ -22,6 +22,7 @@ data class ClienteEntity(
     val diasVisita: String = "", // Cadena separada por comas ej. "LUNES,JUEVES"
     val deudaMonetaria: Double = 0.0, // Saldo adeudado en $
     val bidonesPrestados: Int = 0, // Envases de 20L que el cliente adeuda físicamente
+    val fotoReferenciaPath: String? = null, // Ruta interna de la foto de la casa/edificio
     val activo: Boolean = true,
     val fechaCreacion: Long = System.currentTimeMillis()
 )

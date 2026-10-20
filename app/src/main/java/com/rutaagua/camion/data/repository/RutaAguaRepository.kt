@@ -7,6 +7,7 @@ import com.rutaagua.camion.data.local.entity.GastoExtraEntity
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
 import com.rutaagua.camion.data.local.entity.RecargaPlantaEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
+import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.RecargaCalculada
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.StockAlertas
@@ -148,12 +149,6 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     // RECARGAS EN PLANTA (TRANSACCIÓN SEGURA)
     // ==========================================
 
-    /**
-     * Registra el abastecimiento en la fábrica purificadora:
-     * 1. Suma los llenos cargados al inventario según su tipo.
-     * 2. Descuenta los vacíos descargados en planta.
-     * 3. Registra el historial de la recarga.
-     */
     suspend fun registrarRecargaPlanta(recarga: RecargaPlantaEntity): Long = withContext(Dispatchers.IO) {
         database.withTransaction {
             val actual = inventarioDao.obtenerInventarioDirecto() ?: InventarioCamionEntity(id = 1)
@@ -186,86 +181,147 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         recargaPlantaDao.obtenerRecargasPorFechaFlow(fechaTexto)
 
     // ==========================================
-    // TRANSACCIÓN DE VENTA Y MOVIMIENTO DE ENVASES
+    // TRANSACCIÓN DE VENTA, EDICIÓN Y REVERSIÓN
     // ==========================================
 
-    /**
-     * Registra una venta, entrega o abono ejecutando atómicamente:
-     * a) Descuento de llenos del tipo correspondiente y galones/pacas/minis del inventario.
-     * b) Suma de bidones vacíos recogidos (recargas normales + devoluciones de deudas).
-     * c) Actualización de la deuda monetaria y bidones prestados del cliente.
-     * d) Persistencia de la transacción de venta.
-     */
     suspend fun registrarVenta(transaccion: TransaccionVentaEntity): Long = withContext(Dispatchers.IO) {
         database.withTransaction {
-            val inventarioActual = inventarioDao.obtenerInventarioDirecto() ?: InventarioCamionEntity(id = 1)
-
-            // 1. Total de bidones que descienden del camión para este tipo
-            val bidonesQueBajan = transaccion.cantidadBidonesRecarga +
-                    transaccion.cantidadBidonesPrestados +
-                    transaccion.cantidadBidonesVendidosEnvase
-
-            var transLlenos = inventarioActual.bidonesLlenosTransparentes
-            var azulLlenos = inventarioActual.bidonesLlenosAzules
-            var marcLlenos = inventarioActual.bidonesLlenosMarcados
-
-            when (transaccion.tipoBidon) {
-                TipoBidon.TRANSPARENTE -> transLlenos = maxOf(0, transLlenos - bidonesQueBajan)
-                TipoBidon.AZUL -> azulLlenos = maxOf(0, azulLlenos - bidonesQueBajan)
-                TipoBidon.MARCADO -> marcLlenos = maxOf(0, marcLlenos - bidonesQueBajan)
-            }
-
-            // Descuento de otros productos
-            val galonesLlenos = maxOf(0, inventarioActual.galonesLlenos - transaccion.cantidadGalones)
-            val pacasLlenas = maxOf(0, inventarioActual.pacasLlenas - transaccion.cantidadPacas)
-            val minisLlenas = maxOf(0, inventarioActual.minisLlenas - transaccion.cantidadMinis)
-
-            // 2. Envases vacíos que suben al camión:
-            // - En recarga normal: sube 1 vacío.
-            // - En bidón devuelto: sube 1 vacío.
-            // - En bidón prestado o vendido con envase nuevo: NO sube vacío.
-            val vaciosQueSuben = transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesDevueltos
-            val nuevosVacios = inventarioActual.bidonesVacios + vaciosQueSuben
-
-            val inventarioActualizado = inventarioActual.copy(
-                bidonesLlenosTransparentes = transLlenos,
-                bidonesLlenosAzules = azulLlenos,
-                bidonesLlenosMarcados = marcLlenos,
-                bidonesVacios = nuevosVacios,
-                galonesLlenos = galonesLlenos,
-                pacasLlenas = pacasLlenas,
-                minisLlenas = minisLlenas,
-                fechaUltimaActualizacion = System.currentTimeMillis()
-            )
-            inventarioDao.insertarOActualizar(inventarioActualizado)
-
-            // 3. Actualizar Cliente si está registrado
-            transaccion.clienteId?.let { cId ->
-                val clienteActual = clienteDao.obtenerPorIdDirecto(cId)
-                if (clienteActual != null) {
-                    val nuevosPrestados = maxOf(
-                        0,
-                        clienteActual.bidonesPrestados +
-                                transaccion.cantidadBidonesPrestados -
-                                transaccion.cantidadBidonesDevueltos
-                    )
-                    val nuevaDeuda = maxOf(
-                        0.0,
-                        clienteActual.deudaMonetaria +
-                                transaccion.montoCredito -
-                                transaccion.montoAbono -
-                                transaccion.montoCanceladoDeuda
-                    )
-                    clienteDao.actualizarDeudaYBidones(
-                        id = cId,
-                        nuevaDeuda = nuevaDeuda,
-                        nuevosBidones = nuevosPrestados
-                    )
-                }
-            }
-
-            // 4. Guardar la transacción de venta
+            aplicarImpactoVenta(transaccion)
             transaccionDao.insertar(transaccion)
+        }
+    }
+
+    /**
+     * Elimina una venta revirtiendo de forma segura e íntegra el stock del camión y los saldos del cliente.
+     */
+    suspend fun eliminarVenta(transaccion: TransaccionVentaEntity): Int = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            revertirImpactoVenta(transaccion)
+            transaccionDao.eliminar(transaccion)
+        }
+    }
+
+    /**
+     * Edita una venta de manera atómica: revierte la venta anterior y aplica la nueva en una sola transacción.
+     */
+    suspend fun editarVenta(
+        transaccionAnterior: TransaccionVentaEntity,
+        transaccionNueva: TransaccionVentaEntity
+    ): Int = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            revertirImpactoVenta(transaccionAnterior)
+            aplicarImpactoVenta(transaccionNueva)
+            transaccionDao.actualizar(transaccionNueva.copy(id = transaccionAnterior.id))
+        }
+    }
+
+    private suspend fun aplicarImpactoVenta(transaccion: TransaccionVentaEntity) {
+        val inventarioActual = inventarioDao.obtenerInventarioDirecto() ?: InventarioCamionEntity(id = 1)
+
+        val bidonesQueBajan = transaccion.cantidadBidonesRecarga +
+                transaccion.cantidadBidonesPrestados +
+                transaccion.cantidadBidonesVendidosEnvase
+
+        var transLlenos = inventarioActual.bidonesLlenosTransparentes
+        var azulLlenos = inventarioActual.bidonesLlenosAzules
+        var marcLlenos = inventarioActual.bidonesLlenosMarcados
+
+        when (transaccion.tipoBidon) {
+            TipoBidon.TRANSPARENTE -> transLlenos = maxOf(0, transLlenos - bidonesQueBajan)
+            TipoBidon.AZUL -> azulLlenos = maxOf(0, azulLlenos - bidonesQueBajan)
+            TipoBidon.MARCADO -> marcLlenos = maxOf(0, marcLlenos - bidonesQueBajan)
+        }
+
+        val galonesLlenos = maxOf(0, inventarioActual.galonesLlenos - transaccion.cantidadGalones)
+        val pacasLlenas = maxOf(0, inventarioActual.pacasLlenas - transaccion.cantidadPacas)
+        val minisLlenas = maxOf(0, inventarioActual.minisLlenas - transaccion.cantidadMinis)
+
+        val vaciosQueSuben = transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesDevueltos
+        val nuevosVacios = inventarioActual.bidonesVacios + vaciosQueSuben
+
+        val inventarioActualizado = inventarioActual.copy(
+            bidonesLlenosTransparentes = transLlenos,
+            bidonesLlenosAzules = azulLlenos,
+            bidonesLlenosMarcados = marcLlenos,
+            bidonesVacios = nuevosVacios,
+            galonesLlenos = galonesLlenos,
+            pacasLlenas = pacasLlenas,
+            minisLlenas = minisLlenas,
+            fechaUltimaActualizacion = System.currentTimeMillis()
+        )
+        inventarioDao.insertarOActualizar(inventarioActualizado)
+
+        transaccion.clienteId?.let { cId ->
+            val clienteActual = clienteDao.obtenerPorIdDirecto(cId)
+            if (clienteActual != null) {
+                val nuevosPrestados = maxOf(
+                    0,
+                    clienteActual.bidonesPrestados +
+                            transaccion.cantidadBidonesPrestados -
+                            transaccion.cantidadBidonesDevueltos
+                )
+                val nuevaDeuda = maxOf(
+                    0.0,
+                    clienteActual.deudaMonetaria +
+                            transaccion.montoCredito -
+                            transaccion.montoAbono -
+                            transaccion.montoCanceladoDeuda
+                )
+                clienteDao.actualizarDeudaYBidones(
+                    id = cId,
+                    nuevaDeuda = nuevaDeuda,
+                    nuevosBidones = nuevosPrestados
+                )
+            }
+        }
+    }
+
+    private suspend fun revertirImpactoVenta(t: TransaccionVentaEntity) {
+        val inventario = inventarioDao.obtenerInventarioDirecto() ?: InventarioCamionEntity(id = 1)
+        val bidonesQueHabianBajado = t.cantidadBidonesRecarga + t.cantidadBidonesPrestados + t.cantidadBidonesVendidosEnvase
+
+        var trans = inventario.bidonesLlenosTransparentes
+        var azul = inventario.bidonesLlenosAzules
+        var marc = inventario.bidonesLlenosMarcados
+
+        when (t.tipoBidon) {
+            TipoBidon.TRANSPARENTE -> trans += bidonesQueHabianBajado
+            TipoBidon.AZUL -> azul += bidonesQueHabianBajado
+            TipoBidon.MARCADO -> marc += bidonesQueHabianBajado
+        }
+
+        val galones = inventario.galonesLlenos + t.cantidadGalones
+        val pacas = inventario.pacasLlenas + t.cantidadPacas
+        val minis = inventario.minisLlenas + t.cantidadMinis
+
+        val vaciosQueHabianSubido = t.cantidadBidonesRecarga + t.cantidadBidonesDevueltos
+        val nuevosVacios = maxOf(0, inventario.bidonesVacios - vaciosQueHabianSubido)
+
+        val inventarioActualizado = inventario.copy(
+            bidonesLlenosTransparentes = trans,
+            bidonesLlenosAzules = azul,
+            bidonesLlenosMarcados = marc,
+            bidonesVacios = nuevosVacios,
+            galonesLlenos = galones,
+            pacasLlenas = pacas,
+            minisLlenas = minis,
+            fechaUltimaActualizacion = System.currentTimeMillis()
+        )
+        inventarioDao.insertarOActualizar(inventarioActualizado)
+
+        t.clienteId?.let { cId ->
+            val cliente = clienteDao.obtenerPorIdDirecto(cId)
+            if (cliente != null) {
+                val prestados = maxOf(
+                    0,
+                    cliente.bidonesPrestados - t.cantidadBidonesPrestados + t.cantidadBidonesDevueltos
+                )
+                val deuda = maxOf(
+                    0.0,
+                    cliente.deudaMonetaria - t.montoCredito + t.montoAbono + t.montoCanceladoDeuda
+                )
+                clienteDao.actualizarDeudaYBidones(cId, deuda, prestados)
+            }
         }
     }
 
@@ -274,6 +330,40 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
 
     fun obtenerTransaccionesDeCliente(clienteId: Long): Flow<List<TransaccionVentaEntity>> =
         transaccionDao.obtenerPorClienteFlow(clienteId)
+
+    // ==========================================
+    // ESTADÍSTICAS Y PORCENTAJES DE VENTAS HOY
+    // ==========================================
+
+    fun obtenerEstadisticasVentasPorTipo(fechaTexto: String): Flow<EstadisticasVentasTipo> {
+        val fTrans = transaccionDao.sumarBidonesPorTipoYFechaFlow(TipoBidon.TRANSPARENTE.name, fechaTexto)
+        val fAzul = transaccionDao.sumarBidonesPorTipoYFechaFlow(TipoBidon.AZUL.name, fechaTexto)
+        val fMarc = transaccionDao.sumarBidonesPorTipoYFechaFlow(TipoBidon.MARCADO.name, fechaTexto)
+        val fGal = transaccionDao.sumarGalonesPorFechaFlow(fechaTexto)
+        val fPac = transaccionDao.sumarPacasPorFechaFlow(fechaTexto)
+        val fMin = transaccionDao.sumarMinisPorFechaFlow(fechaTexto)
+        val fEnvNuevos = transaccionDao.sumarBidonesVendidosEnvasePorFechaFlow(fechaTexto)
+
+        return combine(fTrans, fAzul, fMarc) { trans, azul, marc ->
+            Triple(trans, azul, marc)
+        }.combine(combine(fGal, fPac, fMin, fEnvNuevos) { gal, pac, min, env ->
+            SecundariosParts(gal, pac, min, env)
+        }) { (trans, azul, marc), sec ->
+            val totalBidones = trans + azul + marc
+            EstadisticasVentasTipo(
+                transparentesVendidos = trans,
+                azulesVendidos = azul,
+                marcadosVendidos = marc,
+                totalBidonesVendidos = totalBidones,
+                galonesVendidos = sec.gal,
+                pacasVendidas = sec.pac,
+                minisVendidas = sec.min,
+                envasesNuevosVendidos = sec.env
+            )
+        }
+    }
+
+    private data class SecundariosParts(val gal: Int, val pac: Int, val min: Int, val env: Int)
 
     // ==========================================
     // GASTOS EXTRAS DE RUTA
@@ -291,12 +381,9 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         gastoDao.obtenerPorFechaFlow(fechaTexto)
 
     // ==========================================
-    // CIERRE DIARIO Y ARQUEO DE CAJA
+    // CIERRE DIARIO Y REPORTE WHATSAPP
     // ==========================================
 
-    /**
-     * Combina reactivamente todas las sumatorias del día para generar el cierre de caja.
-     */
     fun obtenerResumenCierreDia(fechaTexto: String): Flow<ResumenCierreDia> {
         val fEfectivo = transaccionDao.sumarEfectivoPorFechaFlow(fechaTexto)
         val fTransfer = transaccionDao.sumarTransferenciaPorFechaFlow(fechaTexto)
@@ -316,7 +403,6 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
 
         val fGastos = gastoDao.sumarGastosPorFechaFlow(fechaTexto)
 
-        // Agrupación financiera
         val fFinanciero = combine(
             fEfectivo,
             fTransfer,
@@ -329,7 +415,6 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             FinancialParts(base.ef, base.tr, base.cr, base.ab, base.ca, tv)
         }
 
-        // Agrupación de bidones
         val fBidones = combine(
             fBidonesRecarga,
             fBidonesPrestados,
@@ -339,7 +424,6 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             BidonesParts(br, bp, bd, bv)
         }
 
-        // Agrupación de otros productos
         val fOtros = combine(
             fGalones,
             fPacas,
@@ -386,47 +470,61 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     }
 
     /**
-     * Genera el texto formateado para compartir el cierre del día por WhatsApp.
+     * Formatea el reporte para WhatsApp con desglose exacto por tipo de bidón y sin stock restante.
      */
-    fun formatearReporteWhatsApp(resumen: ResumenCierreDia): String {
+    fun formatearReporteWhatsApp(
+        resumen: ResumenCierreDia,
+        estadisticas: EstadisticasVentasTipo,
+        fechaDisplay: String
+    ): String {
         return buildString {
-            appendLine("💧 *REPORTE RUTA AGUA - CIERRE DEL DÍA*")
-            appendLine("📅 *Fecha:* ${resumen.fechaTexto}")
+            appendLine("💧 *REPORTE RUTA AGUA - CIERRE DEL DÍA* 🚚")
+            appendLine("📅 *Fecha:* $fechaDisplay")
             appendLine("─────────────────────────")
-            appendLine("📦 *PRODUCTOS ENTREGADOS:*")
-            appendLine("• Bidones Vendidos (20L): ${resumen.totalBidonesVendidos}")
+            appendLine("📦 *TOTAL BIDONES VENDIDOS: ${resumen.totalBidonesVendidos}*")
+            appendLine("  • Transparentes (PET): *${estadisticas.transparentesVendidos}* (${String.format(Locale.US, "%.1f", estadisticas.porcentajeTransparentes)}%)")
+            appendLine("  • Azules Estándar: *${estadisticas.azulesVendidos}* (${String.format(Locale.US, "%.1f", estadisticas.porcentajeAzules)}%)")
+            appendLine("  • Marcados: *${estadisticas.marcadosVendidos}* (${String.format(Locale.US, "%.1f", estadisticas.porcentajeMarcados)}%)")
+
             if (resumen.totalBidonesPrestados > 0) {
-                appendLine("• Bidones Prestados (deben envase): ${resumen.totalBidonesPrestados}")
+                appendLine("• Bidones Prestados (deben envase): *${resumen.totalBidonesPrestados}*")
             }
             if (resumen.totalBidonesDevueltos > 0) {
-                appendLine("• Bidones Devueltos (recuperados): ${resumen.totalBidonesDevueltos}")
+                appendLine("• Envases Recuperados/Devueltos: *${resumen.totalBidonesDevueltos}*")
+            }
+            if (estadisticas.envasesNuevosVendidos > 0) {
+                appendLine("• Envases Nuevos Vendidos: *${estadisticas.envasesNuevosVendidos}*")
             }
             if (resumen.totalGalonesVendidos > 0) {
-                appendLine("• Galones (4L): ${resumen.totalGalonesVendidos}")
+                appendLine("• Galones (4L): *${resumen.totalGalonesVendidos}*")
             }
             if (resumen.totalPacasVendidas > 0) {
-                appendLine("• Pacas (24x500ml): ${resumen.totalPacasVendidas}")
+                appendLine("• Pacas (24x500ml): *${resumen.totalPacasVendidas}*")
             }
             if (resumen.totalMinisVendidas > 0) {
-                appendLine("• Minis (12x500ml): ${resumen.totalMinisVendidas}")
+                appendLine("• Minis (12x500ml): *${resumen.totalMinisVendidas}*")
             }
+
             appendLine("─────────────────────────")
             appendLine("💰 *CONTABILIDAD:*")
-            appendLine("• Venta Total Bruta: $${String.format(Locale.US, "%.2f", resumen.granTotalVenta)}")
-            appendLine("• Cobro en Efectivo: $${String.format(Locale.US, "%.2f", resumen.totalIngresoEfectivo)}")
-            appendLine("• Cobro por Transferencia: $${String.format(Locale.US, "%.2f", resumen.totalIngresoTransferencia)}")
+            appendLine("• Venta Total Bruta: *$${String.format(Locale.US, "%.2f", resumen.granTotalVenta)}*")
+            appendLine("• Cobro en Efectivo: *$${String.format(Locale.US, "%.2f", resumen.totalIngresoEfectivo)}*")
+            if (resumen.totalIngresoTransferencia > 0) {
+                appendLine("• Transferencias: *$${String.format(Locale.US, "%.2f", resumen.totalIngresoTransferencia)}*")
+            }
             if (resumen.totalCreditosOtorgados > 0) {
-                appendLine("• Créditos Otorgados (Fiado): $${String.format(Locale.US, "%.2f", resumen.totalCreditosOtorgados)}")
+                appendLine("• Créditos Otorgados (Fiado): *$${String.format(Locale.US, "%.2f", resumen.totalCreditosOtorgados)}*")
             }
             if (resumen.totalAbonosRecibidos > 0) {
-                appendLine("• Abonos Recibidos: $${String.format(Locale.US, "%.2f", resumen.totalAbonosRecibidos)}")
+                appendLine("• Abonos Recibidos: *$${String.format(Locale.US, "%.2f", resumen.totalAbonosRecibidos)}*")
             }
             if (resumen.totalDeudasCanceladas > 0) {
-                appendLine("• Deudas Canceladas: $${String.format(Locale.US, "%.2f", resumen.totalDeudasCanceladas)}")
+                appendLine("• Deudas Canceladas: *$${String.format(Locale.US, "%.2f", resumen.totalDeudasCanceladas)}*")
             }
+
             appendLine("─────────────────────────")
-            appendLine("🧾 *GASTOS EN RUTA:* $${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}")
-            appendLine("💵 *EFECTIVO NETO A ENTREGAR:* $${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}")
+            appendLine("🧾 *GASTOS EN RUTA:* *$${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}*")
+            appendLine("💵 *EFECTIVO NETO A ENTREGAR:* *$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}*")
             appendLine("─────────────────────────")
             appendLine("🚚 *Ruta Agua Camión - Sistema 100% Offline*")
         }

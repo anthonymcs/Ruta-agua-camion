@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -22,6 +23,9 @@ interface TransaccionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(transaccion: TransaccionVentaEntity): Long
+
+    @Update
+    suspend fun actualizar(transaccion: TransaccionVentaEntity): Int
 
     @Delete
     suspend fun eliminar(transaccion: TransaccionVentaEntity): Int
@@ -66,4 +70,12 @@ interface TransaccionDao {
 
     @Query("SELECT COALESCE(SUM(cantidadMinis), 0) FROM transacciones_ventas WHERE fechaTexto = :fechaTexto")
     fun sumarMinisPorFechaFlow(fechaTexto: String): Flow<Int>
+
+    // Desglose de ventas de bidones por tipo específico en una fecha
+    @Query("""
+        SELECT COALESCE(SUM(cantidadBidonesRecarga + cantidadBidonesVendidosEnvase), 0) 
+        FROM transacciones_ventas 
+        WHERE fechaTexto = :fechaTexto AND tipoBidon = :tipoBidon
+    """)
+    fun sumarBidonesPorTipoYFechaFlow(tipoBidon: String, fechaTexto: String): Flow<Int>
 }
