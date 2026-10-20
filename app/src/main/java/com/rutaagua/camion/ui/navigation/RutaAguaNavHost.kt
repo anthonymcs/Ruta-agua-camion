@@ -24,8 +24,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.rutaagua.camion.data.repository.RutaAguaRepository
-import com.rutaagua.camion.ui.screens.calendario.CalendarioRutaPlaceholderScreen
-import com.rutaagua.camion.ui.screens.clientes.ClientesPlaceholderScreen
+import com.rutaagua.camion.ui.screens.calendario.CalendarioRutaScreen
+import com.rutaagua.camion.ui.screens.clientes.ClientesScreen
+import com.rutaagua.camion.ui.screens.clientes.ClientesViewModel
 import com.rutaagua.camion.ui.screens.inventario.InventarioCamionScreen
 import com.rutaagua.camion.ui.screens.inventario.InventarioCamionViewModel
 import com.rutaagua.camion.ui.screens.registro.RegistroVentasPlaceholderScreen
@@ -34,15 +35,20 @@ import com.rutaagua.camion.ui.theme.AguaPrimaryLight
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 
-class InventarioViewModelFactory(
+class RutaAguaViewModelFactory(
     private val repository: RutaAguaRepository
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(InventarioCamionViewModel::class.java)) {
-            return InventarioCamionViewModel(repository) as T
+        return when {
+            modelClass.isAssignableFrom(InventarioCamionViewModel::class.java) -> {
+                InventarioCamionViewModel(repository) as T
+            }
+            modelClass.isAssignableFrom(ClientesViewModel::class.java) -> {
+                ClientesViewModel(repository) as T
+            }
+            else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
 }
 
@@ -58,10 +64,10 @@ fun RutaAguaNavHost(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: AppDestinations.CAMION.ruta
 
-    // Inicialización del ViewModel de Inventario
-    val inventarioViewModel: InventarioCamionViewModel = viewModel(
-        factory = InventarioViewModelFactory(repository)
-    )
+    val factory = RutaAguaViewModelFactory(repository)
+
+    val inventarioViewModel: InventarioCamionViewModel = viewModel(factory = factory)
+    val clientesViewModel: ClientesViewModel = viewModel(factory = factory)
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -116,7 +122,7 @@ fun RutaAguaNavHost(
             startDestination = AppDestinations.CAMION.ruta,
             modifier = Modifier.padding(innerPadding)
         ) {
-            // Pestaña 1: Registro de Ventas y Arqueo
+            // Pestaña 1: Registro de Ventas y Arqueo (Pendiente Fase 4)
             composable(AppDestinations.REGISTRO.ruta) {
                 RegistroVentasPlaceholderScreen()
             }
@@ -126,14 +132,14 @@ fun RutaAguaNavHost(
                 InventarioCamionScreen(viewModel = inventarioViewModel)
             }
 
-            // Pestaña 3: Directorio de Clientes
+            // Pestaña 3: Directorio de Clientes y Saldos
             composable(AppDestinations.CLIENTES.ruta) {
-                ClientesPlaceholderScreen()
+                ClientesScreen(viewModel = clientesViewModel)
             }
 
-            // Pestaña 4: Calendario de Ruta Semanal
+            // Pestaña 4: Calendario de Ruta Semanal (Lunes a Sábado)
             composable(AppDestinations.CALENDARIO.ruta) {
-                CalendarioRutaPlaceholderScreen()
+                CalendarioRutaScreen(viewModel = clientesViewModel)
             }
         }
     }
