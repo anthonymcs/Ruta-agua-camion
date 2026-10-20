@@ -7,27 +7,37 @@ import com.rutaagua.camion.data.local.entity.RecargaPlantaEntity
 import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.RecargaCalculada
 import com.rutaagua.camion.data.local.model.StockAlertas
+import com.rutaagua.camion.data.local.model.TipoVehiculo
+import com.rutaagua.camion.data.local.prefs.AppPreferences
 import com.rutaagua.camion.data.repository.RutaAguaRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class InventarioCamionViewModel(
-    private val repository: RutaAguaRepository
+    private val repository: RutaAguaRepository,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     private val formatoFecha = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     val fechaHoyTexto: String = formatoFecha.format(Date())
 
-    // Estado del inventario en tiempo real
-    val inventarioState: StateFlow<InventarioCamionEntity?> = repository
-        .obtenerInventarioCamion()
+    val vehiculoActivoState: StateFlow<TipoVehiculo> = appPreferences.vehiculoActivo
+
+    // Estado del inventario en tiempo real según vehículo activo (Camión / Camioneta)
+    val inventarioState: StateFlow<InventarioCamionEntity?> = vehiculoActivoState
+        .flatMapLatest { vehiculo ->
+            repository.obtenerInventarioCamion(vehiculo.name)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -35,35 +45,43 @@ class InventarioCamionViewModel(
         )
 
     // Cálculo automático de recargas faltantes en planta
-    val calculoRecargaState: StateFlow<RecargaCalculada?> = repository
-        .obtenerCalculoRecargaPlanta()
+    val calculoRecargaState: StateFlow<RecargaCalculada?> = vehiculoActivoState
+        .flatMapLatest { vehiculo ->
+            repository.obtenerCalculoRecargaPlanta(vehiculo.name)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
 
-    // Alertas de stock crítico en camión
-    val alertasStockState: StateFlow<StockAlertas> = repository
-        .obtenerAlertasStock()
+    // Alertas de stock crítico en el vehículo activo
+    val alertasStockState: StateFlow<StockAlertas> = vehiculoActivoState
+        .flatMapLatest { vehiculo ->
+            repository.obtenerAlertasStock(vehiculo.name)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = StockAlertas()
         )
 
-    // Historial de recargas de hoy en planta
-    val recargasHoyState: StateFlow<List<RecargaPlantaEntity>> = repository
-        .obtenerRecargasPorFecha(fechaHoyTexto)
+    // Historial de recargas de hoy en planta para el vehículo activo
+    val recargasHoyState: StateFlow<List<RecargaPlantaEntity>> = vehiculoActivoState
+        .flatMapLatest { vehiculo ->
+            repository.obtenerRecargasPorFecha(fechaHoyTexto, vehiculo.name)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
-    // Estadísticas de ventas de hoy por tipo de bidón y producto
-    val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = repository
-        .obtenerEstadisticasVentasPorTipo(fechaHoyTexto)
+    // Estadísticas de ventas de hoy por tipo de bidón y producto para el vehículo activo
+    val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = vehiculoActivoState
+        .flatMapLatest { vehiculo ->
+            repository.obtenerEstadisticasVentasPorTipo(fechaHoyTexto, vehiculo.name)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -101,7 +119,7 @@ class InventarioCamionViewModel(
     }
 
     /**
-     * Actualiza la capacidad máxima del camión según cómo haya salido el día (ej. 218, 189, 164, 163).
+     * Actualiza la capacidad máxima del vehículo actual (ej. 218 en Camión, 80 en Camioneta).
      */
     fun cambiarCapacidadTope(
         topeBidones: Int,
@@ -110,14 +128,16 @@ class InventarioCamionViewModel(
         topeMinis: Int = 2
     ) {
         viewModelScope.launch {
+            val vehiculo = appPreferences.obtenerVehiculoActivo().name
             repository.actualizarCapacidadTope(
+                vehiculo = vehiculo,
                 topeBidones = topeBidones,
                 topeGalones = topeGalones,
                 topePacas = topePacas,
                 topeMinis = topeMinis
             )
             _mostrarDialogoAjusteCapacidad.value = false
-            _mensajeSnackbar.value = "Meta del camión ajustada a $topeBidones bidones"
+            _mensajeSnackbar.value = "Meta de $vehiculo ajustada a $topeBidones bidones"
         }
     }
 
@@ -136,7 +156,9 @@ class InventarioCamionViewModel(
         observaciones: String = ""
     ) {
         viewModelScope.launch {
+            val vehiculo = appPreferences.obtenerVehiculoActivo().name
             val recarga = RecargaPlantaEntity(
+                vehiculo = vehiculo,
                 fecha = System.currentTimeMillis(),
                 fechaTexto = fechaHoyTexto,
                 numeroVuelta = numeroVuelta,
@@ -152,7 +174,7 @@ class InventarioCamionViewModel(
             repository.registrarRecargaPlanta(recarga)
             _mostrarModalRecargaPlanta.value = false
             val total = cargadosTransparentes + cargadosAzules + cargadosMarcados
-            _mensajeSnackbar.value = "Recarga Planta (Vuelta $numeroVuelta) guardada: +$total bidones"
+            _mensajeSnackbar.value = "Recarga Planta $vehiculo (Vuelta $numeroVuelta): +$total bidones"
         }
     }
 }

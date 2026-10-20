@@ -14,6 +14,13 @@ interface GastoDao {
     @Query("SELECT * FROM gastos_extras WHERE fechaTexto = :fechaTexto ORDER BY fecha DESC")
     fun obtenerPorFechaFlow(fechaTexto: String): Flow<List<GastoExtraEntity>>
 
+    @Query("""
+        SELECT * FROM gastos_extras 
+        WHERE fechaTexto = :fechaTexto AND (:vehiculo IS NULL OR vehiculo = :vehiculo) 
+        ORDER BY fecha DESC
+    """)
+    fun obtenerPorFechaYVehiculoFlow(fechaTexto: String, vehiculo: String?): Flow<List<GastoExtraEntity>>
+
     @Query("SELECT * FROM gastos_extras ORDER BY fecha DESC")
     fun obtenerTodosFlow(): Flow<List<GastoExtraEntity>>
 

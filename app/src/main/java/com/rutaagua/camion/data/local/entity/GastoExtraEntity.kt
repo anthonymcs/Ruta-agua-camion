@@ -16,6 +16,7 @@ import androidx.room.PrimaryKey
 data class GastoExtraEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    val vehiculo: String = "CAMION", // "CAMION" o "CAMIONETA"
     val fecha: Long = System.currentTimeMillis(),
     val fechaTexto: String, // "YYYY-MM-DD"
     val concepto: String, // Ej: "Almuerzo chofer y ayudante", "Bebidas / Colas"

@@ -29,6 +29,7 @@ import com.rutaagua.camion.data.local.model.TipoBidon
 data class TransaccionVentaEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    val vehiculo: String = "CAMION", // "CAMION" o "CAMIONETA"
     val clienteId: Long? = null, // Null si es cliente de paso ocasional
     val nombreClientePaso: String? = null, // Nombre o referencia para clientes de paso
     val fecha: Long = System.currentTimeMillis(),

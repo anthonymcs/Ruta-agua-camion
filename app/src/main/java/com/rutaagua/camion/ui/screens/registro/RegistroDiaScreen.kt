@@ -79,11 +79,13 @@ import com.rutaagua.camion.ui.components.CamionRepartidorIllustration
 import com.rutaagua.camion.ui.components.GalonIllustration
 import com.rutaagua.camion.ui.components.MiniIllustration
 import com.rutaagua.camion.ui.components.PacaIllustration
+import com.rutaagua.camion.ui.security.SecurityPinDialog
 import com.rutaagua.camion.ui.theme.AguaPrimary
 import com.rutaagua.camion.ui.theme.AguaPrimaryDark
 import com.rutaagua.camion.ui.theme.AguaPrimaryLight
 import com.rutaagua.camion.ui.theme.AmbarAdvertencia
 import com.rutaagua.camion.ui.theme.AmbarFondo
+import com.rutaagua.camion.ui.theme.AzulCorporativo
 import com.rutaagua.camion.ui.theme.BidonAzulColor
 import com.rutaagua.camion.ui.theme.BidonMarcadoColor
 import com.rutaagua.camion.ui.theme.BidonTransparenteColor
@@ -107,7 +109,8 @@ fun RegistroDiaScreen(
     val context = LocalContext.current
     val transacciones by viewModel.transaccionesHoyState.collectAsState()
     val gastos by viewModel.gastosHoyState.collectAsState()
-    val inventario by viewModel.inventarioCamionState.collectAsState()
+    val inventario by viewModel.inventarioVehiculoActivoState.collectAsState()
+    val filtroVehiculo by viewModel.filtroVehiculoState.collectAsState()
     val resumen by viewModel.resumenCierreDiaState.collectAsState()
     val todosLosClientes by viewModel.todosLosClientesState.collectAsState()
 
@@ -117,6 +120,11 @@ fun RegistroDiaScreen(
     val transaccionAEliminar by viewModel.transaccionAEliminar.collectAsState()
     val mostrarDialogoGasto by viewModel.mostrarDialogoGasto.collectAsState()
     val mensajeSnackbar by viewModel.mensajeSnackbar.collectAsState()
+
+    var ventaParaEditar by remember { mutableStateOf<Pair<TransaccionVentaEntity, com.rutaagua.camion.data.local.entity.ClienteEntity?>?>(null) }
+    var ventaParaEliminar by remember { mutableStateOf<TransaccionVentaEntity?>(null) }
+    var mostrarPinParaEditar by remember { mutableStateOf(false) }
+    var mostrarPinParaEliminar by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -200,6 +208,31 @@ fun RegistroDiaScreen(
                 }
             }
 
+            // 2.1 Selector de Vista por Vehículo
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FiltroVehiculoRegistro.entries.forEach { filtro ->
+                        val seleccionado = filtroVehiculo == filtro
+                        FilterChip(
+                            selected = seleccionado,
+                            onClick = { viewModel.cambiarFiltroVehiculo(filtro) },
+                            label = {
+                                Text(
+                                    text = filtro.titulo,
+                                    fontWeight = if (seleccionado) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
             // 3. Título del Registro de Ventas de Hoy
             item {
                 Row(
@@ -234,8 +267,14 @@ fun RegistroDiaScreen(
                         transaccion = transaccion,
                         nombreCliente = cliente?.nombre ?: transaccion.nombreClientePaso ?: "Cliente de Paso",
                         ubicacion = cliente?.ubicacion ?: "",
-                        onEditar = { viewModel.abrirEditarVenta(transaccion, cliente) },
-                        onEliminar = { viewModel.solicitarEliminarVenta(transaccion) },
+                        onEditar = {
+                            ventaParaEditar = Pair(transaccion, cliente)
+                            mostrarPinParaEditar = true
+                        },
+                        onEliminar = {
+                            ventaParaEliminar = transaccion
+                            mostrarPinParaEliminar = true
+                        },
                         onEnviarRecibo = {
                             val mensajeRecibo = WhatsAppHelper.generarMensajeReciboEntrega(
                                 transaccion = transaccion,
@@ -340,6 +379,42 @@ fun RegistroDiaScreen(
         DialogoAgregarGasto(
             onConfirmar = { concepto, monto -> viewModel.registrarGastoExtra(concepto, monto) },
             onDismiss = { viewModel.cerrarDialogoGasto() }
+        )
+    }
+
+    // Diálogo de Seguridad con PIN para Editar Venta
+    if (mostrarPinParaEditar && ventaParaEditar != null) {
+        SecurityPinDialog(
+            titulo = "Autorizar Edición de Venta",
+            subtitulo = "Ingresa el PIN para modificar los datos de la entrega",
+            onDismissRequest = {
+                mostrarPinParaEditar = false
+                ventaParaEditar = null
+            },
+            onPinCorrecto = {
+                val (t, c) = ventaParaEditar!!
+                mostrarPinParaEditar = false
+                ventaParaEditar = null
+                viewModel.abrirEditarVenta(t, c)
+            }
+        )
+    }
+
+    // Diálogo de Seguridad con PIN para Eliminar Venta
+    if (mostrarPinParaEliminar && ventaParaEliminar != null) {
+        SecurityPinDialog(
+            titulo = "Autorizar Eliminación de Venta",
+            subtitulo = "Ingresa el PIN para autorizar la eliminación y reversión de inventario",
+            onDismissRequest = {
+                mostrarPinParaEliminar = false
+                ventaParaEliminar = null
+            },
+            onPinCorrecto = {
+                val t = ventaParaEliminar!!
+                mostrarPinParaEliminar = false
+                ventaParaEliminar = null
+                viewModel.solicitarEliminarVenta(t)
+            }
         )
     }
 }
@@ -600,6 +675,19 @@ private fun TarjetaRegistroItem(
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = TextoSecundario,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        color = if (transaccion.vehiculo == "CAMIONETA") Color(0xFFF0F9FF) else Color(0xFFF1F5F9),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = if (transaccion.vehiculo == "CAMIONETA") "🛻 Camioneta" else "🚚 Camión",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (transaccion.vehiculo == "CAMIONETA") AzulCorporativo else AguaPrimary,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }

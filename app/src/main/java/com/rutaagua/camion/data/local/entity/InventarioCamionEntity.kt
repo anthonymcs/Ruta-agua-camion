@@ -12,6 +12,7 @@ import com.rutaagua.camion.data.local.model.TipoBidon
 data class InventarioCamionEntity(
     @PrimaryKey
     val id: Int = 1,
+    val vehiculo: String = "CAMION", // "CAMION" o "CAMIONETA"
     // Metas / Topes de capacidad habitual del camión (ajustables según la jornada)
     val capacidadTopeBidones: Int = 218,
     val capacidadTopeGalones: Int = 90,

@@ -3,6 +3,7 @@ package com.rutaagua.camion.ui.screens.clientes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rutaagua.camion.data.local.entity.ClienteEntity
+import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
 import com.rutaagua.camion.data.local.model.DiaSemana
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.model.TipoCliente
@@ -39,7 +40,9 @@ enum class EstadoEntregaRuta {
 data class ClienteRutaItem(
     val cliente: ClienteEntity,
     val estado: EstadoEntregaRuta,
-    val bidonesEntregados: Int = 0
+    val bidonesEntregados: Int = 0,
+    val vehiculoEntrega: String? = null,
+    val horaEntrega: String? = null
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -83,6 +86,18 @@ class ClientesViewModel(
         initialValue = emptyList()
     )
 
+    // Mapa de entregas de hoy para mostrar badges cruzados de qué vehículo atendió al cliente
+    val transaccionesHoyClientesState: StateFlow<Map<Long, TransaccionVentaEntity>> = repository
+        .obtenerTransaccionesPorFecha(fechaHoyIso)
+        .map { transacciones ->
+            transacciones.filter { it.clienteId != null }.associateBy { it.clienteId!! }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
+
     // Estados para BottomSheet de Crear/Editar
     val clienteEnEdicion = MutableStateFlow<ClienteEntity?>(null)
     val mostrarModalCliente = MutableStateFlow(false)
@@ -107,6 +122,7 @@ class ClientesViewModel(
                 repository.obtenerClientesPorDiaRuta(dia.name),
                 repository.obtenerTransaccionesPorFecha(fechaDia)
             ) { clientesRuta, transaccionesDelDia ->
+                val horaFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
                 clientesRuta.map { cliente ->
                     if (esDiaFuturo) {
                         ClienteRutaItem(
@@ -120,10 +136,16 @@ class ClientesViewModel(
                         val bidones = transaccionesCliente.sumOf {
                             it.cantidadBidonesRecarga + it.cantidadBidonesPrestados + it.cantidadBidonesVendidosEnvase
                         }
+                        val ultimaTx = transaccionesCliente.maxByOrNull { it.fecha }
+                        val vehiculo = ultimaTx?.vehiculo
+                        val hora = ultimaTx?.let { horaFormat.format(Date(it.fecha)) }
+
                         ClienteRutaItem(
                             cliente = cliente,
                             estado = if (fueAtendido) EstadoEntregaRuta.ATENDIDO else EstadoEntregaRuta.PENDIENTE,
-                            bidonesEntregados = bidones
+                            bidonesEntregados = bidones,
+                            vehiculoEntrega = vehiculo,
+                            horaEntrega = hora
                         )
                     }
                 }

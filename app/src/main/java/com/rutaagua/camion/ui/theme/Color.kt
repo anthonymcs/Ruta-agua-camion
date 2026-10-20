@@ -39,3 +39,11 @@ val FondoNeutralSuave = Color(0xFFF1F5F9)
 val TextoOscuro = Color(0xFF0F172A)
 val TextoSecundario = Color(0xFF475569)
 val BordeSuave = Color(0xFFE2E8F0)
+
+// Aliases de conveniencia corporativa
+val AzulCorporativo = AguaPrimary
+val BordeSutil = BordeSuave
+val FondoGrisClaro = FondoNeutralSuave
+val GrisCard = FondoNeutralSuave
+val RojoDeuda = RojoAlerta
+val SuperficieBlanca = SuperficieTarjeta

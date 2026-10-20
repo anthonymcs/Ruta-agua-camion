@@ -10,19 +10,30 @@ import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.FormaPago
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.TipoBidon
+import com.rutaagua.camion.data.local.prefs.AppPreferences
 import com.rutaagua.camion.data.repository.RutaAguaRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+enum class FiltroVehiculoRegistro(val titulo: String, val vehiculoKey: String?) {
+    CONSOLIDADO("📊 Consolidado", null),
+    CAMION("🚚 Solo Camión", "CAMION"),
+    CAMIONETA("🛻 Solo Camioneta", "CAMIONETA")
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
 class RegistroDiaViewModel(
-    private val repository: RutaAguaRepository
+    private val repository: RutaAguaRepository,
+    private val appPreferences: AppPreferences
 ) : ViewModel() {
 
     private val formatoFechaIso = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -31,49 +42,62 @@ class RegistroDiaViewModel(
     val fechaHoyTexto: String = formatoFechaIso.format(Date())
     val fechaHoyDisplay: String = formatoFechaDisplay.format(Date())
 
+    // Filtro rápido de vista: Consolidado Ambos / Solo Camión / Solo Camioneta
+    val filtroVehiculoState = MutableStateFlow(FiltroVehiculoRegistro.CONSOLIDADO)
+
     // -------------------------------------------------------------
     // ESTADOS REACTIVOS
     // -------------------------------------------------------------
 
-    // Transacciones del día en vivo
-    val transaccionesHoyState: StateFlow<List<TransaccionVentaEntity>> = repository
-        .obtenerTransaccionesPorFecha(fechaHoyTexto)
+    // Transacciones del día en vivo según filtro seleccionado
+    val transaccionesHoyState: StateFlow<List<TransaccionVentaEntity>> = filtroVehiculoState
+        .flatMapLatest { filtro ->
+            repository.obtenerTransaccionesPorFecha(fechaHoyTexto, filtro.vehiculoKey)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
-    // Gastos extras del día
-    val gastosHoyState: StateFlow<List<GastoExtraEntity>> = repository
-        .obtenerGastosPorFecha(fechaHoyTexto)
+    // Gastos extras del día según filtro seleccionado
+    val gastosHoyState: StateFlow<List<GastoExtraEntity>> = filtroVehiculoState
+        .flatMapLatest { filtro ->
+            repository.obtenerGastosPorFecha(fechaHoyTexto, filtro.vehiculoKey)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
-    // Inventario del camión para validar stock restante
-    val inventarioCamionState: StateFlow<InventarioCamionEntity?> = repository
-        .obtenerInventarioCamion()
+    // Inventario del vehículo activo para validar stock restante al registrar venta
+    val inventarioVehiculoActivoState: StateFlow<InventarioCamionEntity?> = appPreferences.vehiculoActivo
+        .flatMapLatest { vehiculo ->
+            repository.obtenerInventarioCamion(vehiculo.name)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
 
-    // Resumen diario de arqueo de caja y totales
-    val resumenCierreDiaState: StateFlow<ResumenCierreDia> = repository
-        .obtenerResumenCierreDia(fechaHoyTexto)
+    // Resumen diario de arqueo de caja y totales (Consolidado o por Vehículo)
+    val resumenCierreDiaState: StateFlow<ResumenCierreDia> = filtroVehiculoState
+        .flatMapLatest { filtro ->
+            repository.obtenerResumenCierreDia(fechaHoyTexto, filtro.vehiculoKey)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ResumenCierreDia(fechaTexto = fechaHoyTexto)
         )
 
-    // Estadísticas detalladas de ventas por tipo de bidón y producto
-    val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = repository
-        .obtenerEstadisticasVentasPorTipo(fechaHoyTexto)
+    // Estadísticas detalladas de ventas por tipo de producto
+    val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = filtroVehiculoState
+        .flatMapLatest { filtro ->
+            repository.obtenerEstadisticasVentasPorTipo(fechaHoyTexto, filtro.vehiculoKey)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -109,6 +133,10 @@ class RegistroDiaViewModel(
 
     private val _mensajeSnackbar = MutableStateFlow<String?>(null)
     val mensajeSnackbar: StateFlow<String?> = _mensajeSnackbar.asStateFlow()
+
+    fun cambiarFiltroVehiculo(filtro: FiltroVehiculoRegistro) {
+        filtroVehiculoState.value = filtro
+    }
 
     fun abrirModalNuevaVenta(cliente: ClienteEntity? = null) {
         _clientePreseleccionado.value = cliente
@@ -162,7 +190,7 @@ class RegistroDiaViewModel(
     // -------------------------------------------------------------
 
     /**
-     * Registra o edita una venta, descontando o ajustando el inventario atómicamente.
+     * Registra o edita una venta, vinculada al vehículo activo y descontando el inventario atómicamente.
      */
     fun registrarOEditarVenta(
         clienteId: Long?,
@@ -182,11 +210,14 @@ class RegistroDiaViewModel(
         nota: String = ""
     ) {
         viewModelScope.launch {
-            val totalBidonesSalen = cantidadRecarga + cantidadPrestados + cantidadVendidosEnvase
-            val inv = inventarioCamionState.value
+            val vehiculoOperativo = appPreferences.obtenerVehiculoActivo().name
             val transaccionPrevia = _transaccionEnEdicion.value
+            val vehiculoVenta = transaccionPrevia?.vehiculo ?: vehiculoOperativo
 
-            // Validación de existencia de botellones en camión (considerando si es edición)
+            val totalBidonesSalen = cantidadRecarga + cantidadPrestados + cantidadVendidosEnvase
+            val inv = inventarioVehiculoActivoState.value
+
+            // Validación de existencia en el vehículo correspondiente
             if (inv != null && totalBidonesSalen > 0) {
                 var disponibleTipo = inv.stockPorTipo(tipoBidon)
                 if (transaccionPrevia != null && transaccionPrevia.tipoBidon == tipoBidon) {
@@ -196,7 +227,7 @@ class RegistroDiaViewModel(
                     disponibleTipo += antesBajaron
                 }
                 if (disponibleTipo < totalBidonesSalen) {
-                    _mensajeSnackbar.value = "Stock insuficiente: solo quedan $disponibleTipo bidones ${tipoBidon.name} en el camión"
+                    _mensajeSnackbar.value = "Stock insuficiente: solo quedan $disponibleTipo bidones ${tipoBidon.name} en $vehiculoVenta"
                     return@launch
                 }
             }
@@ -231,6 +262,7 @@ class RegistroDiaViewModel(
 
             val nuevaTransaccion = TransaccionVentaEntity(
                 id = transaccionPrevia?.id ?: 0L,
+                vehiculo = vehiculoVenta,
                 clienteId = clienteId,
                 nombreClientePaso = nombreClientePaso,
                 fecha = transaccionPrevia?.fecha ?: System.currentTimeMillis(),
@@ -260,10 +292,10 @@ class RegistroDiaViewModel(
 
             if (transaccionPrevia != null) {
                 repository.editarVenta(transaccionPrevia, nuevaTransaccion)
-                _mensajeSnackbar.value = "Entrega actualizada correctamente"
+                _mensajeSnackbar.value = "Entrega actualizada en $vehiculoVenta"
             } else {
                 repository.registrarVenta(nuevaTransaccion)
-                _mensajeSnackbar.value = "Venta guardada (Total: $${String.format(Locale.US, "%.2f", totalVentaHoy)})"
+                _mensajeSnackbar.value = "Venta guardada en $vehiculoVenta (Total: $${String.format(Locale.US, "%.2f", totalVentaHoy)})"
             }
 
             _mostrarModalNuevaVenta.value = false
@@ -283,7 +315,9 @@ class RegistroDiaViewModel(
         }
 
         viewModelScope.launch {
+            val vehiculoOperativo = appPreferences.obtenerVehiculoActivo().name
             val gasto = GastoExtraEntity(
+                vehiculo = vehiculoOperativo,
                 fecha = System.currentTimeMillis(),
                 fechaTexto = fechaHoyTexto,
                 concepto = concepto.trim(),
@@ -292,7 +326,7 @@ class RegistroDiaViewModel(
             )
             repository.registrarGastoExtra(gasto)
             _mostrarDialogoGasto.value = false
-            _mensajeSnackbar.value = "Gasto registrado: $${String.format(Locale.US, "%.2f", monto)} ($concepto)"
+            _mensajeSnackbar.value = "Gasto en $vehiculoOperativo: $${String.format(Locale.US, "%.2f", monto)} ($concepto)"
         }
     }
 
@@ -309,6 +343,12 @@ class RegistroDiaViewModel(
     fun generarTextoReporteWhatsApp(): String {
         val resumen = resumenCierreDiaState.value
         val estadisticas = estadisticasVentasHoyState.value
-        return repository.formatearReporteWhatsApp(resumen, estadisticas, fechaHoyDisplay)
+        val filtroActual = filtroVehiculoState.value
+        val vehiculoLabel = when (filtroActual) {
+            FiltroVehiculoRegistro.CONSOLIDADO -> "📊 Consolidado General (Ambos)"
+            FiltroVehiculoRegistro.CAMION -> "🚚 Solo Camión"
+            FiltroVehiculoRegistro.CAMIONETA -> "🛻 Solo Camioneta"
+        }
+        return repository.formatearReporteWhatsApp(resumen, estadisticas, fechaHoyDisplay, vehiculoLabel)
     }
 }

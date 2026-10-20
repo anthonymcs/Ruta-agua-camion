@@ -122,3 +122,34 @@
    - Botón directo **"WhatsApp Cliente"** en tarjetas de clientes para enviar su Estado de Cuenta (deuda y envases prestados).
    - Botón directo **"📲 Enviar recibo al cliente"** en cada entrega del día para emitir recibo digital con productos, totales, método de pago y saldo actualizado.
    - Enlace directo vía `wa.me` con fallback a selector de contactos de WhatsApp para clientes sin número guardado o ventas al paso.
+
+
+---
+
+## 9. Arquitectura Multi-Vehículo, Sincronización Real-Time y Respaldo OTA ($0.00 Costo)
+1. **Soporte Multi-Vehículo (`CAMION` + `CAMIONETA`)**:
+   - Configuración independiente de inventarios y capacidades:
+     - `CAMION`: Capacidad estándar 218 bidones, 90 galones, 6 pacas, 2 minis.
+     - `CAMIONETA`: Capacidad estándar 80 bidones, 30 galones, 2 pacas, 1 mini.
+   - Selector de vehículo activo visible en el header superior con alternancia rápida en 1 toque.
+   - Todas las transacciones, recargas de planta, gastos e inventarios quedan asociados al vehículo operativo (`vehiculo: String`).
+   - Filtro rápido en `RegistroDiaScreen`: `📊 Consolidado Ambos`, `🚚 Solo Camión`, `🛻 Solo Camioneta`.
+2. **Sincronización en Tiempo Real Offline-First (Cloud Firestore a $0.00)**:
+   - Autenticación transparente `FirebaseAuth.signInAnonymously()`.
+   - Caché persistente offline activada (`persistentCacheSettings`) para funcionamiento ininterrumpido sin señal móvil en carretera.
+   - 5 Observadores reactivos (`addSnapshotListener`) sincronizan bidireccionalmente: `clientes`, `transacciones`, `inventarios`, `recargas_planta` y `gastos`.
+   - Directorio de clientes 100% compartido: las fotos de referencia se comprimen a miniaturas JPEG en Base64 (<20KB), eliminando la necesidad de Firebase Storage (costo $0.00 garantizado).
+3. **Visibilidad Cruzada de Entregas entre Vehículos**:
+   - Alertas visuales y badges en tiempo real en `CalendarioRutaScreen` y `ClientesScreen` si el cliente ya fue entregado hoy por el otro vehículo (ej. `"✅ Atendido hoy por 🛻 CAMIONETA (10:30 • 2 un.)"`), evitando duplicar viajes.
+4. **Seguridad Local por PIN (4 Dígitos)**:
+   - PIN predeterminado `1234` configurable en Ajustes.
+   - Se solicita exclusivamente antes de:
+     1) Editar una venta registrada.
+     2) Eliminar una venta registrada.
+     3) Eliminar a un cliente.
+     4) Modificar manualmente deuda monetaria o envases prestados de un cliente.
+5. **Copias de Seguridad Locales (JSON) y Actualizaciones OTA**:
+   - Menú de Ajustes (⚙️) accesible desde la barra superior.
+   - Exportación completa de base de datos a archivo JSON local con opción de compartir vía WhatsApp u otras aplicaciones.
+   - Importación y restauración segura de respaldos JSON mediante selector de archivos del sistema.
+   - Comprobador de actualizaciones Over-The-Air (`OTAUpdateChecker`) con descarga e instalación automática del APK más reciente mediante `DownloadManager` y `FileProvider`.

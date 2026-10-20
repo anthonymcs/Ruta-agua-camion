@@ -13,6 +13,13 @@ interface RecargaPlantaDao {
     @Query("SELECT * FROM recargas_planta WHERE fechaTexto = :fechaTexto ORDER BY fecha DESC")
     fun obtenerRecargasPorFechaFlow(fechaTexto: String): Flow<List<RecargaPlantaEntity>>
 
+    @Query("""
+        SELECT * FROM recargas_planta 
+        WHERE fechaTexto = :fechaTexto AND (:vehiculo IS NULL OR vehiculo = :vehiculo) 
+        ORDER BY fecha DESC
+    """)
+    fun obtenerRecargasPorFechaYVehiculoFlow(fechaTexto: String, vehiculo: String?): Flow<List<RecargaPlantaEntity>>
+
     @Query("SELECT * FROM recargas_planta ORDER BY fecha DESC")
     fun obtenerTodasFlow(): Flow<List<RecargaPlantaEntity>>
 

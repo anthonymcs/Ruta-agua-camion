@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
         TransaccionVentaEntity::class,
         GastoExtraEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -65,11 +65,12 @@ abstract class RutaAguaDatabase : RoomDatabase() {
         ) : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                // Inicializa el inventario del camión con los valores tope predeterminados
+                // Inicializa los inventarios independientes para Camión y Camioneta
                 INSTANCE?.let { database ->
                     scope.launch {
-                        val inventarioInicial = InventarioCamionEntity(
+                        val inventarioCamion = InventarioCamionEntity(
                             id = 1,
+                            vehiculo = "CAMION",
                             capacidadTopeBidones = 218,
                             capacidadTopeGalones = 90,
                             capacidadTopePacas = 6,
@@ -82,7 +83,23 @@ abstract class RutaAguaDatabase : RoomDatabase() {
                             pacasLlenas = 0,
                             minisLlenas = 0
                         )
-                        database.inventarioDao().insertarOActualizar(inventarioInicial)
+                        val inventarioCamioneta = InventarioCamionEntity(
+                            id = 2,
+                            vehiculo = "CAMIONETA",
+                            capacidadTopeBidones = 80,
+                            capacidadTopeGalones = 30,
+                            capacidadTopePacas = 2,
+                            capacidadTopeMinis = 1,
+                            bidonesLlenosTransparentes = 0,
+                            bidonesLlenosAzules = 0,
+                            bidonesLlenosMarcados = 0,
+                            bidonesVacios = 0,
+                            galonesLlenos = 0,
+                            pacasLlenas = 0,
+                            minisLlenas = 0
+                        )
+                        database.inventarioDao().insertarOActualizar(inventarioCamion)
+                        database.inventarioDao().insertarOActualizar(inventarioCamioneta)
                     }
                 }
             }

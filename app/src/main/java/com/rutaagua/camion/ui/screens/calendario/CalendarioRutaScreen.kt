@@ -505,11 +505,16 @@ private fun TarjetaClienteRutaProgramado(
             Spacer(modifier = Modifier.width(8.dp))
 
             // Estado de Entrega (Atendido vs Pendiente vs Programado)
+            val vehiculoStr = if (item.vehiculoEntrega == "CAMIONETA") "🛻 CAMIONETA" else "🚚 CAMIÓN"
+            val horaStr = if (!item.horaEntrega.isNullOrBlank()) " (${item.horaEntrega})" else ""
+            val cantStr = if (item.bidonesEntregados > 0) " • ${item.bidonesEntregados} un." else ""
+            val textoAtendido = "Atendido por $vehiculoStr$horaStr$cantStr"
+
             val (fondoBadge, colorBadge, textoBadge, iconoBadge) = when (item.estado) {
                 EstadoEntregaRuta.ATENDIDO -> listOf(
                     VerdeEfectivoFondo,
                     VerdeEfectivo,
-                    if (item.bidonesEntregados > 0) "Atendido (${item.bidonesEntregados})" else "Atendido",
+                    textoAtendido,
                     Icons.Default.CheckCircle
                 )
                 EstadoEntregaRuta.PENDIENTE -> listOf(

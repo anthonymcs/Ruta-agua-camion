@@ -12,6 +12,7 @@ import com.rutaagua.camion.data.local.model.RecargaCalculada
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.StockAlertas
 import com.rutaagua.camion.data.local.model.TipoBidon
+import com.rutaagua.camion.data.remote.FirestoreSyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -21,7 +22,7 @@ import java.util.Locale
 
 /**
  * Repositorio central que coordina y garantiza la integridad de los datos
- * entre el inventario del camión, clientes, ventas y contabilidad diaria.
+ * entre el inventario del vehículo (Camión / Camioneta), clientes, ventas y contabilidad diaria.
  */
 class RutaAguaRepository(private val database: RutaAguaDatabase) {
 
@@ -30,6 +31,8 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     private val transaccionDao = database.transaccionDao()
     private val recargaPlantaDao = database.recargaPlantaDao()
     private val gastoDao = database.gastoDao()
+
+    var syncManager: FirestoreSyncManager? = null
 
     // ==========================================
     // CLIENTES
@@ -47,6 +50,10 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     fun obtenerClientePorId(id: Long): Flow<ClienteEntity?> =
         clienteDao.obtenerPorIdFlow(id)
 
+    suspend fun obtenerClientePorIdDirecto(id: Long): ClienteEntity? = withContext(Dispatchers.IO) {
+        clienteDao.obtenerPorIdDirecto(id)
+    }
+
     fun obtenerClientesConDeuda(): Flow<List<ClienteEntity>> =
         clienteDao.obtenerClientesConDeudaFlow()
 
@@ -54,48 +61,61 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         clienteDao.obtenerClientesConBidonesPrestadosFlow()
 
     suspend fun guardarCliente(cliente: ClienteEntity): Long = withContext(Dispatchers.IO) {
-        if (cliente.id == 0L) {
+        val id = if (cliente.id == 0L) {
             clienteDao.insertar(cliente)
         } else {
             clienteDao.actualizar(cliente)
             cliente.id
         }
+        clienteDao.obtenerPorIdDirecto(id)?.let {
+            syncManager?.subirCliente(it)
+        }
+        id
     }
 
     suspend fun eliminarCliente(cliente: ClienteEntity) = withContext(Dispatchers.IO) {
         clienteDao.eliminar(cliente)
+        syncManager?.eliminarCliente(cliente.id)
     }
 
     suspend fun desactivarCliente(id: Long) = withContext(Dispatchers.IO) {
         clienteDao.desactivar(id)
+        clienteDao.obtenerPorIdDirecto(id)?.let {
+            syncManager?.subirCliente(it)
+        }
     }
 
     // ==========================================
-    // INVENTARIO DEL CAMIÓN Y ALERTAS
+    // INVENTARIO DEL VEHÍCULO Y ALERTAS
     // ==========================================
 
-    fun obtenerInventarioCamion(): Flow<InventarioCamionEntity?> =
-        inventarioDao.obtenerInventarioFlow()
+    fun obtenerInventarioCamion(vehiculo: String = "CAMION"): Flow<InventarioCamionEntity?> =
+        inventarioDao.obtenerInventarioPorVehiculoFlow(vehiculo)
 
     suspend fun actualizarCapacidadTope(
+        vehiculo: String,
         topeBidones: Int,
         topeGalones: Int,
         topePacas: Int,
         topeMinis: Int
     ) = withContext(Dispatchers.IO) {
-        inventarioDao.actualizarMetasCapacidad(
+        inventarioDao.actualizarMetasCapacidadVehiculo(
+            vehiculo = vehiculo,
             topeBidones = topeBidones,
             topeGalones = topeGalones,
             topePacas = topePacas,
             topeMinis = topeMinis
         )
+        inventarioDao.obtenerInventarioPorVehiculoDirecto(vehiculo)?.let { inv ->
+            syncManager?.subirInventario(inv)
+        }
     }
 
     /**
      * Cálculo reactivo de cuántos bidones y productos faltan para recargar a tope en la planta.
      */
-    fun obtenerCalculoRecargaPlanta(): Flow<RecargaCalculada?> {
-        return inventarioDao.obtenerInventarioFlow().map { inventario ->
+    fun obtenerCalculoRecargaPlanta(vehiculo: String = "CAMION"): Flow<RecargaCalculada?> {
+        return inventarioDao.obtenerInventarioPorVehiculoFlow(vehiculo).map { inventario ->
             inventario?.let { inv ->
                 val llenosActuales = inv.totalBidonesLlenos()
                 RecargaCalculada(
@@ -114,8 +134,8 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     /**
      * Alertas de stock bajo en tiempo real (umbrales de seguridad personalizables).
      */
-    fun obtenerAlertasStock(): Flow<StockAlertas> {
-        return inventarioDao.obtenerInventarioFlow().map { inv ->
+    fun obtenerAlertasStock(vehiculo: String = "CAMION"): Flow<StockAlertas> {
+        return inventarioDao.obtenerInventarioPorVehiculoFlow(vehiculo).map { inv ->
             if (inv == null) {
                 StockAlertas()
             } else {
@@ -151,7 +171,11 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
 
     suspend fun registrarRecargaPlanta(recarga: RecargaPlantaEntity): Long = withContext(Dispatchers.IO) {
         database.withTransaction {
-            val actual = inventarioDao.obtenerInventarioDirecto() ?: InventarioCamionEntity(id = 1)
+            val actual = inventarioDao.obtenerInventarioPorVehiculoDirecto(recarga.vehiculo)
+                ?: InventarioCamionEntity(
+                    id = if (recarga.vehiculo == "CAMIONETA") 2 else 1,
+                    vehiculo = recarga.vehiculo
+                )
 
             val nuevoTrans = actual.bidonesLlenosTransparentes + recarga.bidonesCargadosTransparentes
             val nuevoAzul = actual.bidonesLlenosAzules + recarga.bidonesCargadosAzules
@@ -173,12 +197,18 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             )
 
             inventarioDao.insertarOActualizar(inventarioActualizado)
-            recargaPlantaDao.insertar(recarga)
+            val idGenerado = recargaPlantaDao.insertar(recarga)
+
+            val recargaConId = recarga.copy(id = idGenerado)
+            syncManager?.subirRecarga(recargaConId)
+            syncManager?.subirInventario(inventarioActualizado)
+
+            idGenerado
         }
     }
 
-    fun obtenerRecargasPorFecha(fechaTexto: String): Flow<List<RecargaPlantaEntity>> =
-        recargaPlantaDao.obtenerRecargasPorFechaFlow(fechaTexto)
+    fun obtenerRecargasPorFecha(fechaTexto: String, vehiculo: String? = null): Flow<List<RecargaPlantaEntity>> =
+        recargaPlantaDao.obtenerRecargasPorFechaYVehiculoFlow(fechaTexto, vehiculo)
 
     // ==========================================
     // TRANSACCIÓN DE VENTA, EDICIÓN Y REVERSIÓN
@@ -187,17 +217,22 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     suspend fun registrarVenta(transaccion: TransaccionVentaEntity): Long = withContext(Dispatchers.IO) {
         database.withTransaction {
             aplicarImpactoVenta(transaccion)
-            transaccionDao.insertar(transaccion)
+            val idGenerado = transaccionDao.insertar(transaccion)
+            val txConId = transaccion.copy(id = idGenerado)
+            syncManager?.subirTransaccion(txConId)
+            idGenerado
         }
     }
 
     /**
-     * Elimina una venta revirtiendo de forma segura e íntegra el stock del camión y los saldos del cliente.
+     * Elimina una venta revirtiendo de forma segura e íntegra el stock del vehículo y los saldos del cliente.
      */
     suspend fun eliminarVenta(transaccion: TransaccionVentaEntity): Int = withContext(Dispatchers.IO) {
         database.withTransaction {
             revertirImpactoVenta(transaccion)
-            transaccionDao.eliminar(transaccion)
+            val rows = transaccionDao.eliminar(transaccion)
+            syncManager?.eliminarTransaccion(transaccion.id)
+            rows
         }
     }
 
@@ -211,12 +246,18 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         database.withTransaction {
             revertirImpactoVenta(transaccionAnterior)
             aplicarImpactoVenta(transaccionNueva)
-            transaccionDao.actualizar(transaccionNueva.copy(id = transaccionAnterior.id))
+            val rows = transaccionDao.actualizar(transaccionNueva.copy(id = transaccionAnterior.id))
+            syncManager?.subirTransaccion(transaccionNueva.copy(id = transaccionAnterior.id))
+            rows
         }
     }
 
     private suspend fun aplicarImpactoVenta(transaccion: TransaccionVentaEntity) {
-        val inventarioActual = inventarioDao.obtenerInventarioDirecto() ?: InventarioCamionEntity(id = 1)
+        val inventarioActual = inventarioDao.obtenerInventarioPorVehiculoDirecto(transaccion.vehiculo)
+            ?: InventarioCamionEntity(
+                id = if (transaccion.vehiculo == "CAMIONETA") 2 else 1,
+                vehiculo = transaccion.vehiculo
+            )
 
         val bidonesQueBajan = transaccion.cantidadBidonesRecarga +
                 transaccion.cantidadBidonesPrestados +
@@ -250,6 +291,7 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             fechaUltimaActualizacion = System.currentTimeMillis()
         )
         inventarioDao.insertarOActualizar(inventarioActualizado)
+        syncManager?.subirInventario(inventarioActualizado)
 
         transaccion.clienteId?.let { cId ->
             val clienteActual = clienteDao.obtenerPorIdDirecto(cId)
@@ -272,12 +314,19 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
                     nuevaDeuda = nuevaDeuda,
                     nuevosBidones = nuevosPrestados
                 )
+                clienteDao.obtenerPorIdDirecto(cId)?.let { c ->
+                    syncManager?.subirCliente(c)
+                }
             }
         }
     }
 
     private suspend fun revertirImpactoVenta(t: TransaccionVentaEntity) {
-        val inventario = inventarioDao.obtenerInventarioDirecto() ?: InventarioCamionEntity(id = 1)
+        val inventario = inventarioDao.obtenerInventarioPorVehiculoDirecto(t.vehiculo)
+            ?: InventarioCamionEntity(
+                id = if (t.vehiculo == "CAMIONETA") 2 else 1,
+                vehiculo = t.vehiculo
+            )
         val bidonesQueHabianBajado = t.cantidadBidonesRecarga + t.cantidadBidonesPrestados + t.cantidadBidonesVendidosEnvase
 
         var trans = inventario.bidonesLlenosTransparentes
@@ -308,6 +357,7 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             fechaUltimaActualizacion = System.currentTimeMillis()
         )
         inventarioDao.insertarOActualizar(inventarioActualizado)
+        syncManager?.subirInventario(inventarioActualizado)
 
         t.clienteId?.let { cId ->
             val cliente = clienteDao.obtenerPorIdDirecto(cId)
@@ -321,12 +371,18 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
                     cliente.deudaMonetaria - t.montoCredito + t.montoAbono + t.montoCanceladoDeuda
                 )
                 clienteDao.actualizarDeudaYBidones(cId, deuda, prestados)
+                clienteDao.obtenerPorIdDirecto(cId)?.let { c ->
+                    syncManager?.subirCliente(c)
+                }
             }
         }
     }
 
-    fun obtenerTransaccionesPorFecha(fechaTexto: String): Flow<List<TransaccionVentaEntity>> =
-        transaccionDao.obtenerPorFechaFlow(fechaTexto)
+    fun obtenerTransaccionesPorFecha(fechaTexto: String, vehiculo: String? = null): Flow<List<TransaccionVentaEntity>> =
+        transaccionDao.obtenerPorFechaYVehiculoFlow(fechaTexto, vehiculo)
+
+    fun obtenerTodasLasTransacciones(vehiculo: String? = null): Flow<List<TransaccionVentaEntity>> =
+        transaccionDao.obtenerTodasPorVehiculoFlow(vehiculo)
 
     fun obtenerTransaccionesDeCliente(clienteId: Long): Flow<List<TransaccionVentaEntity>> =
         transaccionDao.obtenerPorClienteFlow(clienteId)
@@ -335,136 +391,104 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     // ESTADÍSTICAS Y PORCENTAJES DE VENTAS HOY
     // ==========================================
 
-    fun obtenerEstadisticasVentasPorTipo(fechaTexto: String): Flow<EstadisticasVentasTipo> {
-        val fTrans = transaccionDao.sumarBidonesPorTipoYFechaFlow(TipoBidon.TRANSPARENTE.name, fechaTexto)
-        val fAzul = transaccionDao.sumarBidonesPorTipoYFechaFlow(TipoBidon.AZUL.name, fechaTexto)
-        val fMarc = transaccionDao.sumarBidonesPorTipoYFechaFlow(TipoBidon.MARCADO.name, fechaTexto)
-        val fGal = transaccionDao.sumarGalonesPorFechaFlow(fechaTexto)
-        val fPac = transaccionDao.sumarPacasPorFechaFlow(fechaTexto)
-        val fMin = transaccionDao.sumarMinisPorFechaFlow(fechaTexto)
-        val fEnvNuevos = transaccionDao.sumarBidonesVendidosEnvasePorFechaFlow(fechaTexto)
-
-        return combine(fTrans, fAzul, fMarc) { trans, azul, marc ->
-            Triple(trans, azul, marc)
-        }.combine(combine(fGal, fPac, fMin, fEnvNuevos) { gal, pac, min, env ->
-            SecundariosParts(gal, pac, min, env)
-        }) { (trans, azul, marc), sec ->
+    fun obtenerEstadisticasVentasPorTipo(fechaTexto: String, vehiculo: String? = null): Flow<EstadisticasVentasTipo> {
+        return transaccionDao.obtenerPorFechaYVehiculoFlow(fechaTexto, vehiculo).map { transacciones ->
+            var trans = 0
+            var azul = 0
+            var marc = 0
+            var gal = 0
+            var pac = 0
+            var min = 0
+            var env = 0
+            for (t in transacciones) {
+                val b = t.cantidadBidonesRecarga + t.cantidadBidonesVendidosEnvase
+                when (t.tipoBidon) {
+                    TipoBidon.TRANSPARENTE -> trans += b
+                    TipoBidon.AZUL -> azul += b
+                    TipoBidon.MARCADO -> marc += b
+                }
+                gal += t.cantidadGalones
+                pac += t.cantidadPacas
+                min += t.cantidadMinis
+                env += t.cantidadBidonesVendidosEnvase
+            }
             val totalBidones = trans + azul + marc
             EstadisticasVentasTipo(
                 transparentesVendidos = trans,
                 azulesVendidos = azul,
                 marcadosVendidos = marc,
                 totalBidonesVendidos = totalBidones,
-                galonesVendidos = sec.gal,
-                pacasVendidas = sec.pac,
-                minisVendidas = sec.min,
-                envasesNuevosVendidos = sec.env
+                galonesVendidos = gal,
+                pacasVendidas = pac,
+                minisVendidas = min,
+                envasesNuevosVendidos = env
             )
         }
     }
-
-    private data class SecundariosParts(val gal: Int, val pac: Int, val min: Int, val env: Int)
 
     // ==========================================
     // GASTOS EXTRAS DE RUTA
     // ==========================================
 
     suspend fun registrarGastoExtra(gasto: GastoExtraEntity): Long = withContext(Dispatchers.IO) {
-        gastoDao.insertar(gasto)
+        val id = gastoDao.insertar(gasto)
+        val gastoConId = gasto.copy(id = id)
+        syncManager?.subirGasto(gastoConId)
+        id
     }
 
     suspend fun eliminarGastoExtra(gasto: GastoExtraEntity) = withContext(Dispatchers.IO) {
         gastoDao.eliminar(gasto)
+        syncManager?.eliminarGasto(gasto.id)
     }
 
-    fun obtenerGastosPorFecha(fechaTexto: String): Flow<List<GastoExtraEntity>> =
-        gastoDao.obtenerPorFechaFlow(fechaTexto)
+    fun obtenerGastosPorFecha(fechaTexto: String, vehiculo: String? = null): Flow<List<GastoExtraEntity>> =
+        gastoDao.obtenerPorFechaYVehiculoFlow(fechaTexto, vehiculo)
 
     // ==========================================
     // CIERRE DIARIO Y REPORTE WHATSAPP
     // ==========================================
 
-    fun obtenerResumenCierreDia(fechaTexto: String): Flow<ResumenCierreDia> {
-        val fEfectivo = transaccionDao.sumarEfectivoPorFechaFlow(fechaTexto)
-        val fTransfer = transaccionDao.sumarTransferenciaPorFechaFlow(fechaTexto)
-        val fCredito = transaccionDao.sumarCreditoPorFechaFlow(fechaTexto)
-        val fAbono = transaccionDao.sumarAbonosPorFechaFlow(fechaTexto)
-        val fCancelado = transaccionDao.sumarCanceladosPorFechaFlow(fechaTexto)
-        val fTotalVenta = transaccionDao.sumarTotalVentasPorFechaFlow(fechaTexto)
+    fun obtenerResumenCierreDia(fechaTexto: String, vehiculo: String? = null): Flow<ResumenCierreDia> {
+        val fTrans = transaccionDao.obtenerPorFechaYVehiculoFlow(fechaTexto, vehiculo)
+        val fGastos = gastoDao.obtenerPorFechaYVehiculoFlow(fechaTexto, vehiculo)
 
-        val fBidonesRecarga = transaccionDao.sumarBidonesRecargaPorFechaFlow(fechaTexto)
-        val fBidonesPrestados = transaccionDao.sumarBidonesPrestadosPorFechaFlow(fechaTexto)
-        val fBidonesDevueltos = transaccionDao.sumarBidonesDevueltosPorFechaFlow(fechaTexto)
-        val fBidonesVendidos = transaccionDao.sumarBidonesVendidosEnvasePorFechaFlow(fechaTexto)
+        return combine(fTrans, fGastos) { transacciones, gastos ->
+            val totalEfectivo = transacciones.sumOf { it.montoEfectivo }
+            val totalTransferencia = transacciones.sumOf { it.montoTransferencia }
+            val totalCredito = transacciones.sumOf { it.montoCredito }
+            val totalAbono = transacciones.sumOf { it.montoAbono }
+            val totalCancelado = transacciones.sumOf { it.montoCanceladoDeuda }
+            val granTotalVenta = transacciones.sumOf { it.totalImporte }
 
-        val fGalones = transaccionDao.sumarGalonesPorFechaFlow(fechaTexto)
-        val fPacas = transaccionDao.sumarPacasPorFechaFlow(fechaTexto)
-        val fMinis = transaccionDao.sumarMinisPorFechaFlow(fechaTexto)
+            val totalBidonesRecarga = transacciones.sumOf { it.cantidadBidonesRecarga }
+            val totalBidonesPrestados = transacciones.sumOf { it.cantidadBidonesPrestados }
+            val totalBidonesDevueltos = transacciones.sumOf { it.cantidadBidonesDevueltos }
+            val totalBidonesVendidosEnvase = transacciones.sumOf { it.cantidadBidonesVendidosEnvase }
+            val totalGalones = transacciones.sumOf { it.cantidadGalones }
+            val totalPacas = transacciones.sumOf { it.cantidadPacas }
+            val totalMinis = transacciones.sumOf { it.cantidadMinis }
 
-        val fGastos = gastoDao.sumarGastosPorFechaFlow(fechaTexto)
-
-        val fFinanciero = combine(
-            fEfectivo,
-            fTransfer,
-            fCredito,
-            fAbono,
-            fCancelado
-        ) { ef, tr, cr, ab, ca ->
-            FinancialBase(ef, tr, cr, ab, ca)
-        }.combine(fTotalVenta) { base, tv ->
-            FinancialParts(base.ef, base.tr, base.cr, base.ab, base.ca, tv)
-        }
-
-        val fBidones = combine(
-            fBidonesRecarga,
-            fBidonesPrestados,
-            fBidonesDevueltos,
-            fBidonesVendidos
-        ) { br, bp, bd, bv ->
-            BidonesParts(br, bp, bd, bv)
-        }
-
-        val fOtros = combine(
-            fGalones,
-            fPacas,
-            fMinis
-        ) { gal, pac, min ->
-            OtrosParts(gal, pac, min)
-        }
-
-        val fProductos = combine(fBidones, fOtros) { b, o ->
-            ProductParts(
-                bidonesRecarga = b.recarga,
-                bidonesPrestados = b.prestados,
-                bidonesDevueltos = b.devueltos,
-                bidonesVendidosEnvase = b.vendidos,
-                galones = o.galones,
-                pacas = o.pacas,
-                minis = o.minis
-            )
-        }
-
-        return combine(fFinanciero, fProductos, fGastos) { fin, prod, gastos ->
-            val totalBidonesVendidos = prod.bidonesRecarga + prod.bidonesVendidosEnvase
-            val totalEfectivoEntrante = fin.efectivo + fin.abono + fin.cancelado
-            val efectivoNeto = totalEfectivoEntrante - gastos
+            val totalGastos = gastos.sumOf { it.monto }
+            val totalEfectivoEntrante = totalEfectivo + totalAbono + totalCancelado
+            val efectivoNeto = totalEfectivoEntrante - totalGastos
 
             ResumenCierreDia(
                 fechaTexto = fechaTexto,
-                totalBidonesVendidos = totalBidonesVendidos,
-                totalBidonesPrestados = prod.bidonesPrestados,
-                totalBidonesDevueltos = prod.bidonesDevueltos,
-                totalGalonesVendidos = prod.galones,
-                totalPacasVendidas = prod.pacas,
-                totalMinisVendidas = prod.minis,
-                totalIngresoEfectivo = fin.efectivo,
-                totalIngresoTransferencia = fin.transferencia,
-                totalCreditosOtorgados = fin.credito,
-                totalAbonosRecibidos = fin.abono,
-                totalDeudasCanceladas = fin.cancelado,
-                totalGastosRuta = gastos,
+                totalBidonesVendidos = totalBidonesRecarga + totalBidonesVendidosEnvase,
+                totalBidonesPrestados = totalBidonesPrestados,
+                totalBidonesDevueltos = totalBidonesDevueltos,
+                totalGalonesVendidos = totalGalones,
+                totalPacasVendidas = totalPacas,
+                totalMinisVendidas = totalMinis,
+                totalIngresoEfectivo = totalEfectivo,
+                totalIngresoTransferencia = totalTransferencia,
+                totalCreditosOtorgados = totalCredito,
+                totalAbonosRecibidos = totalAbono,
+                totalDeudasCanceladas = totalCancelado,
+                totalGastosRuta = totalGastos,
                 efectivoNetoCaja = efectivoNeto,
-                granTotalVenta = fin.totalVenta
+                granTotalVenta = granTotalVenta
             )
         }
     }
@@ -475,10 +499,11 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     fun formatearReporteWhatsApp(
         resumen: ResumenCierreDia,
         estadisticas: EstadisticasVentasTipo,
-        fechaDisplay: String
+        fechaDisplay: String,
+        vehiculoLabel: String = "🚚 Camión"
     ): String {
         return buildString {
-            appendLine("💧 *REPORTE RUTA AGUA - CIERRE DEL DÍA* 🚚")
+            appendLine("💧 *REPORTE RUTA AGUA - CIERRE DEL DÍA* $vehiculoLabel")
             appendLine("📅 *Fecha:* $fechaDisplay")
             appendLine("─────────────────────────")
             appendLine("📦 *TOTAL BIDONES VENDIDOS: ${resumen.totalBidonesVendidos}*")
@@ -526,47 +551,7 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             appendLine("🧾 *GASTOS EN RUTA:* *$${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}*")
             appendLine("💵 *EFECTIVO NETO A ENTREGAR:* *$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}*")
             appendLine("─────────────────────────")
-            appendLine("🚚 *Ruta Agua Camión - Sistema 100% Offline*")
+            appendLine("💧 *Ruta Agua - Sistema Offline & Sincronizado*")
         }
     }
-
-    private data class FinancialBase(
-        val ef: Double,
-        val tr: Double,
-        val cr: Double,
-        val ab: Double,
-        val ca: Double
-    )
-
-    private data class FinancialParts(
-        val efectivo: Double,
-        val transferencia: Double,
-        val credito: Double,
-        val abono: Double,
-        val cancelado: Double,
-        val totalVenta: Double
-    )
-
-    private data class BidonesParts(
-        val recarga: Int,
-        val prestados: Int,
-        val devueltos: Int,
-        val vendidos: Int
-    )
-
-    private data class OtrosParts(
-        val galones: Int,
-        val pacas: Int,
-        val minis: Int
-    )
-
-    private data class ProductParts(
-        val bidonesRecarga: Int,
-        val bidonesPrestados: Int,
-        val bidonesDevueltos: Int,
-        val bidonesVendidosEnvase: Int,
-        val galones: Int,
-        val pacas: Int,
-        val minis: Int
-    )
 }

@@ -15,8 +15,18 @@ interface TransaccionDao {
     @Query("SELECT * FROM transacciones_ventas WHERE fechaTexto = :fechaTexto ORDER BY fecha DESC")
     fun obtenerPorFechaFlow(fechaTexto: String): Flow<List<TransaccionVentaEntity>>
 
+    @Query("""
+        SELECT * FROM transacciones_ventas 
+        WHERE fechaTexto = :fechaTexto AND (:vehiculo IS NULL OR vehiculo = :vehiculo) 
+        ORDER BY fecha DESC
+    """)
+    fun obtenerPorFechaYVehiculoFlow(fechaTexto: String, vehiculo: String?): Flow<List<TransaccionVentaEntity>>
+
     @Query("SELECT * FROM transacciones_ventas ORDER BY fecha DESC")
     fun obtenerTodasFlow(): Flow<List<TransaccionVentaEntity>>
+
+    @Query("SELECT * FROM transacciones_ventas WHERE (:vehiculo IS NULL OR vehiculo = :vehiculo) ORDER BY fecha DESC")
+    fun obtenerTodasPorVehiculoFlow(vehiculo: String?): Flow<List<TransaccionVentaEntity>>
 
     @Query("SELECT * FROM transacciones_ventas WHERE clienteId = :clienteId ORDER BY fecha DESC")
     fun obtenerPorClienteFlow(clienteId: Long): Flow<List<TransaccionVentaEntity>>

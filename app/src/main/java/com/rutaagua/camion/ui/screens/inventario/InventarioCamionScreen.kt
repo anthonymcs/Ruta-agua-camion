@@ -74,6 +74,7 @@ import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.RecargaCalculada
 import com.rutaagua.camion.data.local.model.StockAlertas
 import com.rutaagua.camion.data.local.model.TipoBidon
+import com.rutaagua.camion.data.local.model.TipoVehiculo
 import com.rutaagua.camion.ui.components.BidonIllustration
 import com.rutaagua.camion.ui.components.CamionRepartidorIllustration
 import com.rutaagua.camion.ui.components.GalonIllustration
@@ -103,6 +104,7 @@ fun InventarioCamionScreen(
     modifier: Modifier = Modifier
 ) {
     val inventario by viewModel.inventarioState.collectAsState()
+    val vehiculoActivo by viewModel.vehiculoActivoState.collectAsState()
     val calculoRecarga by viewModel.calculoRecargaState.collectAsState()
     val alertasStock by viewModel.alertasStockState.collectAsState()
     val estadisticasVentas by viewModel.estadisticasVentasHoyState.collectAsState()
@@ -126,6 +128,7 @@ fun InventarioCamionScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             HeaderCamion(
+                vehiculoActivo = vehiculoActivo,
                 onAjustarCapacidadClick = { viewModel.abrirDialogoCapacidad() }
             )
         }
@@ -240,6 +243,7 @@ fun InventarioCamionScreen(
  */
 @Composable
 private fun HeaderCamion(
+    vehiculoActivo: TipoVehiculo,
     onAjustarCapacidadClick: () -> Unit
 ) {
     Surface(
@@ -258,7 +262,7 @@ private fun HeaderCamion(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "ESTADO DEL CAMIÓN",
+                        text = if (vehiculoActivo == TipoVehiculo.CAMIONETA) "ESTADO DE LA CAMIONETA" else "ESTADO DEL CAMIÓN",
                         style = MaterialTheme.typography.titleLarge,
                         color = AguaPrimaryDark
                     )

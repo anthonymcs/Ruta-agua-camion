@@ -10,6 +10,7 @@ import androidx.room.PrimaryKey
 data class RecargaPlantaEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    val vehiculo: String = "CAMION", // "CAMION" o "CAMIONETA"
     val fecha: Long = System.currentTimeMillis(),
     val fechaTexto: String, // Formato "YYYY-MM-DD" para filtros diarios
     val numeroVuelta: Int = 1, // Vuelta 1 o 2 del día

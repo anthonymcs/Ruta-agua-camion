@@ -76,6 +76,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.BorderStroke
+import com.rutaagua.camion.ui.security.SecurityPinDialog
+import java.text.SimpleDateFormat
+import java.util.Date
 import com.rutaagua.camion.data.local.entity.ClienteEntity
 import com.rutaagua.camion.data.local.model.DiaSemana
 import com.rutaagua.camion.data.local.model.TipoBidon
@@ -111,12 +115,19 @@ fun ClientesScreen(
     modifier: Modifier = Modifier
 ) {
     val clientes by viewModel.clientesFiltradosState.collectAsState()
+    val transaccionesHoyClientes by viewModel.transaccionesHoyClientesState.collectAsState()
     val query by viewModel.busquedaQuery.collectAsState()
     val filtroActual by viewModel.filtroSeleccionado.collectAsState()
     val mostrarModal by viewModel.mostrarModalCliente.collectAsState()
     val clienteEnEdicion by viewModel.clienteEnEdicion.collectAsState()
     val clienteAEliminar by viewModel.clienteAEliminar.collectAsState()
     val mensajeSnackbar by viewModel.mensajeSnackbar.collectAsState()
+
+    var clienteParaEliminar by remember { mutableStateOf<ClienteEntity?>(null) }
+    var mostrarPinParaEliminarCliente by remember { mutableStateOf(false) }
+
+    var guardadoPendiente by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var mostrarPinParaModificarSaldo by remember { mutableStateOf(false) }
 
     var fotoZoomPath by remember { mutableStateOf<String?>(null) }
     var fotoZoomNombre by remember { mutableStateOf("") }
@@ -190,8 +201,12 @@ fun ClientesScreen(
                     items(clientes, key = { it.id }) { cliente ->
                         TarjetaClienteItem(
                             cliente = cliente,
+                            transaccionHoy = transaccionesHoyClientes[cliente.id],
                             onEditarClick = { viewModel.abrirEditarCliente(cliente) },
-                            onEliminarClick = { viewModel.solicitarEliminarCliente(cliente) },
+                            onEliminarClick = {
+                                clienteParaEliminar = cliente
+                                mostrarPinParaEliminarCliente = true
+                            },
                             onVerFoto = { path, nombre ->
                                 fotoZoomPath = path
                                 fotoZoomNombre = nombre
@@ -215,19 +230,43 @@ fun ClientesScreen(
             ModalFormularioCliente(
                 clienteExistente = clienteEnEdicion,
                 onGuardar = { id, nom, tel, ubi, tipo, dias, tBidon, precio, deuda, prestados, foto ->
-                    viewModel.guardarCliente(
-                        id = id,
-                        nombre = nom,
-                        telefono = tel,
-                        ubicacion = ubi,
-                        tipoCliente = tipo,
-                        diasVisita = dias,
-                        tipoBidonPreferido = tBidon,
-                        precioHabitual = precio,
-                        deudaInicial = deuda,
-                        bidonesPrestadosInicial = prestados,
-                        fotoReferenciaPath = foto
+                    val requierePinSaldo = clienteEnEdicion != null && (
+                        deuda != clienteEnEdicion!!.deudaMonetaria ||
+                        prestados != clienteEnEdicion!!.bidonesPrestados
                     )
+
+                    if (requierePinSaldo) {
+                        guardadoPendiente = {
+                            viewModel.guardarCliente(
+                                id = id,
+                                nombre = nom,
+                                telefono = tel,
+                                ubicacion = ubi,
+                                tipoCliente = tipo,
+                                diasVisita = dias,
+                                tipoBidonPreferido = tBidon,
+                                precioHabitual = precio,
+                                deudaInicial = deuda,
+                                bidonesPrestadosInicial = prestados,
+                                fotoReferenciaPath = foto
+                            )
+                        }
+                        mostrarPinParaModificarSaldo = true
+                    } else {
+                        viewModel.guardarCliente(
+                            id = id,
+                            nombre = nom,
+                            telefono = tel,
+                            ubicacion = ubi,
+                            tipoCliente = tipo,
+                            diasVisita = dias,
+                            tipoBidonPreferido = tBidon,
+                            precioHabitual = precio,
+                            deudaInicial = deuda,
+                            bidonesPrestadosInicial = prestados,
+                            fotoReferenciaPath = foto
+                        )
+                    }
                 },
                 onCancelar = { viewModel.cerrarModalCliente() }
             )
@@ -263,6 +302,42 @@ fun ClientesScreen(
                 OutlinedButton(onClick = { viewModel.cancelarEliminarCliente() }) {
                     Text("Cancelar")
                 }
+            }
+        )
+    }
+
+    // Diálogo de Seguridad PIN para Eliminar Cliente
+    if (mostrarPinParaEliminarCliente && clienteParaEliminar != null) {
+        SecurityPinDialog(
+            titulo = "Autorizar Eliminación de Cliente",
+            subtitulo = "Ingresa el PIN para autorizar la eliminación de \"${clienteParaEliminar!!.nombre}\"",
+            onDismissRequest = {
+                mostrarPinParaEliminarCliente = false
+                clienteParaEliminar = null
+            },
+            onPinCorrecto = {
+                val c = clienteParaEliminar!!
+                mostrarPinParaEliminarCliente = false
+                clienteParaEliminar = null
+                viewModel.solicitarEliminarCliente(c)
+            }
+        )
+    }
+
+    // Diálogo de Seguridad PIN para Modificar Saldo / Envases Prestados
+    if (mostrarPinParaModificarSaldo && guardadoPendiente != null) {
+        SecurityPinDialog(
+            titulo = "Autorizar Ajuste de Saldo / Envases",
+            subtitulo = "Ingresa el PIN para autorizar la modificación manual de deuda monetaria o envases",
+            onDismissRequest = {
+                mostrarPinParaModificarSaldo = false
+                guardadoPendiente = null
+            },
+            onPinCorrecto = {
+                val accion = guardadoPendiente!!
+                mostrarPinParaModificarSaldo = false
+                guardadoPendiente = null
+                accion()
             }
         )
     }
@@ -353,6 +428,7 @@ private fun FilaFiltrosClientes(
 @Composable
 private fun TarjetaClienteItem(
     cliente: ClienteEntity,
+    transaccionHoy: com.rutaagua.camion.data.local.entity.TransaccionVentaEntity? = null,
     onEditarClick: () -> Unit,
     onEliminarClick: () -> Unit,
     onVerFoto: (path: String, nombre: String) -> Unit
@@ -547,6 +623,32 @@ private fun TarjetaClienteItem(
             // Fila Inferior: Badges de Deuda en Dinero ($) o Bidones Prestados (si aplican)
             val tieneDeuda = cliente.deudaMonetaria > 0.0
             val tienePrestados = cliente.bidonesPrestados > 0
+
+            if (transaccionHoy != null) {
+                val vehiculoIcono = if (transaccionHoy.vehiculo == "CAMIONETA") "🛻 CAMIONETA" else "🚚 CAMIÓN"
+                val formatoHora = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+                val hora = formatoHora.format(Date(transaccionHoy.fecha))
+                val bidones = transaccionHoy.cantidadBidonesRecarga + transaccionHoy.cantidadBidonesPrestados + transaccionHoy.cantidadBidonesVendidosEnvase
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    color = Color(0xFFF0FDF4),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, Color(0xFF86EFAC)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "✅ Atendido hoy por $vehiculoIcono ($hora • $bidones un.)",
+                            color = Color(0xFF15803D),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
 
             if (tieneDeuda || tienePrestados) {
                 Spacer(modifier = Modifier.height(10.dp))
