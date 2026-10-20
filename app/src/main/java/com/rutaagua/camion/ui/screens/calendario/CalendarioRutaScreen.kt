@@ -66,10 +66,13 @@ import com.rutaagua.camion.ui.theme.VerdeEfectivo
 import com.rutaagua.camion.ui.theme.VerdeEfectivoFondo
 import java.util.Locale
 
+import com.rutaagua.camion.data.local.entity.ClienteEntity
+
 @Composable
 fun CalendarioRutaScreen(
     viewModel: ClientesViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRegistrarEntregaCliente: ((ClienteEntity) -> Unit)? = null
 ) {
     val diaSeleccionado by viewModel.diaSeleccionadoCalendario.collectAsState()
     val clientesRuta by viewModel.clientesRutaDiaState.collectAsState()
@@ -123,7 +126,10 @@ fun CalendarioRutaScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(clientesRuta, key = { it.cliente.id }) { item ->
-                        TarjetaClienteRutaProgramado(item = item)
+                        TarjetaClienteRutaProgramado(
+                            item = item,
+                            onClick = { onRegistrarEntregaCliente?.invoke(item.cliente) }
+                        )
                     }
                     item {
                         Spacer(modifier = Modifier.height(80.dp))
@@ -363,7 +369,10 @@ private fun ResumenBotellonesRequeridos(clientesRuta: List<ClienteRutaItem>) {
  * Tarjeta individual para cliente en la ruta del día.
  */
 @Composable
-private fun TarjetaClienteRutaProgramado(item: ClienteRutaItem) {
+private fun TarjetaClienteRutaProgramado(
+    item: ClienteRutaItem,
+    onClick: (() -> Unit)? = null
+) {
     val cliente = item.cliente
     val entregado = item.entregadoHoy
 
@@ -377,7 +386,9 @@ private fun TarjetaClienteRutaProgramado(item: ClienteRutaItem) {
             width = 1.dp,
             color = if (entregado) VerdeEfectivo.copy(alpha = 0.5f) else Color(0xFFE2E8F0)
         ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
     ) {
         Row(
             modifier = Modifier

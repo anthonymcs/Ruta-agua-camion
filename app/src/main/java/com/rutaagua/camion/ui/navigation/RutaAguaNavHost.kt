@@ -29,7 +29,8 @@ import com.rutaagua.camion.ui.screens.clientes.ClientesScreen
 import com.rutaagua.camion.ui.screens.clientes.ClientesViewModel
 import com.rutaagua.camion.ui.screens.inventario.InventarioCamionScreen
 import com.rutaagua.camion.ui.screens.inventario.InventarioCamionViewModel
-import com.rutaagua.camion.ui.screens.registro.RegistroVentasPlaceholderScreen
+import com.rutaagua.camion.ui.screens.registro.RegistroDiaScreen
+import com.rutaagua.camion.ui.screens.registro.RegistroDiaViewModel
 import com.rutaagua.camion.ui.theme.AguaPrimary
 import com.rutaagua.camion.ui.theme.AguaPrimaryLight
 import com.rutaagua.camion.ui.theme.TextoOscuro
@@ -41,6 +42,9 @@ class RutaAguaViewModelFactory(
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return when {
+            modelClass.isAssignableFrom(RegistroDiaViewModel::class.java) -> {
+                RegistroDiaViewModel(repository) as T
+            }
             modelClass.isAssignableFrom(InventarioCamionViewModel::class.java) -> {
                 InventarioCamionViewModel(repository) as T
             }
@@ -62,10 +66,11 @@ fun RutaAguaNavHost(
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route ?: AppDestinations.CAMION.ruta
+    val currentRoute = navBackStackEntry?.destination?.route ?: AppDestinations.REGISTRO.ruta
 
     val factory = RutaAguaViewModelFactory(repository)
 
+    val registroDiaViewModel: RegistroDiaViewModel = viewModel(factory = factory)
     val inventarioViewModel: InventarioCamionViewModel = viewModel(factory = factory)
     val clientesViewModel: ClientesViewModel = viewModel(factory = factory)
 
@@ -119,12 +124,12 @@ fun RutaAguaNavHost(
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = AppDestinations.CAMION.ruta,
+            startDestination = AppDestinations.REGISTRO.ruta,
             modifier = Modifier.padding(innerPadding)
         ) {
-            // Pestaña 1: Registro de Ventas y Arqueo (Pendiente Fase 4)
+            // Pestaña 1: Registro Diario de Ventas, Arqueo de Caja y WhatsApp
             composable(AppDestinations.REGISTRO.ruta) {
-                RegistroVentasPlaceholderScreen()
+                RegistroDiaScreen(viewModel = registroDiaViewModel)
             }
 
             // Pestaña 2: Camión (Inventario en vivo y Recarga en Planta)
@@ -139,7 +144,19 @@ fun RutaAguaNavHost(
 
             // Pestaña 4: Calendario de Ruta Semanal (Lunes a Sábado)
             composable(AppDestinations.CALENDARIO.ruta) {
-                CalendarioRutaScreen(viewModel = clientesViewModel)
+                CalendarioRutaScreen(
+                    viewModel = clientesViewModel,
+                    onRegistrarEntregaCliente = { cliente ->
+                        registroDiaViewModel.abrirModalNuevaVenta(cliente)
+                        navController.navigate(AppDestinations.REGISTRO.ruta) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
             }
         }
     }
