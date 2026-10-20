@@ -93,6 +93,7 @@ import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 import com.rutaagua.camion.ui.theme.VerdeEfectivo
 import com.rutaagua.camion.ui.theme.VerdeEfectivoFondo
+import com.rutaagua.camion.ui.utils.WhatsAppHelper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -234,7 +235,15 @@ fun RegistroDiaScreen(
                         nombreCliente = cliente?.nombre ?: transaccion.nombreClientePaso ?: "Cliente de Paso",
                         ubicacion = cliente?.ubicacion ?: "",
                         onEditar = { viewModel.abrirEditarVenta(transaccion, cliente) },
-                        onEliminar = { viewModel.solicitarEliminarVenta(transaccion) }
+                        onEliminar = { viewModel.solicitarEliminarVenta(transaccion) },
+                        onEnviarRecibo = {
+                            val mensajeRecibo = WhatsAppHelper.generarMensajeReciboEntrega(
+                                transaccion = transaccion,
+                                cliente = cliente,
+                                fechaDisplay = viewModel.fechaHoyDisplay
+                            )
+                            WhatsAppHelper.abrirChatWhatsApp(context, cliente?.telefono, mensajeRecibo)
+                        }
                     )
                 }
             }
@@ -557,7 +566,8 @@ private fun TarjetaRegistroItem(
     nombreCliente: String,
     ubicacion: String,
     onEditar: () -> Unit,
-    onEliminar: () -> Unit
+    onEliminar: () -> Unit,
+    onEnviarRecibo: () -> Unit
 ) {
     val formatoHora = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val horaTexto = formatoHora.format(Date(transaccion.fecha))
@@ -715,6 +725,32 @@ private fun TarjetaRegistroItem(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Black,
                     color = AguaPrimary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Botón de WhatsApp para Enviar Recibo al Cliente
+            Button(
+                onClick = onEnviarRecibo,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(38.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "📲 Enviar recibo al cliente",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
                 )
             }
         }

@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
@@ -69,6 +70,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -82,6 +84,7 @@ import com.rutaagua.camion.ui.components.BidonIllustration
 import com.rutaagua.camion.ui.components.DialogoVistaPreviaFoto
 import com.rutaagua.camion.ui.components.FotoReferenciaThumbnail
 import com.rutaagua.camion.ui.components.SelectorFotoReferencia
+import com.rutaagua.camion.ui.utils.WhatsAppHelper
 import com.rutaagua.camion.ui.theme.AguaPrimary
 import com.rutaagua.camion.ui.theme.AguaPrimaryDark
 import com.rutaagua.camion.ui.theme.AguaPrimaryLight
@@ -354,6 +357,8 @@ private fun TarjetaClienteItem(
     onEliminarClick: () -> Unit,
     onVerFoto: (path: String, nombre: String) -> Unit
 ) {
+    val context = LocalContext.current
+
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -590,6 +595,34 @@ private fun TarjetaClienteItem(
                     }
                 }
             }
+
+            // Botón de WhatsApp Directo con Estado de Cuenta
+            Spacer(modifier = Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    val mensaje = WhatsAppHelper.generarMensajeEstadoCuenta(cliente)
+                    WhatsAppHelper.abrirChatWhatsApp(context, cliente.telefono, mensaje)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Chat,
+                    contentDescription = "WhatsApp Cliente",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "WhatsApp Cliente",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
         }
     }
 }
@@ -696,7 +729,7 @@ private fun ModalFormularioCliente(
             OutlinedTextField(
                 value = telefono,
                 onValueChange = { telefono = it },
-                label = { Text("Teléfono / WhatsApp") },
+                label = { Text("📱 Teléfono / WhatsApp (Opcional)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()

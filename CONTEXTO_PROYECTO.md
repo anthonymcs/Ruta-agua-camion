@@ -117,3 +117,8 @@
    - Captura vía cámara (`FileProvider`) y selección desde galería.
    - Guardado y compresión automática JPEG en almacenamiento interno (`filesDir/fotos_clientes/`).
    - Miniatura en tarjetas de clientes y vista ampliada con diálogo modal de zoom.
+6. **Conexión Directa a WhatsApp por Cliente y Envío de Recibos**:
+   - Normalización de números para Ecuador (`09xxxxxxxx` o `9xxxxxxxx` a `5939xxxxxxxx`).
+   - Botón directo **"WhatsApp Cliente"** en tarjetas de clientes para enviar su Estado de Cuenta (deuda y envases prestados).
+   - Botón directo **"📲 Enviar recibo al cliente"** en cada entrega del día para emitir recibo digital con productos, totales, método de pago y saldo actualizado.
+   - Enlace directo vía `wa.me` con fallback a selector de contactos de WhatsApp para clientes sin número guardado o ventas al paso.
