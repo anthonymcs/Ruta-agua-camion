@@ -25,4 +25,10 @@ interface RecargaPlantaDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(recarga: RecargaPlantaEntity): Long
+
+    @androidx.room.Update
+    suspend fun actualizar(recarga: RecargaPlantaEntity): Int
+
+    @androidx.room.Delete
+    suspend fun eliminar(recarga: RecargaPlantaEntity): Int
 }

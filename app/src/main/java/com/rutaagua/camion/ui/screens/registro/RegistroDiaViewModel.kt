@@ -2,6 +2,7 @@ package com.rutaagua.camion.ui.screens.registro
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rutaagua.camion.data.local.entity.CierreCajaEntity
 import com.rutaagua.camion.data.local.entity.ClienteEntity
 import com.rutaagua.camion.data.local.entity.GastoExtraEntity
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
@@ -11,6 +12,7 @@ import com.rutaagua.camion.data.local.model.FormaPago
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.prefs.AppPreferences
+import com.rutaagua.camion.data.local.prefs.RolUsuario
 import com.rutaagua.camion.data.repository.RutaAguaRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,8 +44,14 @@ class RegistroDiaViewModel(
     val fechaHoyTexto: String = formatoFechaIso.format(Date())
     val fechaHoyDisplay: String = formatoFechaDisplay.format(Date())
 
-    // Filtro rápido de vista: Consolidado Ambos / Solo Camión / Solo Camioneta
-    val filtroVehiculoState = MutableStateFlow(FiltroVehiculoRegistro.CONSOLIDADO)
+    // Filtro rápido de vista: Inicializado directamente con el vehículo activo para aislar operaciones
+    val filtroVehiculoState = MutableStateFlow(
+        if (appPreferences.obtenerVehiculoActivo() == com.rutaagua.camion.data.local.model.TipoVehiculo.CAMIONETA) {
+            FiltroVehiculoRegistro.CAMIONETA
+        } else {
+            FiltroVehiculoRegistro.CAMION
+        }
+    )
 
     // -------------------------------------------------------------
     // ESTADOS REACTIVOS
@@ -113,11 +121,36 @@ class RegistroDiaViewModel(
             initialValue = emptyList()
         )
 
+    // Rol activo y costos de planta
+    val rolActivo: StateFlow<RolUsuario> = appPreferences.rolActivo
+    val costoPlantaBidon: Double get() = appPreferences.obtenerCostoPlantaBidon()
+    val costoPlantaGalon: Double get() = appPreferences.obtenerCostoPlantaGalon()
+    val costoPlantaPaca: Double get() = appPreferences.obtenerCostoPlantaPaca()
+    val costoPlantaMini: Double get() = appPreferences.obtenerCostoPlantaMini()
+
+    // Cierre de caja de hoy en vivo
+    val cierreHoyState: StateFlow<CierreCajaEntity?> = filtroVehiculoState
+        .flatMapLatest { filtro ->
+            if (filtro.vehiculoKey != null) {
+                repository.obtenerCierrePorFechaYVehiculo(fechaHoyTexto, filtro.vehiculoKey)
+            } else {
+                repository.obtenerUltimoCierrePorFecha(fechaHoyTexto)
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     // -------------------------------------------------------------
     // DIÁLOGOS Y MODALES
     // -------------------------------------------------------------
     private val _mostrarModalNuevaVenta = MutableStateFlow(false)
     val mostrarModalNuevaVenta: StateFlow<Boolean> = _mostrarModalNuevaVenta.asStateFlow()
+
+    private val _mostrarDialogoCierre = MutableStateFlow(false)
+    val mostrarDialogoCierre: StateFlow<Boolean> = _mostrarDialogoCierre.asStateFlow()
 
     private val _clientePreseleccionado = MutableStateFlow<ClienteEntity?>(null)
     val clientePreseleccionado: StateFlow<ClienteEntity?> = _clientePreseleccionado.asStateFlow()
@@ -136,6 +169,14 @@ class RegistroDiaViewModel(
 
     fun cambiarFiltroVehiculo(filtro: FiltroVehiculoRegistro) {
         filtroVehiculoState.value = filtro
+    }
+
+    fun cambiarFiltroSegunVehiculo(tipo: com.rutaagua.camion.data.local.model.TipoVehiculo) {
+        filtroVehiculoState.value = if (tipo == com.rutaagua.camion.data.local.model.TipoVehiculo.CAMIONETA) {
+            FiltroVehiculoRegistro.CAMIONETA
+        } else {
+            FiltroVehiculoRegistro.CAMION
+        }
     }
 
     fun abrirModalNuevaVenta(cliente: ClienteEntity? = null) {
@@ -207,28 +248,58 @@ class RegistroDiaViewModel(
         cantidadMinis: Int,
         formaPago: FormaPago,
         montoPagado: Double,
-        nota: String = ""
+        nota: String = "",
+        recargaTransparentes: Int = 0,
+        recargaAzules: Int = 0,
+        recargaMarcados: Int = 0,
+        montoEfectivo: Double = 0.0,
+        montoTransferencia: Double = 0.0,
+        montoCredito: Double = 0.0,
+        montoAbono: Double = 0.0,
+        montoCanceladoDeuda: Double = 0.0
     ) {
         viewModelScope.launch {
             val vehiculoOperativo = appPreferences.obtenerVehiculoActivo().name
             val transaccionPrevia = _transaccionEnEdicion.value
             val vehiculoVenta = transaccionPrevia?.vehiculo ?: vehiculoOperativo
 
-            val totalBidonesSalen = cantidadRecarga + cantidadPrestados + cantidadVendidosEnvase
             val inv = inventarioVehiculoActivoState.value
+            val tieneMultiBidon = (recargaTransparentes + recargaAzules + recargaMarcados) > 0
 
             // Validación de existencia en el vehículo correspondiente
-            if (inv != null && totalBidonesSalen > 0) {
-                var disponibleTipo = inv.stockPorTipo(tipoBidon)
-                if (transaccionPrevia != null && transaccionPrevia.tipoBidon == tipoBidon) {
-                    val antesBajaron = transaccionPrevia.cantidadBidonesRecarga +
-                            transaccionPrevia.cantidadBidonesPrestados +
-                            transaccionPrevia.cantidadBidonesVendidosEnvase
-                    disponibleTipo += antesBajaron
-                }
-                if (disponibleTipo < totalBidonesSalen) {
-                    _mensajeSnackbar.value = "Stock insuficiente: solo quedan $disponibleTipo bidones ${tipoBidon.name} en $vehiculoVenta"
-                    return@launch
+            if (inv != null) {
+                if (tieneMultiBidon) {
+                    val prevTrans = transaccionPrevia?.recargaTransparentes ?: 0
+                    val prevAzul = transaccionPrevia?.recargaAzules ?: 0
+                    val prevMarc = transaccionPrevia?.recargaMarcados ?: 0
+
+                    if (recargaTransparentes > (inv.bidonesLlenosTransparentes + prevTrans)) {
+                        _mensajeSnackbar.value = "Stock insuficiente en PET Cristal (disponibles: ${inv.bidonesLlenosTransparentes})"
+                        return@launch
+                    }
+                    if (recargaAzules > (inv.bidonesLlenosAzules + prevAzul)) {
+                        _mensajeSnackbar.value = "Stock insuficiente en Azul Estándar (disponibles: ${inv.bidonesLlenosAzules})"
+                        return@launch
+                    }
+                    if (recargaMarcados > (inv.bidonesLlenosMarcados + prevMarc)) {
+                        _mensajeSnackbar.value = "Stock insuficiente en Marcados (disponibles: ${inv.bidonesLlenosMarcados})"
+                        return@launch
+                    }
+                } else {
+                    val totalBidonesSalen = cantidadRecarga + cantidadPrestados + cantidadVendidosEnvase
+                    if (totalBidonesSalen > 0) {
+                        var disponibleTipo = inv.stockPorTipo(tipoBidon)
+                        if (transaccionPrevia != null && transaccionPrevia.tipoBidon == tipoBidon) {
+                            val antesBajaron = transaccionPrevia.cantidadBidonesRecarga +
+                                    transaccionPrevia.cantidadBidonesPrestados +
+                                    transaccionPrevia.cantidadBidonesVendidosEnvase
+                            disponibleTipo += antesBajaron
+                        }
+                        if (disponibleTipo < totalBidonesSalen) {
+                            _mensajeSnackbar.value = "Stock insuficiente: solo quedan $disponibleTipo bidones ${tipoBidon.name} en $vehiculoVenta"
+                            return@launch
+                        }
+                    }
                 }
             }
 
@@ -240,25 +311,39 @@ class RegistroDiaViewModel(
             val subtotalMinis = cantidadMinis * 1.75
             val totalVentaHoy = subtotalRecarga + subtotalVendidosEnvase + subtotalGalones + subtotalPacas + subtotalMinis
 
-            var efectivo = 0.0
-            var transferencia = 0.0
-            var credito = 0.0
-            var abono = 0.0
-            var cancelado = 0.0
+            val usoDesgloseFinanciero = (montoEfectivo + montoTransferencia + montoCredito + montoAbono + montoCanceladoDeuda) > 0.0
 
-            when (formaPago) {
-                FormaPago.EFECTIVO -> efectivo = totalVentaHoy
-                FormaPago.TRANSFERENCIA -> transferencia = totalVentaHoy
-                FormaPago.CREDITO -> credito = totalVentaHoy
-                FormaPago.ABONO -> {
-                    efectivo = montoPagado
-                    abono = montoPagado
-                }
-                FormaPago.CANCELADO -> {
-                    efectivo = montoPagado
-                    cancelado = montoPagado
+            var finalEfectivo = 0.0
+            var finalTransferencia = 0.0
+            var finalCredito = 0.0
+            var finalAbono = 0.0
+            var finalCancelado = 0.0
+
+            if (usoDesgloseFinanciero) {
+                finalEfectivo = montoEfectivo
+                finalTransferencia = montoTransferencia
+                finalCredito = montoCredito
+                finalAbono = montoAbono
+                finalCancelado = montoCanceladoDeuda
+            } else {
+                when (formaPago) {
+                    FormaPago.EFECTIVO -> finalEfectivo = totalVentaHoy
+                    FormaPago.TRANSFERENCIA -> finalTransferencia = totalVentaHoy
+                    FormaPago.CREDITO -> finalCredito = totalVentaHoy
+                    FormaPago.ABONO -> {
+                        finalEfectivo = montoPagado
+                        finalAbono = montoPagado
+                    }
+                    FormaPago.CANCELADO -> {
+                        finalEfectivo = montoPagado
+                        finalCancelado = montoPagado
+                    }
                 }
             }
+
+            val finalRecTrans = if (tieneMultiBidon) recargaTransparentes else if (tipoBidon == TipoBidon.TRANSPARENTE) cantidadRecarga else 0
+            val finalRecAzul = if (tieneMultiBidon) recargaAzules else if (tipoBidon == TipoBidon.AZUL) cantidadRecarga else 0
+            val finalRecMarc = if (tieneMultiBidon) recargaMarcados else if (tipoBidon == TipoBidon.MARCADO) cantidadRecarga else 0
 
             val nuevaTransaccion = TransaccionVentaEntity(
                 id = transaccionPrevia?.id ?: 0L,
@@ -274,6 +359,12 @@ class RegistroDiaViewModel(
                 cantidadBidonesDevueltos = cantidadDevueltos,
                 cantidadBidonesVendidosEnvase = cantidadVendidosEnvase,
                 precioUnitarioBidonVendido = precioUnitarioBidonVendido,
+                recargaTransparentes = finalRecTrans,
+                recargaAzules = finalRecAzul,
+                recargaMarcados = finalRecMarc,
+                envasesVendidosTransparentes = if (tipoBidon == TipoBidon.TRANSPARENTE) cantidadVendidosEnvase else 0,
+                envasesVendidosAzules = if (tipoBidon == TipoBidon.AZUL) cantidadVendidosEnvase else 0,
+                envasesVendidosMarcados = if (tipoBidon == TipoBidon.MARCADO) cantidadVendidosEnvase else 0,
                 cantidadGalones = cantidadGalones,
                 precioUnitarioGalon = 0.75,
                 cantidadPacas = cantidadPacas,
@@ -282,11 +373,11 @@ class RegistroDiaViewModel(
                 precioUnitarioMini = 1.75,
                 totalImporte = totalVentaHoy,
                 formaPagoPrincipal = formaPago,
-                montoEfectivo = efectivo,
-                montoTransferencia = transferencia,
-                montoCredito = credito,
-                montoAbono = abono,
-                montoCanceladoDeuda = cancelado,
+                montoEfectivo = finalEfectivo,
+                montoTransferencia = finalTransferencia,
+                montoCredito = finalCredito,
+                montoAbono = finalAbono,
+                montoCanceladoDeuda = finalCancelado,
                 nota = nota
             )
 
@@ -334,6 +425,72 @@ class RegistroDiaViewModel(
         viewModelScope.launch {
             repository.eliminarGastoExtra(gasto)
             _mensajeSnackbar.value = "Gasto eliminado"
+        }
+    }
+
+    fun abrirDialogoCierre() {
+        _mostrarDialogoCierre.value = true
+    }
+
+    fun cerrarDialogoCierre() {
+        _mostrarDialogoCierre.value = false
+    }
+
+    fun registrarCierreCaja(
+        efectivoDeclarado: Double,
+        transferenciasDeclaradas: Double,
+        observaciones: String
+    ) {
+        viewModelScope.launch {
+            val resumen = resumenCierreDiaState.value
+            val vehiculoActual = appPreferences.obtenerVehiculoActivo().name
+
+            val efectivoSistema = resumen.efectivoNetoCaja
+            val transferenciasSistema = resumen.totalIngresoTransferencia
+            val totalSistema = efectivoSistema + transferenciasSistema
+            val totalDeclarado = efectivoDeclarado + transferenciasDeclaradas
+
+            val diferenciaEfectivo = efectivoDeclarado - efectivoSistema
+            val diferenciaTransferencia = transferenciasDeclaradas - transferenciasSistema
+            val diferenciaTotal = totalDeclarado - totalSistema
+
+            val costoTotalPlanta = (resumen.totalBidonesVendidos * costoPlantaBidon) +
+                    (resumen.totalGalonesVendidos * costoPlantaGalon) +
+                    (resumen.totalPacasVendidas * costoPlantaPaca) +
+                    (resumen.totalMinisVendidas * costoPlantaMini)
+
+            val utilidadBruta = maxOf(0.0, resumen.granTotalVenta - costoTotalPlanta)
+            val utilidadNeta = utilidadBruta - resumen.totalGastosRuta
+
+            val cierreExistente = cierreHoyState.value
+            val cierreEntity = CierreCajaEntity(
+                id = cierreExistente?.id ?: 0L,
+                fechaIso = fechaHoyTexto,
+                timestamp = System.currentTimeMillis(),
+                vehiculo = vehiculoActual,
+                efectivoDeclarado = efectivoDeclarado,
+                transferenciasDeclaradas = transferenciasDeclaradas,
+                totalDeclarado = totalDeclarado,
+                observaciones = observaciones,
+                efectivoSistema = efectivoSistema,
+                transferenciasSistema = transferenciasSistema,
+                totalSistema = totalSistema,
+                diferenciaEfectivo = diferenciaEfectivo,
+                diferenciaTransferencia = diferenciaTransferencia,
+                diferenciaTotal = diferenciaTotal,
+                bidonesVendidos = resumen.totalBidonesVendidos,
+                galonesVendidos = resumen.totalGalonesVendidos,
+                pacasVendidas = resumen.totalPacasVendidas,
+                minisVendidas = resumen.totalMinisVendidas,
+                gastosRuta = resumen.totalGastosRuta,
+                costoTotalPlanta = costoTotalPlanta,
+                utilidadBruta = utilidadBruta,
+                utilidadNeta = utilidadNeta,
+                sincronizado = false
+            )
+
+            repository.guardarCierreCaja(cierreEntity)
+            _mensajeSnackbar.value = "Cierre de caja guardado exitosamente"
         }
     }
 

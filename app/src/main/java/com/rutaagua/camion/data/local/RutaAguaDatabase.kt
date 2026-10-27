@@ -8,15 +8,19 @@ import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.rutaagua.camion.data.local.converter.Converters
 import com.rutaagua.camion.data.local.dao.ClienteDao
+import com.rutaagua.camion.data.local.dao.CierreCajaDao
 import com.rutaagua.camion.data.local.dao.GastoDao
 import com.rutaagua.camion.data.local.dao.InventarioDao
 import com.rutaagua.camion.data.local.dao.RecargaPlantaDao
 import com.rutaagua.camion.data.local.dao.TransaccionDao
+import com.rutaagua.camion.data.local.dao.VisitaFallidaDao
 import com.rutaagua.camion.data.local.entity.ClienteEntity
+import com.rutaagua.camion.data.local.entity.CierreCajaEntity
 import com.rutaagua.camion.data.local.entity.GastoExtraEntity
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
 import com.rutaagua.camion.data.local.entity.RecargaPlantaEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
+import com.rutaagua.camion.data.local.entity.VisitaFallidaEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -27,9 +31,11 @@ import kotlinx.coroutines.launch
         InventarioCamionEntity::class,
         RecargaPlantaEntity::class,
         TransaccionVentaEntity::class,
-        GastoExtraEntity::class
+        GastoExtraEntity::class,
+        CierreCajaEntity::class,
+        VisitaFallidaEntity::class
     ],
-    version = 3,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -40,6 +46,8 @@ abstract class RutaAguaDatabase : RoomDatabase() {
     abstract fun recargaPlantaDao(): RecargaPlantaDao
     abstract fun transaccionDao(): TransaccionDao
     abstract fun gastoDao(): GastoDao
+    abstract fun cierreCajaDao(): CierreCajaDao
+    abstract fun visitaFallidaDao(): VisitaFallidaDao
 
     companion object {
         @Volatile

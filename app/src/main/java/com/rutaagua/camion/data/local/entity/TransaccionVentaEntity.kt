@@ -37,12 +37,20 @@ data class TransaccionVentaEntity(
 
     // Desglose de Bidones de 20L
     val tipoBidon: TipoBidon = TipoBidon.AZUL,
-    val cantidadBidonesRecarga: Int = 0, // Recarga estándar (baja lleno, sube vacío)
+    val cantidadBidonesRecarga: Int = 0, // Recarga estándar (total o azul por compatibilidad)
     val precioUnitarioBidon: Double = 1.00,
     val cantidadBidonesPrestados: Int = 0, // Baja lleno, NO sube vacío (debe envase)
     val cantidadBidonesDevueltos: Int = 0, // Sube vacío, reduce bidones prestados del cliente
     val cantidadBidonesVendidosEnvase: Int = 0, // Venta de envase nuevo ($5.50 - $6.00)
     val precioUnitarioBidonVendido: Double = 0.0,
+
+    // Desglose multi-tipo por bidón específico en una misma entrega
+    val recargaTransparentes: Int = 0,
+    val recargaAzules: Int = 0,
+    val recargaMarcados: Int = 0,
+    val envasesVendidosTransparentes: Int = 0,
+    val envasesVendidosAzules: Int = 0,
+    val envasesVendidosMarcados: Int = 0,
 
     // Otros productos de venta regular
     val cantidadGalones: Int = 0, // 4L ($0.75 c/u)

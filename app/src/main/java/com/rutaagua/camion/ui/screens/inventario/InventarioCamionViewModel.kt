@@ -106,12 +106,25 @@ class InventarioCamionViewModel(
         _mostrarDialogoAjusteCapacidad.value = false
     }
 
-    fun abrirModalRecarga() {
+    // Control de edición y eliminación de recargas
+    private val _recargaEnEdicion = MutableStateFlow<RecargaPlantaEntity?>(null)
+    val recargaEnEdicion: StateFlow<RecargaPlantaEntity?> = _recargaEnEdicion.asStateFlow()
+
+    fun abrirModalRecarga(recargaAEditar: RecargaPlantaEntity? = null) {
+        _recargaEnEdicion.value = recargaAEditar
         _mostrarModalRecargaPlanta.value = true
     }
 
     fun cerrarModalRecarga() {
+        _recargaEnEdicion.value = null
         _mostrarModalRecargaPlanta.value = false
+    }
+
+    fun eliminarRecargaPlanta(recarga: RecargaPlantaEntity) {
+        viewModelScope.launch {
+            repository.eliminarRecargaPlanta(recarga)
+            _mensajeSnackbar.value = "Recarga de vuelta ${recarga.numeroVuelta} eliminada y stock revertido"
+        }
     }
 
     fun limpiarMensajeSnackbar() {
@@ -142,7 +155,7 @@ class InventarioCamionViewModel(
     }
 
     /**
-     * Ejecuta la recarga en planta purificadora (Vuelta 1 o 2).
+     * Ejecuta o edita la recarga en planta purificadora (Vuelta 1 o 2).
      */
     fun registrarRecargaPlanta(
         numeroVuelta: Int,
@@ -157,10 +170,13 @@ class InventarioCamionViewModel(
     ) {
         viewModelScope.launch {
             val vehiculo = appPreferences.obtenerVehiculoActivo().name
+            val recargaPrevia = _recargaEnEdicion.value
+
             val recarga = RecargaPlantaEntity(
-                vehiculo = vehiculo,
-                fecha = System.currentTimeMillis(),
-                fechaTexto = fechaHoyTexto,
+                id = recargaPrevia?.id ?: 0L,
+                vehiculo = recargaPrevia?.vehiculo ?: vehiculo,
+                fecha = recargaPrevia?.fecha ?: System.currentTimeMillis(),
+                fechaTexto = recargaPrevia?.fechaTexto ?: fechaHoyTexto,
                 numeroVuelta = numeroVuelta,
                 bidonesCargadosTransparentes = cargadosTransparentes,
                 bidonesCargadosAzules = cargadosAzules,
@@ -171,10 +187,18 @@ class InventarioCamionViewModel(
                 minisCargadas = minisCargadas,
                 observaciones = observaciones
             )
-            repository.registrarRecargaPlanta(recarga)
+
+            if (recargaPrevia != null) {
+                repository.editarRecargaPlanta(recargaPrevia, recarga)
+                _mensajeSnackbar.value = "Recarga actualizada en $vehiculo (Vuelta $numeroVuelta)"
+            } else {
+                repository.registrarRecargaPlanta(recarga)
+                val total = cargadosTransparentes + cargadosAzules + cargadosMarcados
+                _mensajeSnackbar.value = "Recarga Planta $vehiculo (Vuelta $numeroVuelta): +$total bidones"
+            }
+
+            _recargaEnEdicion.value = null
             _mostrarModalRecargaPlanta.value = false
-            val total = cargadosTransparentes + cargadosAzules + cargadosMarcados
-            _mensajeSnackbar.value = "Recarga Planta $vehiculo (Vuelta $numeroVuelta): +$total bidones"
         }
     }
 }

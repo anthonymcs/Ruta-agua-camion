@@ -70,18 +70,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
+import com.rutaagua.camion.data.local.entity.RecargaPlantaEntity
 import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.RecargaCalculada
 import com.rutaagua.camion.data.local.model.StockAlertas
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.model.TipoVehiculo
 import com.rutaagua.camion.ui.components.BidonIllustration
+import androidx.compose.material.icons.filled.Sync
+import com.rutaagua.camion.ui.components.CamionIllustration
+import com.rutaagua.camion.ui.components.CamionetaIllustration
 import com.rutaagua.camion.ui.components.CamionRepartidorIllustration
 import com.rutaagua.camion.ui.components.GalonIllustration
 import com.rutaagua.camion.ui.components.MiniIllustration
 import com.rutaagua.camion.ui.components.PacaIllustration
 import com.rutaagua.camion.ui.theme.AguaPrimary
 import com.rutaagua.camion.ui.theme.AguaPrimaryDark
+import com.rutaagua.camion.ui.theme.AguaPrimaryLight
 import com.rutaagua.camion.ui.theme.AmbarAdvertencia
 import com.rutaagua.camion.ui.theme.AmbarFondo
 import com.rutaagua.camion.ui.theme.BidonAzulColor
@@ -101,6 +106,7 @@ import com.rutaagua.camion.ui.theme.VerdeEfectivoFondo
 @Composable
 fun InventarioCamionScreen(
     viewModel: InventarioCamionViewModel,
+    onCambiarVehiculoClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val inventario by viewModel.inventarioState.collectAsState()
@@ -111,6 +117,13 @@ fun InventarioCamionScreen(
     val mostrarDialogoCapacidad by viewModel.mostrarDialogoAjusteCapacidad.collectAsState()
     val mostrarModalRecarga by viewModel.mostrarModalRecargaPlanta.collectAsState()
     val mensajeSnackbar by viewModel.mensajeSnackbar.collectAsState()
+    val recargasHoy by viewModel.recargasHoyState.collectAsState()
+    val recargaEnEdicion by viewModel.recargaEnEdicion.collectAsState()
+
+    var recargaParaEliminar by remember { mutableStateOf<RecargaPlantaEntity?>(null) }
+    var recargaParaEditar by remember { mutableStateOf<RecargaPlantaEntity?>(null) }
+    var mostrarPinParaEditarRecarga by remember { mutableStateOf(false) }
+    var mostrarPinParaEliminarRecarga by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -129,7 +142,8 @@ fun InventarioCamionScreen(
         topBar = {
             HeaderCamion(
                 vehiculoActivo = vehiculoActivo,
-                onAjustarCapacidadClick = { viewModel.abrirDialogoCapacidad() }
+                onAjustarCapacidadClick = { viewModel.abrirDialogoCapacidad() },
+                onCambiarVehiculoClick = onCambiarVehiculoClick
             )
         }
     ) { innerPadding ->
@@ -177,7 +191,7 @@ fun InventarioCamionScreen(
 
             item {
                 inventario?.let { inv ->
-                    FilaTarjetasBidones(inv)
+                    FilaTarjetasBidones(inv, estadisticasVentas)
                 }
             }
 
@@ -206,12 +220,42 @@ fun InventarioCamionScreen(
             }
 
             item {
-                SeccionEstadisticasVentasHoy(estadisticas = estadisticasVentas)
+                SeccionEstadisticasVentasHoy(
+                    estadisticas = estadisticasVentas,
+                    inventario = inventario
+                )
+            }
+
+            // 7. Historial de Recargas del Día con Edición y Eliminación protegidas por PIN
+            if (recargasHoy.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "RECARGAS REGISTRADAS HOY (${recargasHoy.size})",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextoSecundario
+                    )
+                }
+
+                items(recargasHoy.size) { idx ->
+                    val recarga = recargasHoy[idx]
+                    TarjetaRecargaItem(
+                        recarga = recarga,
+                        onEditar = {
+                            recargaParaEditar = recarga
+                            mostrarPinParaEditarRecarga = true
+                        },
+                        onEliminar = {
+                            recargaParaEliminar = recarga
+                            mostrarPinParaEliminarRecarga = true
+                        }
+                    )
+                }
             }
         }
     }
 
-    // Modal para Registrar Recarga en Planta
+    // Modal para Registrar o Editar Recarga en Planta
     if (mostrarModalRecarga) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.cerrarModalRecarga() },
@@ -220,12 +264,48 @@ fun InventarioCamionScreen(
             ModalRecargaPlantaContent(
                 inventario = inventario,
                 calculoRecarga = calculoRecarga,
+                recargaEnEdicion = recargaEnEdicion,
                 onConfirmarRecarga = { v, t, a, m, vac, gal, pac, min, obs ->
                     viewModel.registrarRecargaPlanta(v, t, a, m, vac, gal, pac, min, obs)
                 },
                 onCancelar = { viewModel.cerrarModalRecarga() }
             )
         }
+    }
+
+    // PIN de seguridad para EDITAR recarga
+    if (mostrarPinParaEditarRecarga && recargaParaEditar != null) {
+        com.rutaagua.camion.ui.security.SecurityPinDialog(
+            titulo = "Editar Carga de Camión",
+            subtitulo = "Ingresa la contraseña de seguridad (PIN)",
+            onDismissRequest = {
+                mostrarPinParaEditarRecarga = false
+                recargaParaEditar = null
+            },
+            onPinCorrecto = {
+                mostrarPinParaEditarRecarga = false
+                val r = recargaParaEditar
+                recargaParaEditar = null
+                viewModel.abrirModalRecarga(r)
+            }
+        )
+    }
+
+    // PIN de seguridad para ELIMINAR recarga
+    if (mostrarPinParaEliminarRecarga && recargaParaEliminar != null) {
+        com.rutaagua.camion.ui.security.SecurityPinDialog(
+            titulo = "Eliminar Carga de Camión",
+            subtitulo = "Ingresa la contraseña de seguridad (PIN)",
+            onDismissRequest = {
+                mostrarPinParaEliminarRecarga = false
+                recargaParaEliminar = null
+            },
+            onPinCorrecto = {
+                mostrarPinParaEliminarRecarga = false
+                recargaParaEliminar?.let { viewModel.eliminarRecargaPlanta(it) }
+                recargaParaEliminar = null
+            }
+        )
     }
 
     // Diálogo de Ajuste Rápido de Capacidad Diaria
@@ -244,7 +324,8 @@ fun InventarioCamionScreen(
 @Composable
 private fun HeaderCamion(
     vehiculoActivo: TipoVehiculo,
-    onAjustarCapacidadClick: () -> Unit
+    onAjustarCapacidadClick: () -> Unit,
+    onCambiarVehiculoClick: (() -> Unit)? = null
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -257,8 +338,15 @@ private fun HeaderCamion(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CamionRepartidorIllustration(size = 46.dp)
+            Row(
+                modifier = Modifier.weight(1f, fill = false),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (vehiculoActivo == TipoVehiculo.CAMIONETA) {
+                    CamionetaIllustration(size = 50.dp)
+                } else {
+                    CamionIllustration(size = 50.dp)
+                }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
@@ -274,12 +362,23 @@ private fun HeaderCamion(
                 }
             }
 
-            IconButton(onClick = onAjustarCapacidadClick) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Ajustar Capacidad",
-                    tint = AguaPrimary
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onCambiarVehiculoClick != null) {
+                    IconButton(onClick = onCambiarVehiculoClick) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Cambiar Vehículo",
+                            tint = AguaPrimary
+                        )
+                    }
+                }
+                IconButton(onClick = onAjustarCapacidadClick) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Ajustar Capacidad",
+                        tint = AguaPrimary
+                    )
+                }
             }
         }
     }
@@ -496,7 +595,14 @@ private fun BotonRecargarEnPlanta(
  * Tarjetas de los 3 tipos de bidones con números gigantes y alertas visuales.
  */
 @Composable
-private fun FilaTarjetasBidones(inventario: InventarioCamionEntity) {
+private fun FilaTarjetasBidones(
+    inventario: InventarioCamionEntity,
+    estadisticas: EstadisticasVentasTipo? = null
+) {
+    val totalTrans = inventario.bidonesLlenosTransparentes + (estadisticas?.transparentesVendidos ?: 0)
+    val totalAzul = inventario.bidonesLlenosAzules + (estadisticas?.azulesVendidos ?: 0)
+    val totalMarc = inventario.bidonesLlenosMarcados + (estadisticas?.marcadosVendidos ?: 0)
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -505,6 +611,7 @@ private fun FilaTarjetasBidones(inventario: InventarioCamionEntity) {
             tipo = TipoBidon.TRANSPARENTE,
             nombre = "PET Cristal",
             cantidad = inventario.bidonesLlenosTransparentes,
+            totalCargado = totalTrans,
             colorFondo = BidonTransparenteFondo,
             colorBorde = BidonTransparenteColor,
             modifier = Modifier.weight(1f)
@@ -514,6 +621,7 @@ private fun FilaTarjetasBidones(inventario: InventarioCamionEntity) {
             tipo = TipoBidon.AZUL,
             nombre = "Azul Fuerte",
             cantidad = inventario.bidonesLlenosAzules,
+            totalCargado = totalAzul,
             colorFondo = BidonAzulFondo,
             colorBorde = BidonAzulColor,
             modifier = Modifier.weight(1f)
@@ -523,6 +631,7 @@ private fun FilaTarjetasBidones(inventario: InventarioCamionEntity) {
             tipo = TipoBidon.MARCADO,
             nombre = "Marcado",
             cantidad = inventario.bidonesLlenosMarcados,
+            totalCargado = totalMarc,
             colorFondo = BidonMarcadoFondo,
             colorBorde = BidonMarcadoColor,
             modifier = Modifier.weight(1f)
@@ -535,6 +644,7 @@ private fun TarjetaBidonIndividual(
     tipo: TipoBidon,
     nombre: String,
     cantidad: Int,
+    totalCargado: Int = 0,
     colorFondo: Color,
     colorBorde: Color,
     modifier: Modifier = Modifier
@@ -562,12 +672,23 @@ private fun TarjetaBidonIndividual(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = "$cantidad",
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.Black,
-                color = if (stockBajo) RojoAlerta else TextoOscuro
-            )
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = "$cantidad",
+                    style = MaterialTheme.typography.displayLarge,
+                    fontWeight = FontWeight.Black,
+                    color = if (stockBajo) RojoAlerta else TextoOscuro
+                )
+                if (totalCargado > 0) {
+                    Text(
+                        text = "/$totalCargado",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextoSecundario,
+                        modifier = Modifier.padding(bottom = 6.dp, start = 2.dp),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
 
             Text(
                 text = nombre,
@@ -716,6 +837,7 @@ private fun TarjetaProductoConIlustracion(
 private fun ModalRecargaPlantaContent(
     inventario: InventarioCamionEntity?,
     calculoRecarga: RecargaCalculada?,
+    recargaEnEdicion: RecargaPlantaEntity? = null,
     onConfirmarRecarga: (
         numeroVuelta: Int,
         trans: Int,
@@ -729,19 +851,33 @@ private fun ModalRecargaPlantaContent(
     ) -> Unit,
     onCancelar: () -> Unit
 ) {
-    var numeroVuelta by remember { mutableIntStateOf(1) }
+    var numeroVuelta by remember { mutableIntStateOf(recargaEnEdicion?.numeroVuelta ?: 1) }
 
     val faltantes = calculoRecarga?.bidonesFaltantesParaTope ?: 0
-    var cantTrans by remember { mutableIntStateOf(faltantes / 3) }
-    var cantAzul by remember { mutableIntStateOf(faltantes - (faltantes / 3) - (faltantes / 6)) }
-    var cantMarc by remember { mutableIntStateOf(faltantes / 6) }
-    var cantVaciosBajar by remember { mutableIntStateOf(inventario?.bidonesVacios ?: 0) }
+    var cantTrans by remember {
+        mutableIntStateOf(recargaEnEdicion?.bidonesCargadosTransparentes ?: (faltantes / 3))
+    }
+    var cantAzul by remember {
+        mutableIntStateOf(recargaEnEdicion?.bidonesCargadosAzules ?: (faltantes - (faltantes / 3) - (faltantes / 6)))
+    }
+    var cantMarc by remember {
+        mutableIntStateOf(recargaEnEdicion?.bidonesCargadosMarcados ?: (faltantes / 6))
+    }
+    var cantVaciosBajar by remember {
+        mutableIntStateOf(recargaEnEdicion?.bidonesVaciosDescargados ?: (inventario?.bidonesVacios ?: 0))
+    }
 
-    var cantGalones by remember { mutableIntStateOf(calculoRecarga?.galonesFaltantes ?: 0) }
-    var cantPacas by remember { mutableIntStateOf(calculoRecarga?.pacasFaltantes ?: 0) }
-    var cantMinis by remember { mutableIntStateOf(calculoRecarga?.minisFaltantes ?: 0) }
+    var cantGalones by remember {
+        mutableIntStateOf(recargaEnEdicion?.galonesCargados ?: (calculoRecarga?.galonesFaltantes ?: 0))
+    }
+    var cantPacas by remember {
+        mutableIntStateOf(recargaEnEdicion?.pacasCargadas ?: (calculoRecarga?.pacasFaltantes ?: 0))
+    }
+    var cantMinis by remember {
+        mutableIntStateOf(recargaEnEdicion?.minisCargadas ?: (calculoRecarga?.minisFaltantes ?: 0))
+    }
 
-    var observaciones by remember { mutableStateOf("") }
+    var observaciones by remember { mutableStateOf(recargaEnEdicion?.observaciones ?: "") }
 
     val totalCargados = cantTrans + cantAzul + cantMarc
 
@@ -759,12 +895,12 @@ private fun ModalRecargaPlantaContent(
             ) {
                 Column {
                     Text(
-                        text = "RECARGA EN PLANTA",
+                        text = if (recargaEnEdicion != null) "EDITAR CARGA EN PLANTA" else "RECARGA EN PLANTA",
                         style = MaterialTheme.typography.titleLarge,
                         color = AguaPrimaryDark
                     )
                     Text(
-                        text = "Abastecimiento de camión",
+                        text = if (recargaEnEdicion != null) "Modifica los valores cargados en este viaje" else "Abastecimiento de camión",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextoSecundario
                     )
@@ -944,7 +1080,7 @@ private fun ModalRecargaPlantaContent(
                 Icon(imageVector = Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "CONFIRMAR RECARGA (+$totalCargados BIDONES)",
+                    text = if (recargaEnEdicion != null) "GUARDAR CAMBIOS (+$totalCargados BIDONES)" else "CONFIRMAR RECARGA (+$totalCargados BIDONES)",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -991,7 +1127,10 @@ private fun FilaSelectorConIcono(
             )
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             IconButton(
                 onClick = { if (cantidad > 0) onCambio(cantidad - 1) },
                 modifier = Modifier
@@ -1001,13 +1140,21 @@ private fun FilaSelectorConIcono(
                 Icon(imageVector = Icons.Default.Remove, contentDescription = "Menos", tint = TextoOscuro)
             }
 
-            Text(
-                text = "$cantidad",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.width(46.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .width(48.dp)
+                    .background(Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                    .padding(vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "$cantidad",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black,
+                    color = TextoOscuro,
+                    textAlign = TextAlign.Center
+                )
+            }
 
             IconButton(
                 onClick = { onCambio(cantidad + 1) },
@@ -1054,7 +1201,10 @@ private fun FilaSelectorCantidad(
             )
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             IconButton(
                 onClick = { if (cantidad > 0) onCambio(cantidad - 1) },
                 modifier = Modifier
@@ -1064,13 +1214,21 @@ private fun FilaSelectorCantidad(
                 Icon(imageVector = Icons.Default.Remove, contentDescription = "Menos", tint = TextoOscuro)
             }
 
-            Text(
-                text = "$cantidad",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.width(46.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .width(48.dp)
+                    .background(Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                    .padding(vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "$cantidad",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black,
+                    color = TextoOscuro,
+                    textAlign = TextAlign.Center
+                )
+            }
 
             IconButton(
                 onClick = { onCambio(cantidad + 1) },
@@ -1079,6 +1237,114 @@ private fun FilaSelectorCantidad(
                     .background(AguaPrimary, CircleShape)
             ) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = "Más", tint = Color.White)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TarjetaRecargaItem(
+    recarga: com.rutaagua.camion.data.local.entity.RecargaPlantaEntity,
+    onEditar: () -> Unit,
+    onEliminar: () -> Unit
+) {
+    val formatoHora = remember { java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()) }
+    val horaTexto = formatoHora.format(java.util.Date(recarga.fecha))
+
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        color = AguaPrimaryLight.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = "Vuelta ${recarga.numeroVuelta}",
+                            color = AguaPrimaryDark,
+                            fontWeight = FontWeight.Black,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Hora: $horaTexto",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextoSecundario
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onEditar, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Build,
+                            contentDescription = "Editar carga",
+                            tint = AguaPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    IconButton(onClick = onEliminar, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Eliminar carga",
+                            tint = RojoAlerta,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Detalle de productos cargados
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Cargado: +${recarga.totalBidonesCargados()} bidones",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextoOscuro
+                )
+                Text(
+                    text = "(T: ${recarga.bidonesCargadosTransparentes} • A: ${recarga.bidonesCargadosAzules} • M: ${recarga.bidonesCargadosMarcados})",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextoSecundario,
+                    fontSize = 11.sp
+                )
+            }
+
+            if (recarga.galonesCargados > 0 || recarga.pacasCargadas > 0 || recarga.minisCargadas > 0) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Otros: ${recarga.galonesCargados} gal. • ${recarga.pacasCargadas} pac. • ${recarga.minisCargadas} min.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextoSecundario,
+                    fontSize = 11.sp
+                )
+            }
+
+            if (recarga.bidonesVaciosDescargados > 0) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Vacíos descargados en planta: -${recarga.bidonesVaciosDescargados}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = VerdeEfectivo,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp
+                )
             }
         }
     }
@@ -1158,7 +1424,8 @@ private fun DialogoAjustarCapacidad(
  */
 @Composable
 private fun SeccionEstadisticasVentasHoy(
-    estadisticas: EstadisticasVentasTipo
+    estadisticas: EstadisticasVentasTipo,
+    inventario: InventarioCamionEntity? = null
 ) {
     val totalBidones = estadisticas.totalBidonesVendidos
     val pctTrans = if (totalBidones > 0) estadisticas.transparentesVendidos.toFloat() / totalBidones else 0f
@@ -1258,28 +1525,43 @@ private fun SeccionEstadisticasVentasHoy(
                     }
                 }
 
-                // Leyenda con porcentajes
+                // Leyenda con porcentajes y stock actual restante
                 Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.padding(start = 8.dp)
                 ) {
+                    val stockTrans = inventario?.bidonesLlenosTransparentes
+                    val totalTransRecargados = estadisticas.transparentesVendidos + (stockTrans ?: 0)
+                    val labelTransQuedan = if (stockTrans != null) " • Quedan: $stockTrans/$totalTransRecargados" else ""
+
+                    val stockAzul = inventario?.bidonesLlenosAzules
+                    val totalAzulRecargados = estadisticas.azulesVendidos + (stockAzul ?: 0)
+                    val labelAzulQuedan = if (stockAzul != null) " • Quedan: $stockAzul/$totalAzulRecargados" else ""
+
+                    val stockMarc = inventario?.bidonesLlenosMarcados
+                    val totalMarcRecargados = estadisticas.marcadosVendidos + (stockMarc ?: 0)
+                    val labelMarcQuedan = if (stockMarc != null) " • Quedan: $stockMarc/$totalMarcRecargados" else ""
+
                     ElementoLeyendaDonut(
                         color = BidonTransparenteColor,
                         nombre = "PET Transparente",
                         cantidad = estadisticas.transparentesVendidos,
-                        porcentaje = estadisticas.porcentajeTransparentes.toInt()
+                        porcentaje = estadisticas.porcentajeTransparentes.toInt(),
+                        textoExtra = labelTransQuedan
                     )
                     ElementoLeyendaDonut(
                         color = BidonAzulColor,
                         nombre = "Azul Normal",
                         cantidad = estadisticas.azulesVendidos,
-                        porcentaje = estadisticas.porcentajeAzules.toInt()
+                        porcentaje = estadisticas.porcentajeAzules.toInt(),
+                        textoExtra = labelAzulQuedan
                     )
                     ElementoLeyendaDonut(
                         color = BidonMarcadoColor,
                         nombre = "Marcado / Sello",
                         cantidad = estadisticas.marcadosVendidos,
-                        porcentaje = estadisticas.porcentajeMarcados.toInt()
+                        porcentaje = estadisticas.porcentajeMarcados.toInt(),
+                        textoExtra = labelMarcQuedan
                     )
                 }
             }
@@ -1299,22 +1581,33 @@ private fun SeccionEstadisticasVentasHoy(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                val gQuedan = inventario?.galonesLlenos
+                val gTotal = (gQuedan ?: 0) + estadisticas.galonesVendidos
                 TarjetaMiniEstadistica(
                     titulo = "Galones (4L)",
                     cantidad = estadisticas.galonesVendidos,
                     ilustracion = { GalonIllustration(size = 24.dp) },
+                    textoExtra = if (gQuedan != null) "Quedan: $gQuedan/$gTotal" else null,
                     modifier = Modifier.weight(1f)
                 )
+
+                val pQuedan = inventario?.pacasLlenas
+                val pTotal = (pQuedan ?: 0) + estadisticas.pacasVendidas
                 TarjetaMiniEstadistica(
                     titulo = "Pacas (24x)",
                     cantidad = estadisticas.pacasVendidas,
                     ilustracion = { PacaIllustration(size = 24.dp) },
+                    textoExtra = if (pQuedan != null) "Quedan: $pQuedan/$pTotal" else null,
                     modifier = Modifier.weight(1f)
                 )
+
+                val mQuedan = inventario?.minisLlenas
+                val mTotal = (mQuedan ?: 0) + estadisticas.minisVendidas
                 TarjetaMiniEstadistica(
                     titulo = "Minis (12x)",
                     cantidad = estadisticas.minisVendidas,
                     ilustracion = { MiniIllustration(size = 24.dp) },
+                    textoExtra = if (mQuedan != null) "Quedan: $mQuedan/$mTotal" else null,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -1327,7 +1620,8 @@ private fun ElementoLeyendaDonut(
     color: Color,
     nombre: String,
     cantidad: Int,
-    porcentaje: Int
+    porcentaje: Int,
+    textoExtra: String = ""
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
@@ -1344,7 +1638,7 @@ private fun ElementoLeyendaDonut(
                 color = TextoOscuro
             )
             Text(
-                text = "$cantidad un. ($porcentaje%)",
+                text = "$cantidad un. ($porcentaje%)$textoExtra",
                 style = MaterialTheme.typography.labelSmall,
                 color = TextoSecundario,
                 fontSize = 11.sp
@@ -1358,6 +1652,7 @@ private fun TarjetaMiniEstadistica(
     titulo: String,
     cantidad: Int,
     ilustracion: @Composable () -> Unit,
+    textoExtra: String? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -1385,6 +1680,17 @@ private fun TarjetaMiniEstadistica(
                 fontSize = 10.sp,
                 textAlign = TextAlign.Center
             )
+            if (textoExtra != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = textoExtra,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AguaPrimaryDark,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }

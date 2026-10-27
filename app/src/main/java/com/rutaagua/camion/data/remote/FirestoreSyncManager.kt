@@ -12,11 +12,13 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.firestoreSettings
 import com.google.firebase.firestore.persistentCacheSettings
 import com.rutaagua.camion.data.local.RutaAguaDatabase
+import com.rutaagua.camion.data.local.entity.CierreCajaEntity
 import com.rutaagua.camion.data.local.entity.ClienteEntity
 import com.rutaagua.camion.data.local.entity.GastoExtraEntity
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
 import com.rutaagua.camion.data.local.entity.RecargaPlantaEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
+import com.rutaagua.camion.data.local.entity.VisitaFallidaEntity
 import com.rutaagua.camion.data.local.model.FormaPago
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.model.TipoCliente
@@ -47,6 +49,11 @@ class FirestoreSyncManager(
     private var listenerInventarios: ListenerRegistration? = null
     private var listenerRecargas: ListenerRegistration? = null
     private var listenerGastos: ListenerRegistration? = null
+    private var listenerCierres: ListenerRegistration? = null
+    private var listenerVisitasFallidas: ListenerRegistration? = null
+
+    // Timestamp de inicio para filtrar transacciones nuevas y lanzar notificaciones
+    private val appStartTimestamp = System.currentTimeMillis()
 
     // Flags para evitar bucles de eco local -> remoto -> local
     private var sincronizandoDesdeRemoto = false
@@ -98,6 +105,9 @@ class FirestoreSyncManager(
                             val diasVisita = doc.getString("diasVisita") ?: ""
                             val deudaMonetaria = doc.getDouble("deudaMonetaria") ?: 0.0
                             val bidonesPrestados = doc.getLong("bidonesPrestados")?.toInt() ?: 0
+                            val latitud = doc.getDouble("latitud")
+                            val longitud = doc.getDouble("longitud")
+                            val enlaceMapa = doc.getString("enlaceMapa") ?: ""
                             val activo = doc.getBoolean("activo") ?: true
                             val fechaCreacion = doc.getLong("fechaCreacion") ?: System.currentTimeMillis()
 
@@ -120,6 +130,9 @@ class FirestoreSyncManager(
                                 deudaMonetaria = deudaMonetaria,
                                 bidonesPrestados = bidonesPrestados,
                                 fotoReferenciaPath = localPath ?: clienteActual?.fotoReferenciaPath,
+                                latitud = latitud,
+                                longitud = longitud,
+                                enlaceMapa = enlaceMapa,
                                 activo = activo,
                                 fechaCreacion = fechaCreacion
                             )
@@ -138,6 +151,35 @@ class FirestoreSyncManager(
                 scope.launch {
                     sincronizandoDesdeRemoto = true
                     try {
+                        // Detectar notificaciones en tiempo real cuando el otro vehículo realiza una venta
+                        for (change in snapshot.documentChanges) {
+                            if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                                val doc = change.document
+                                val fecha = doc.getLong("fecha") ?: 0L
+                                val vehiculoDoc = doc.getString("vehiculo") ?: "CAMION"
+                                val miVehiculo = com.rutaagua.camion.data.local.prefs.AppPreferences.getInstance(context).obtenerVehiculoActivo().name
+                                if (fecha >= appStartTimestamp && vehiculoDoc != miVehiculo) {
+                                    val cId = doc.getLong("clienteId")
+                                    val nombrePaso = doc.getString("nombreClientePaso")
+                                    val nombreCliente = if (!nombrePaso.isNullOrBlank()) {
+                                        nombrePaso
+                                    } else if (cId != null) {
+                                        database.clienteDao().obtenerPorIdDirecto(cId)?.nombre ?: "Cliente de Ruta"
+                                    } else {
+                                        "Cliente de Ruta"
+                                    }
+                                    val formatoHora = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                                    val horaStr = formatoHora.format(java.util.Date(fecha))
+                                    val emojiVehiculo = if (vehiculoDoc == "CAMIONETA") "🛻 CAMIONETA" else "🚚 CAMIÓN"
+                                    com.rutaagua.camion.ui.utils.RutaNotificationHelper.mostrarNotificacionRuta(
+                                        context = context,
+                                        titulo = "🚨 Ruta Actualizada",
+                                        mensaje = "$emojiVehiculo acaba de atender a $nombreCliente ($horaStr)."
+                                    )
+                                }
+                            }
+                        }
+
                         for (doc in snapshot.documents) {
                             val id = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
                             val vehiculo = doc.getString("vehiculo") ?: "CAMION"
@@ -152,6 +194,12 @@ class FirestoreSyncManager(
                             val cantDev = doc.getLong("cantidadBidonesDevueltos")?.toInt() ?: 0
                             val cantVendEnv = doc.getLong("cantidadBidonesVendidosEnvase")?.toInt() ?: 0
                             val pEnv = doc.getDouble("precioUnitarioBidonVendido") ?: 0.0
+                            val recTrans = doc.getLong("recargaTransparentes")?.toInt() ?: 0
+                            val recAzul = doc.getLong("recargaAzules")?.toInt() ?: 0
+                            val recMarc = doc.getLong("recargaMarcados")?.toInt() ?: 0
+                            val envVendTrans = doc.getLong("envasesVendidosTransparentes")?.toInt() ?: 0
+                            val envVendAzul = doc.getLong("envasesVendidosAzules")?.toInt() ?: 0
+                            val envVendMarc = doc.getLong("envasesVendidosMarcados")?.toInt() ?: 0
                             val cantGal = doc.getLong("cantidadGalones")?.toInt() ?: 0
                             val pGal = doc.getDouble("precioUnitarioGalon") ?: 0.75
                             val cantPac = doc.getLong("cantidadPacas")?.toInt() ?: 0
@@ -181,6 +229,12 @@ class FirestoreSyncManager(
                                 cantidadBidonesDevueltos = cantDev,
                                 cantidadBidonesVendidosEnvase = cantVendEnv,
                                 precioUnitarioBidonVendido = pEnv,
+                                recargaTransparentes = recTrans,
+                                recargaAzules = recAzul,
+                                recargaMarcados = recMarc,
+                                envasesVendidosTransparentes = envVendTrans,
+                                envasesVendidosAzules = envVendAzul,
+                                envasesVendidosMarcados = envVendMarc,
                                 cantidadGalones = cantGal,
                                 precioUnitarioGalon = pGal,
                                 cantidadPacas = cantPac,
@@ -306,6 +360,87 @@ class FirestoreSyncManager(
                     }
                 }
             }
+
+        // --- 6. COLECCIÓN CIERRES DE CAJA ---
+        listenerCierres = firestore.collection("cierres_caja")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                scope.launch {
+                    sincronizandoDesdeRemoto = true
+                    try {
+                        for (doc in snapshot.documents) {
+                            val id = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
+                            val fechaIso = doc.getString("fechaIso") ?: ""
+                            val vehiculo = doc.getString("vehiculo") ?: "CAMION"
+                            val cierre = CierreCajaEntity(
+                                id = id,
+                                fechaIso = fechaIso,
+                                timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
+                                vehiculo = vehiculo,
+                                efectivoDeclarado = doc.getDouble("efectivoDeclarado") ?: 0.0,
+                                transferenciasDeclaradas = doc.getDouble("transferenciasDeclaradas") ?: 0.0,
+                                totalDeclarado = doc.getDouble("totalDeclarado") ?: 0.0,
+                                observaciones = doc.getString("observaciones") ?: "",
+                                efectivoSistema = doc.getDouble("efectivoSistema") ?: 0.0,
+                                transferenciasSistema = doc.getDouble("transferenciasSistema") ?: 0.0,
+                                totalSistema = doc.getDouble("totalSistema") ?: 0.0,
+                                diferenciaEfectivo = doc.getDouble("diferenciaEfectivo") ?: 0.0,
+                                diferenciaTransferencia = doc.getDouble("diferenciaTransferencia") ?: 0.0,
+                                diferenciaTotal = doc.getDouble("diferenciaTotal") ?: 0.0,
+                                bidonesVendidos = doc.getLong("bidonesVendidos")?.toInt() ?: 0,
+                                galonesVendidos = doc.getLong("galonesVendidos")?.toInt() ?: 0,
+                                pacasVendidas = doc.getLong("pacasVendidas")?.toInt() ?: 0,
+                                minisVendidas = doc.getLong("minisVendidas")?.toInt() ?: 0,
+                                gastosRuta = doc.getDouble("gastosRuta") ?: 0.0,
+                                costoTotalPlanta = doc.getDouble("costoTotalPlanta") ?: 0.0,
+                                utilidadBruta = doc.getDouble("utilidadBruta") ?: 0.0,
+                                utilidadNeta = doc.getDouble("utilidadNeta") ?: 0.0,
+                                sincronizado = true
+                            )
+                            database.cierreCajaDao().insertar(cierre)
+                        }
+                    } finally {
+                        sincronizandoDesdeRemoto = false
+                    }
+                }
+            }
+
+        // --- 7. COLECCIÓN VISITAS FALLIDAS (NO ESTABA EN CASA) ---
+        listenerVisitasFallidas = firestore.collection("visitas_fallidas")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                scope.launch {
+                    sincronizandoDesdeRemoto = true
+                    try {
+                        for (doc in snapshot.documents) {
+                            val id = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
+                            val clienteId = doc.getLong("clienteId") ?: 0L
+                            val nombreCliente = doc.getString("nombreCliente") ?: ""
+                            val telefonoCliente = doc.getString("telefonoCliente") ?: ""
+                            val fechaIso = doc.getString("fechaIso") ?: ""
+                            val horaDisplay = doc.getString("horaDisplay") ?: ""
+                            val vehiculo = doc.getString("vehiculo") ?: "CAMION"
+
+                            val visita = VisitaFallidaEntity(
+                                id = id,
+                                clienteId = clienteId,
+                                nombreCliente = nombreCliente,
+                                telefonoCliente = telefonoCliente,
+                                fechaIso = fechaIso,
+                                horaDisplay = horaDisplay,
+                                timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
+                                vehiculo = vehiculo,
+                                fotoEvidenciaPath = null,
+                                fotoBase64Thumbnail = doc.getString("fotoBase64Thumbnail"),
+                                sincronizado = true
+                            )
+                            database.visitaFallidaDao().insertar(visita)
+                        }
+                    } finally {
+                        sincronizandoDesdeRemoto = false
+                    }
+                }
+            }
     }
 
     // =========================================================================
@@ -328,6 +463,9 @@ class FirestoreSyncManager(
                 "diasVisita" to cliente.diasVisita,
                 "deudaMonetaria" to cliente.deudaMonetaria,
                 "bidonesPrestados" to cliente.bidonesPrestados,
+                "latitud" to cliente.latitud,
+                "longitud" to cliente.longitud,
+                "enlaceMapa" to cliente.enlaceMapa,
                 "activo" to cliente.activo,
                 "fechaCreacion" to cliente.fechaCreacion,
                 "fotoBase64" to (fotoMiniaturaBase64 ?: "")
@@ -360,6 +498,12 @@ class FirestoreSyncManager(
             "cantidadBidonesDevueltos" to transaccion.cantidadBidonesDevueltos,
             "cantidadBidonesVendidosEnvase" to transaccion.cantidadBidonesVendidosEnvase,
             "precioUnitarioBidonVendido" to transaccion.precioUnitarioBidonVendido,
+            "recargaTransparentes" to transaccion.recargaTransparentes,
+            "recargaAzules" to transaccion.recargaAzules,
+            "recargaMarcados" to transaccion.recargaMarcados,
+            "envasesVendidosTransparentes" to transaccion.envasesVendidosTransparentes,
+            "envasesVendidosAzules" to transaccion.envasesVendidosAzules,
+            "envasesVendidosMarcados" to transaccion.envasesVendidosMarcados,
             "cantidadGalones" to transaccion.cantidadGalones,
             "precioUnitarioGalon" to transaccion.precioUnitarioGalon,
             "cantidadPacas" to transaccion.cantidadPacas,
@@ -430,6 +574,11 @@ class FirestoreSyncManager(
             .set(data, SetOptions.merge())
     }
 
+    fun eliminarRecarga(recargaId: Long) {
+        if (sincronizandoDesdeRemoto) return
+        firestore.collection("recargas_planta").document(recargaId.toString()).delete()
+    }
+
     fun subirGasto(gasto: GastoExtraEntity) {
         if (sincronizandoDesdeRemoto) return
         val data = hashMapOf(
@@ -451,12 +600,64 @@ class FirestoreSyncManager(
         firestore.collection("gastos").document(gastoId.toString()).delete()
     }
 
+    fun subirCierreCaja(cierre: CierreCajaEntity) {
+        if (sincronizandoDesdeRemoto) return
+        val data = hashMapOf(
+            "id" to cierre.id,
+            "fechaIso" to cierre.fechaIso,
+            "timestamp" to cierre.timestamp,
+            "vehiculo" to cierre.vehiculo,
+            "efectivoDeclarado" to cierre.efectivoDeclarado,
+            "transferenciasDeclaradas" to cierre.transferenciasDeclaradas,
+            "totalDeclarado" to cierre.totalDeclarado,
+            "observaciones" to cierre.observaciones,
+            "efectivoSistema" to cierre.efectivoSistema,
+            "transferenciasSistema" to cierre.transferenciasSistema,
+            "totalSistema" to cierre.totalSistema,
+            "diferenciaEfectivo" to cierre.diferenciaEfectivo,
+            "diferenciaTransferencia" to cierre.diferenciaTransferencia,
+            "diferenciaTotal" to cierre.diferenciaTotal,
+            "bidonesVendidos" to cierre.bidonesVendidos,
+            "galonesVendidos" to cierre.galonesVendidos,
+            "pacasVendidas" to cierre.pacasVendidas,
+            "minisVendidas" to cierre.minisVendidas,
+            "gastosRuta" to cierre.gastosRuta,
+            "costoTotalPlanta" to cierre.costoTotalPlanta,
+            "utilidadBruta" to cierre.utilidadBruta,
+            "utilidadNeta" to cierre.utilidadNeta
+        )
+        firestore.collection("cierres_caja")
+            .document(cierre.id.toString())
+            .set(data, SetOptions.merge())
+    }
+
+    fun subirVisitaFallida(visita: VisitaFallidaEntity) {
+        if (sincronizandoDesdeRemoto) return
+        val miniaturaBase64 = visita.fotoEvidenciaPath?.let { comprimirFotoABase64(it) }
+        val data = hashMapOf(
+            "id" to visita.id,
+            "clienteId" to visita.clienteId,
+            "nombreCliente" to visita.nombreCliente,
+            "telefonoCliente" to visita.telefonoCliente,
+            "fechaIso" to visita.fechaIso,
+            "horaDisplay" to visita.horaDisplay,
+            "timestamp" to visita.timestamp,
+            "vehiculo" to visita.vehiculo,
+            "fotoBase64Thumbnail" to (miniaturaBase64 ?: "")
+        )
+        firestore.collection("visitas_fallidas")
+            .document(visita.id.toString())
+            .set(data, SetOptions.merge())
+    }
+
     fun detener() {
         listenerClientes?.remove()
         listenerTransacciones?.remove()
         listenerInventarios?.remove()
         listenerRecargas?.remove()
         listenerGastos?.remove()
+        listenerCierres?.remove()
+        listenerVisitasFallidas?.remove()
     }
 
     // =========================================================================

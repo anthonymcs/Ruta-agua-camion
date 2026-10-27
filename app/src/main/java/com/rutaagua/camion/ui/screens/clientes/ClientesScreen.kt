@@ -1,5 +1,7 @@
 package com.rutaagua.camion.ui.screens.clientes
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,10 +30,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MeetingRoom
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
@@ -44,6 +51,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -81,19 +89,33 @@ import com.rutaagua.camion.ui.security.SecurityPinDialog
 import java.text.SimpleDateFormat
 import java.util.Date
 import com.rutaagua.camion.data.local.entity.ClienteEntity
+import com.rutaagua.camion.data.local.entity.VisitaFallidaEntity
 import com.rutaagua.camion.data.local.model.DiaSemana
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.model.TipoCliente
+import com.rutaagua.camion.data.local.model.TipoVehiculo
 import com.rutaagua.camion.ui.components.BidonIllustration
 import com.rutaagua.camion.ui.components.DialogoVistaPreviaFoto
 import com.rutaagua.camion.ui.components.FotoReferenciaThumbnail
+import com.rutaagua.camion.ui.components.GuardarUbicacionDialog
 import com.rutaagua.camion.ui.components.SelectorFotoReferencia
+import com.rutaagua.camion.ui.components.VehiculoThumbnail
+import com.rutaagua.camion.ui.utils.EvidenciaVisitaHelper
+import com.rutaagua.camion.ui.utils.GpsLocationHelper
 import com.rutaagua.camion.ui.utils.WhatsAppHelper
+import java.io.File
 import com.rutaagua.camion.ui.theme.AguaPrimary
 import com.rutaagua.camion.ui.theme.AguaPrimaryDark
 import com.rutaagua.camion.ui.theme.AguaPrimaryLight
 import com.rutaagua.camion.ui.theme.AmbarAdvertencia
 import com.rutaagua.camion.ui.theme.AmbarFondo
+import com.rutaagua.camion.ui.theme.BordeSutil
+import com.rutaagua.camion.ui.theme.FondoGrisClaro
+import com.rutaagua.camion.ui.theme.RojoAlerta
+import com.rutaagua.camion.ui.theme.RojoAlertaFondo
+import com.rutaagua.camion.ui.theme.TextoOscuro
+import com.rutaagua.camion.ui.theme.TextoSecundario
+import com.rutaagua.camion.ui.theme.VerdeEfectivo
 import com.rutaagua.camion.ui.theme.BidonAzulColor
 import com.rutaagua.camion.ui.theme.BidonAzulFondo
 import com.rutaagua.camion.ui.theme.BidonMarcadoColor
@@ -114,8 +136,10 @@ fun ClientesScreen(
     viewModel: ClientesViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val clientes by viewModel.clientesFiltradosState.collectAsState()
     val transaccionesHoyClientes by viewModel.transaccionesHoyClientesState.collectAsState()
+    val visitasFallidasHoy by viewModel.visitasFallidasHoyState.collectAsState()
     val query by viewModel.busquedaQuery.collectAsState()
     val filtroActual by viewModel.filtroSeleccionado.collectAsState()
     val mostrarModal by viewModel.mostrarModalCliente.collectAsState()
@@ -131,6 +155,38 @@ fun ClientesScreen(
 
     var fotoZoomPath by remember { mutableStateOf<String?>(null) }
     var fotoZoomNombre by remember { mutableStateOf("") }
+    var clienteParaUbicacion by remember { mutableStateOf<ClienteEntity?>(null) }
+
+    // Cámara para constancia de "Cliente No Estaba en Casa"
+    var clienteParaEvidencia by remember { mutableStateOf<ClienteEntity?>(null) }
+    var archivoFotoTemp by remember { mutableStateOf<File?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { exitoso ->
+        if (exitoso && clienteParaEvidencia != null && archivoFotoTemp != null) {
+            val cliente = clienteParaEvidencia!!
+            val archivo = archivoFotoTemp!!
+            val horaActual = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+            val fechaActual = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+
+            viewModel.registrarVisitaFallida(cliente, archivo.absolutePath)
+
+            val mensaje = WhatsAppHelper.generarMensajeVisitaFallida(
+                nombreCliente = cliente.nombre,
+                fecha = fechaActual,
+                hora = horaActual
+            )
+            WhatsAppHelper.enviarVisitaFallidaConFoto(
+                context = context,
+                telefonoRaw = cliente.telefono,
+                mensaje = mensaje,
+                fotoPath = archivo.absolutePath
+            )
+        }
+        clienteParaEvidencia = null
+        archivoFotoTemp = null
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -202,14 +258,37 @@ fun ClientesScreen(
                         TarjetaClienteItem(
                             cliente = cliente,
                             transaccionHoy = transaccionesHoyClientes[cliente.id],
+                            visitaFallidaHoy = visitasFallidasHoy[cliente.id],
                             onEditarClick = { viewModel.abrirEditarCliente(cliente) },
                             onEliminarClick = {
                                 clienteParaEliminar = cliente
                                 mostrarPinParaEliminarCliente = true
                             },
+                            onAbrirMapa = {
+                                if (cliente.latitud != null || cliente.enlaceMapa.isNotBlank()) {
+                                    GpsLocationHelper.abrirNavegacionDirecta(
+                                        context = context,
+                                        latitud = cliente.latitud,
+                                        longitud = cliente.longitud,
+                                        enlaceAlternativo = cliente.enlaceMapa
+                                    )
+                                } else {
+                                    clienteParaUbicacion = cliente
+                                }
+                            },
+                            onGuardarUbicacion = {
+                                clienteParaUbicacion = cliente
+                            },
                             onVerFoto = { path, nombre ->
                                 fotoZoomPath = path
                                 fotoZoomNombre = nombre
+                            },
+                            onNoEstabaClick = {
+                                val archivo = EvidenciaVisitaHelper.crearArchivoFotoEvidencia(context, cliente.id)
+                                archivoFotoTemp = archivo
+                                clienteParaEvidencia = cliente
+                                val uri = EvidenciaVisitaHelper.obtenerUriParaArchivo(context, archivo)
+                                cameraLauncher.launch(uri)
                             }
                         )
                     }
@@ -219,6 +298,18 @@ fun ClientesScreen(
                 }
             }
         }
+    }
+
+    // Diálogo para capturar o editar ubicación GPS del cliente
+    if (clienteParaUbicacion != null) {
+        GuardarUbicacionDialog(
+            cliente = clienteParaUbicacion!!,
+            onGuardarUbicacion = { lat, lng, enlace ->
+                viewModel.actualizarUbicacionCliente(clienteParaUbicacion!!, lat, lng, enlace)
+                clienteParaUbicacion = null
+            },
+            onDismissRequest = { clienteParaUbicacion = null }
+        )
     }
 
     // Modal BottomSheet de Agregar/Editar
@@ -422,308 +513,374 @@ private fun FilaFiltrosClientes(
 }
 
 /**
- * Tarjeta individual para mostrar datos del cliente, días, tipo de bidón, precio y deudas.
+ * Tarjeta individual estructurada, moderna y limpia para cada cliente del directorio.
+ * Diseño minimalista con dieta de texto y detalles secundarios colapsables.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TarjetaClienteItem(
     cliente: ClienteEntity,
     transaccionHoy: com.rutaagua.camion.data.local.entity.TransaccionVentaEntity? = null,
+    visitaFallidaHoy: VisitaFallidaEntity? = null,
     onEditarClick: () -> Unit,
     onEliminarClick: () -> Unit,
-    onVerFoto: (path: String, nombre: String) -> Unit
+    onAbrirMapa: () -> Unit,
+    onGuardarUbicacion: () -> Unit,
+    onVerFoto: (path: String, nombre: String) -> Unit,
+    onNoEstabaClick: () -> Unit
 ) {
     val context = LocalContext.current
+    var expandido by remember { mutableStateOf(false) }
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                transaccionHoy != null -> Color(0xFFF0FDF4)
+                visitaFallidaHoy != null -> Color(0xFFFFFBEB)
+                else -> Color.White
+            }
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = when {
+                transaccionHoy != null -> Color(0xFF86EFAC)
+                visitaFallidaHoy != null -> Color(0xFFFDE68A)
+                else -> BordeSutil
+            }
+        ),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Fila Superior: Foto Fachada, Nombre, Tipo (RUTA/LLAMADA) y Botones
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Cabecera Minimalista (Nombre, Sector corto, Pastillas de deuda/estado)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expandido = !expandido },
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    FotoReferenciaThumbnail(
-                        fotoPath = cliente.fotoReferenciaPath,
-                        onClick = {
-                            if (!cliente.fotoReferenciaPath.isNullOrBlank()) {
-                                onVerFoto(cliente.fotoReferenciaPath!!, cliente.nombre)
-                            }
-                        },
-                        size = 52.dp
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = cliente.nombre,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Black,
+                            color = TextoOscuro
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = if (cliente.tipoCliente == TipoCliente.RUTA) Color(0xFFE0F2FE) else Color(0xFFF0FDF4),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
                             Text(
-                                text = cliente.nombre,
-                                style = MaterialTheme.typography.titleMedium,
+                                text = if (cliente.tipoCliente == TipoCliente.RUTA) "RUTA" else "LLAMADA",
+                                color = if (cliente.tipoCliente == TipoCliente.RUTA) AguaPrimaryDark else VerdeEfectivo,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+
+                    if (cliente.ubicacion.isNotBlank()) {
+                        Text(
+                            text = cliente.ubicacion,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextoSecundario,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                // Pastillas de estado y deuda en fila compacta
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (cliente.deudaMonetaria > 0.0) {
+                        Surface(
+                            color = RojoAlertaFondo,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "💲 $${String.format(Locale.US, "%.2f", cliente.deudaMonetaria)}",
+                                color = RojoAlerta,
+                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Black,
-                                color = TextoOscuro
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    } else {
+                        Surface(
+                            color = VerdeEfectivoFondo,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "💲 $0.00",
+                                color = VerdeEfectivo,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    if (cliente.bidonesPrestados > 0) {
+                        Surface(
+                            color = AmbarFondo,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "🍾 ${cliente.bidonesPrestados}",
+                                color = AmbarAdvertencia,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    if (transaccionHoy != null) {
+                        Surface(
+                            color = Color(0xFFF0FDF4),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFF86EFAC))
+                        ) {
+                            Text(
+                                text = "✅ Atendido",
+                                color = Color(0xFF15803D),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    } else if (visitaFallidaHoy != null) {
+                        Surface(
+                            color = Color(0xFFFFFBEB),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFFFDE68A))
+                        ) {
+                            Text(
+                                text = "🚪 No estaba",
+                                color = AmbarAdvertencia,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = if (expandido) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expandido) "Colapsar" else "Expandir",
+                        tint = TextoSecundario,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // Sección Colapsable con detalles secundarios
+            AnimatedVisibility(visible = expandido) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
+                ) {
+                    HorizontalDivider(color = BordeSutil, modifier = Modifier.padding(bottom = 8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FotoReferenciaThumbnail(
+                                fotoPath = cliente.fotoReferenciaPath,
+                                onClick = {
+                                    if (!cliente.fotoReferenciaPath.isNullOrBlank()) {
+                                        onVerFoto(cliente.fotoReferenciaPath!!, cliente.nombre)
+                                    }
+                                },
+                                size = 44.dp
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            // Badge Tipo Cliente
-                            Surface(
-                                color = if (cliente.tipoCliente == TipoCliente.RUTA) Color(0xFFE0F2FE) else Color(0xFFF0FDF4),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    text = cliente.tipoCliente.name,
-                                    color = if (cliente.tipoCliente == TipoCliente.RUTA) AguaPrimaryDark else VerdeEfectivo,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    BidonIllustration(tipo = cliente.tipoBidonPreferido, size = 18.dp)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "${cliente.tipoBidonPreferido.name} • $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = AguaPrimaryDark
+                                    )
+                                }
+                                if (cliente.telefono.isNotBlank()) {
+                                    Text(
+                                        text = "📞 ${cliente.telefono}",
+                                        fontSize = 11.sp,
+                                        color = TextoSecundario
+                                    )
+                                }
                             }
                         }
 
-                        // Ubicación / Referencia
-                        if (cliente.ubicacion.isNotBlank()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 4.dp)
+                        // Botones de acción secundarios (Editar, Eliminar, Ubicación)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedButton(
+                                onClick = onGuardarUbicacion,
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.height(30.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.LocationOn,
                                     contentDescription = null,
-                                    tint = TextoSecundario,
-                                    modifier = Modifier.size(16.dp)
+                                    tint = if (cliente.latitud != null || cliente.enlaceMapa.isNotBlank()) VerdeEfectivo else AguaPrimary,
+                                    modifier = Modifier.size(13.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = cliente.ubicacion,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = TextoSecundario
+                                    text = if (cliente.latitud != null || cliente.enlaceMapa.isNotBlank()) "GPS ✓" else "📍 GPS",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (cliente.latitud != null || cliente.enlaceMapa.isNotBlank()) VerdeEfectivo else AguaPrimary
                                 )
                             }
-                        }
-
-                        // Teléfono
-                        if (cliente.telefono.isNotBlank()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 2.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Phone,
-                                    contentDescription = null,
-                                    tint = TextoSecundario,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = cliente.telefono,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextoSecundario
-                                )
+                            IconButton(onClick = onEditarClick, modifier = Modifier.size(30.dp)) {
+                                Icon(imageVector = Icons.Default.Edit, contentDescription = "Editar", tint = AguaPrimary, modifier = Modifier.size(17.dp))
+                            }
+                            IconButton(onClick = onEliminarClick, modifier = Modifier.size(30.dp)) {
+                                Icon(imageVector = Icons.Default.Delete, contentDescription = "Eliminar", tint = Color(0xFF94A3B8), modifier = Modifier.size(17.dp))
                             }
                         }
                     }
-                }
 
-                // Botones de acción (Editar y Eliminar)
-                Row {
-                    IconButton(onClick = onEditarClick, modifier = Modifier.size(34.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Editar",
-                            tint = AguaPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    IconButton(onClick = onEliminarClick, modifier = Modifier.size(34.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Eliminar",
-                            tint = Color(0xFF94A3B8),
-                            modifier = Modifier.size(20.dp)
-                        )
+                    // Días de visita si aplica
+                    if (cliente.tipoCliente == TipoCliente.RUTA && cliente.diasVisita.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            cliente.diasVisita.split(",").forEach { dia ->
+                                Surface(
+                                    color = AguaPrimary.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = dia.take(3),
+                                        color = AguaPrimaryDark,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Fila Central: Bidón preferido + Precio habitual + Días de Ruta
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFF8FAFC), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            // Botones de Acción Grandes y Táctiles (Estilo Duolingo)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Minicomponente visual de bidón
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    BidonIllustration(tipo = cliente.tipoBidonPreferido, size = 36.dp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            text = when (cliente.tipoBidonPreferido) {
-                                TipoBidon.TRANSPARENTE -> "Transparente (PET)"
-                                TipoBidon.AZUL -> "Azul Estándar"
-                                TipoBidon.MARCADO -> "Marcado"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                            color = TextoOscuro
-                        )
-                        Text(
-                            text = "Precio: $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Black,
-                            color = AguaPrimary
-                        )
-                    }
-                }
-
-                // Días de visita si es cliente de ruta
-                if (cliente.tipoCliente == TipoCliente.RUTA && cliente.diasVisita.isNotBlank()) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        val dias = cliente.diasVisita.split(",")
-                        dias.forEach { dia ->
-                            val abreviado = when (dia) {
-                                "LUNES" -> "LUN"
-                                "MARTES" -> "MAR"
-                                "MIERCOLES" -> "MIE"
-                                "JUEVES" -> "JUE"
-                                "VIERNES" -> "VIE"
-                                "SABADO" -> "SAB"
-                                else -> dia.take(3)
-                            }
-                            Surface(
-                                color = AguaPrimary,
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = abreviado,
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Fila Inferior: Badges de Deuda en Dinero ($) o Bidones Prestados (si aplican)
-            val tieneDeuda = cliente.deudaMonetaria > 0.0
-            val tienePrestados = cliente.bidonesPrestados > 0
-
-            if (transaccionHoy != null) {
-                val vehiculoIcono = if (transaccionHoy.vehiculo == "CAMIONETA") "🛻 CAMIONETA" else "🚚 CAMIÓN"
-                val formatoHora = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-                val hora = formatoHora.format(Date(transaccionHoy.fecha))
-                val bidones = transaccionHoy.cantidadBidonesRecarga + transaccionHoy.cantidadBidonesPrestados + transaccionHoy.cantidadBidonesVendidosEnvase
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    color = Color(0xFFF0FDF4),
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, Color(0xFF86EFAC)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "✅ Atendido hoy por $vehiculoIcono ($hora • $bidones un.)",
-                            color = Color(0xFF15803D),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            if (tieneDeuda || tienePrestados) {
-                Spacer(modifier = Modifier.height(10.dp))
+                // Fila 1: [🚪 No estaba] y [🧭 Mapa GPS]
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (tieneDeuda) {
-                        Surface(
-                            color = RojoAlertaFondo,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Debe dinero: $${String.format(Locale.US, "%.2f", cliente.deudaMonetaria)}",
-                                    color = RojoAlerta,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                        }
+                    // 1. [🚪 No estaba] (Ámbar vibrante)
+                    Button(
+                        onClick = onNoEstabaClick,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (visitaFallidaHoy != null) Color(0xFFD97706) else Color(0xFFF59E0B)
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (visitaFallidaHoy != null) "No Estaba ✓" else "No estaba",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Color.White
+                        )
                     }
 
-                    if (tienePrestados) {
-                        Surface(
-                            color = AmbarFondo,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Debe envases: ${cliente.bidonesPrestados} un.",
-                                    color = AmbarAdvertencia,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                        }
+                    // 2. [🧭 Mapa GPS] (Azul técnico)
+                    Button(
+                        onClick = onAbrirMapa,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF0284C7)
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Navigation,
+                            contentDescription = "Mapa",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (cliente.latitud != null || cliente.enlaceMapa.isNotBlank()) "Mapa GPS" else "Fijar GPS",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Color.White
+                        )
                     }
                 }
-            }
 
-            // Botón de WhatsApp Directo con Estado de Cuenta
-            Spacer(modifier = Modifier.height(10.dp))
-            Button(
-                onClick = {
-                    val mensaje = WhatsAppHelper.generarMensajeEstadoCuenta(cliente)
-                    WhatsAppHelper.abrirChatWhatsApp(context, cliente.telefono, mensaje)
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(42.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Chat,
-                    contentDescription = "WhatsApp Cliente",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "WhatsApp Cliente",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
-                )
+                // Fila 2: [💬 WhatsApp] (Verde WhatsApp oficial #25D366)
+                Button(
+                    onClick = {
+                        val mensaje = WhatsAppHelper.generarMensajeEstadoCuenta(cliente)
+                        WhatsAppHelper.abrirChatWhatsApp(context, cliente.telefono, mensaje)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF25D366)
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Chat,
+                        contentDescription = "WhatsApp",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "💬 Enviar Estado por WhatsApp",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = Color.White
+                    )
+                }
             }
         }
     }

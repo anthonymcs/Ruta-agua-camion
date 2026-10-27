@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rutaagua.camion.data.local.entity.ClienteEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
+import com.rutaagua.camion.data.local.entity.VisitaFallidaEntity
 import com.rutaagua.camion.data.local.model.DiaSemana
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.model.TipoCliente
@@ -33,6 +34,7 @@ enum class FiltroCliente(val etiqueta: String) {
 
 enum class EstadoEntregaRuta {
     ATENDIDO,
+    NO_ESTABA,
     PENDIENTE,
     PROGRAMADO
 }
@@ -42,7 +44,9 @@ data class ClienteRutaItem(
     val estado: EstadoEntregaRuta,
     val bidonesEntregados: Int = 0,
     val vehiculoEntrega: String? = null,
-    val horaEntrega: String? = null
+    val horaEntrega: String? = null,
+    val horaVisitaFallida: String? = null,
+    val fotoEvidenciaPath: String? = null
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -98,6 +102,18 @@ class ClientesViewModel(
             initialValue = emptyMap()
         )
 
+    // Mapa de visitas fallidas de hoy ("No estaba en casa")
+    val visitasFallidasHoyState: StateFlow<Map<Long, VisitaFallidaEntity>> = repository
+        .obtenerVisitasFallidasPorFecha(fechaHoyIso)
+        .map { visitas ->
+            visitas.associateBy { it.clienteId }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
+
     // Estados para BottomSheet de Crear/Editar
     val clienteEnEdicion = MutableStateFlow<ClienteEntity?>(null)
     val mostrarModalCliente = MutableStateFlow(false)
@@ -120,8 +136,9 @@ class ClientesViewModel(
 
             combine(
                 repository.obtenerClientesPorDiaRuta(dia.name),
-                repository.obtenerTransaccionesPorFecha(fechaDia)
-            ) { clientesRuta, transaccionesDelDia ->
+                repository.obtenerTransaccionesPorFecha(fechaDia),
+                repository.obtenerVisitasFallidasPorFecha(fechaDia)
+            ) { clientesRuta, transaccionesDelDia, visitasDelDia ->
                 val horaFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
                 clientesRuta.map { cliente ->
                     if (esDiaFuturo) {
@@ -133,20 +150,37 @@ class ClientesViewModel(
                     } else {
                         val transaccionesCliente = transaccionesDelDia.filter { it.clienteId == cliente.id }
                         val fueAtendido = transaccionesCliente.isNotEmpty()
-                        val bidones = transaccionesCliente.sumOf {
-                            it.cantidadBidonesRecarga + it.cantidadBidonesPrestados + it.cantidadBidonesVendidosEnvase
-                        }
-                        val ultimaTx = transaccionesCliente.maxByOrNull { it.fecha }
-                        val vehiculo = ultimaTx?.vehiculo
-                        val hora = ultimaTx?.let { horaFormat.format(Date(it.fecha)) }
+                        val visitaFallida = visitasDelDia.firstOrNull { it.clienteId == cliente.id }
 
-                        ClienteRutaItem(
-                            cliente = cliente,
-                            estado = if (fueAtendido) EstadoEntregaRuta.ATENDIDO else EstadoEntregaRuta.PENDIENTE,
-                            bidonesEntregados = bidones,
-                            vehiculoEntrega = vehiculo,
-                            horaEntrega = hora
-                        )
+                        if (fueAtendido) {
+                            val bidones = transaccionesCliente.sumOf {
+                                it.cantidadBidonesRecarga + it.cantidadBidonesPrestados + it.cantidadBidonesVendidosEnvase
+                            }
+                            val ultimaTx = transaccionesCliente.maxByOrNull { it.fecha }
+                            val vehiculo = ultimaTx?.vehiculo
+                            val hora = ultimaTx?.let { horaFormat.format(Date(it.fecha)) }
+
+                            ClienteRutaItem(
+                                cliente = cliente,
+                                estado = EstadoEntregaRuta.ATENDIDO,
+                                bidonesEntregados = bidones,
+                                vehiculoEntrega = vehiculo,
+                                horaEntrega = hora
+                            )
+                        } else if (visitaFallida != null) {
+                            ClienteRutaItem(
+                                cliente = cliente,
+                                estado = EstadoEntregaRuta.NO_ESTABA,
+                                vehiculoEntrega = visitaFallida.vehiculo,
+                                horaVisitaFallida = visitaFallida.horaDisplay,
+                                fotoEvidenciaPath = visitaFallida.fotoEvidenciaPath
+                            )
+                        } else {
+                            ClienteRutaItem(
+                                cliente = cliente,
+                                estado = EstadoEntregaRuta.PENDIENTE
+                            )
+                        }
                     }
                 }
             }
@@ -261,6 +295,37 @@ class ClientesViewModel(
 
     fun seleccionarDiaCalendario(dia: DiaSemana) {
         diaSeleccionadoCalendario.value = dia
+    }
+
+    fun registrarVisitaFallida(cliente: ClienteEntity, fotoPath: String?, vehiculo: String = "CAMION") {
+        viewModelScope.launch {
+            val horaActual = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+            val visita = VisitaFallidaEntity(
+                clienteId = cliente.id,
+                nombreCliente = cliente.nombre,
+                telefonoCliente = cliente.telefono,
+                fechaIso = fechaHoyIso,
+                horaDisplay = horaActual,
+                timestamp = System.currentTimeMillis(),
+                vehiculo = vehiculo,
+                fotoEvidenciaPath = fotoPath,
+                sincronizado = false
+            )
+            repository.registrarVisitaFallida(visita)
+            mensajeSnackbar.value = "Visita registrada: ${cliente.nombre} no estaba en casa"
+        }
+    }
+
+    fun actualizarUbicacionCliente(cliente: ClienteEntity, latitud: Double?, longitud: Double?, enlaceMapa: String) {
+        viewModelScope.launch {
+            val actualizado = cliente.copy(
+                latitud = latitud,
+                longitud = longitud,
+                enlaceMapa = enlaceMapa
+            )
+            repository.guardarCliente(actualizado)
+            mensajeSnackbar.value = "Ubicación de ${cliente.nombre} actualizada"
+        }
     }
 
     fun limpiarMensajeSnackbar() {

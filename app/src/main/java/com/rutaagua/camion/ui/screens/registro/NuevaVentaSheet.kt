@@ -96,7 +96,15 @@ fun NuevaVentaSheet(
         cantMinis: Int,
         formaPago: FormaPago,
         montoPagado: Double,
-        nota: String
+        nota: String,
+        recargaTransparentes: Int,
+        recargaAzules: Int,
+        recargaMarcados: Int,
+        montoEfectivo: Double,
+        montoTransferencia: Double,
+        montoCredito: Double,
+        montoAbono: Double,
+        montoCanceladoDeuda: Double
     ) -> Unit,
     onCancelar: () -> Unit
 ) {
@@ -124,9 +132,15 @@ fun NuevaVentaSheet(
         mutableDoubleStateOf(transaccionAEditar?.precioUnitarioBidon ?: clienteInicial?.precioHabitual ?: 1.00)
     }
 
-    var cantRecarga by remember {
-        mutableIntStateOf(transaccionAEditar?.cantidadBidonesRecarga ?: 1)
-    }
+    val inicioTrans = transaccionAEditar?.recargaTransparentes ?: if (transaccionAEditar?.tipoBidon == TipoBidon.TRANSPARENTE) transaccionAEditar.cantidadBidonesRecarga else 0
+    val inicioAzul = transaccionAEditar?.recargaAzules ?: if (transaccionAEditar?.tipoBidon == TipoBidon.AZUL) transaccionAEditar.cantidadBidonesRecarga else if (transaccionAEditar == null && clienteInicial?.tipoBidonPreferido == TipoBidon.AZUL) 1 else if (transaccionAEditar == null && clienteInicial == null) 1 else 0
+    val inicioMarc = transaccionAEditar?.recargaMarcados ?: if (transaccionAEditar?.tipoBidon == TipoBidon.MARCADO) transaccionAEditar.cantidadBidonesRecarga else 0
+
+    var cantRecargaTrans by remember { mutableIntStateOf(inicioTrans) }
+    var cantRecargaAzul by remember { mutableIntStateOf(inicioAzul) }
+    var cantRecargaMarc by remember { mutableIntStateOf(inicioMarc) }
+
+    val cantRecarga = cantRecargaTrans + cantRecargaAzul + cantRecargaMarc
     var cantVendidosEnvase by remember {
         mutableIntStateOf(transaccionAEditar?.cantidadBidonesVendidosEnvase ?: 0)
     }
@@ -156,8 +170,21 @@ fun NuevaVentaSheet(
     }
 
     // ------------------------------------------------------------------
-    // SECCIÓN 3: PAGO
+    // SECCIÓN 3: PAGO MIXTO Y FORMAS DE PAGO
     // ------------------------------------------------------------------
+    var modoPagoMixto by remember {
+        mutableStateOf(
+            if (transaccionAEditar != null) {
+                listOf(
+                    transaccionAEditar.montoEfectivo > 0,
+                    transaccionAEditar.montoTransferencia > 0,
+                    transaccionAEditar.montoCredito > 0,
+                    transaccionAEditar.montoAbono > 0
+                ).count { it } > 1
+            } else false
+        )
+    }
+
     var formaPago by remember {
         mutableStateOf(transaccionAEditar?.formaPagoPrincipal ?: FormaPago.EFECTIVO)
     }
@@ -170,6 +197,21 @@ fun NuevaVentaSheet(
             }
         )
     }
+
+    // Campos para pago mixto / combinado
+    var pagoMixtoEfectivo by remember {
+        mutableStateOf(if (transaccionAEditar != null && transaccionAEditar.montoEfectivo > 0) transaccionAEditar.montoEfectivo.toString() else "")
+    }
+    var pagoMixtoTransferencia by remember {
+        mutableStateOf(if (transaccionAEditar != null && transaccionAEditar.montoTransferencia > 0) transaccionAEditar.montoTransferencia.toString() else "")
+    }
+    var pagoMixtoCredito by remember {
+        mutableStateOf(if (transaccionAEditar != null && transaccionAEditar.montoCredito > 0) transaccionAEditar.montoCredito.toString() else "")
+    }
+    var pagoMixtoAbonoDeuda by remember {
+        mutableStateOf(if (transaccionAEditar != null && transaccionAEditar.montoAbono > 0) transaccionAEditar.montoAbono.toString() else "")
+    }
+
     var nota by remember { mutableStateOf(transaccionAEditar?.nota ?: "") }
 
     // Cálculos de Total
@@ -335,45 +377,54 @@ fun NuevaVentaSheet(
         }
 
         // ==============================================================
-        // 2. SELECCIÓN DE BIDÓN DE 20L Y PRECIO
+        // 2. SELECCIÓN DE BIDONES DE 20L Y PRECIO (PERMITE COMBINAR)
         // ==============================================================
         item {
             Text(
-                text = "2. TIPO DE BOTELLÓN (20L)",
+                text = "2. RECARGAS DE BOTELLÓN DE 20L (COMBINA TIPOS)",
                 style = MaterialTheme.typography.labelLarge,
                 color = TextoSecundario
             )
             Spacer(modifier = Modifier.height(4.dp))
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                TarjetaSelectorBidonVenta(
+                // PET Cristal
+                FilaBidonCombinable(
                     tipo = TipoBidon.TRANSPARENTE,
-                    nombre = "PET Cristal",
+                    nombre = "PET Cristal (Transparente)",
                     disponibles = inventario?.bidonesLlenosTransparentes ?: 0,
-                    seleccionado = tipoBidonSeleccionado == TipoBidon.TRANSPARENTE,
-                    onSelect = { tipoBidonSeleccionado = TipoBidon.TRANSPARENTE },
-                    modifier = Modifier.weight(1f)
+                    cantidad = cantRecargaTrans,
+                    onCambio = {
+                        cantRecargaTrans = it
+                        if (it > 0) tipoBidonSeleccionado = TipoBidon.TRANSPARENTE
+                    }
                 )
 
-                TarjetaSelectorBidonVenta(
+                // Azul Fuerte
+                FilaBidonCombinable(
                     tipo = TipoBidon.AZUL,
-                    nombre = "Azul Fuerte",
+                    nombre = "Azul Fuerte (Estándar)",
                     disponibles = inventario?.bidonesLlenosAzules ?: 0,
-                    seleccionado = tipoBidonSeleccionado == TipoBidon.AZUL,
-                    onSelect = { tipoBidonSeleccionado = TipoBidon.AZUL },
-                    modifier = Modifier.weight(1f)
+                    cantidad = cantRecargaAzul,
+                    onCambio = {
+                        cantRecargaAzul = it
+                        if (it > 0) tipoBidonSeleccionado = TipoBidon.AZUL
+                    }
                 )
 
-                TarjetaSelectorBidonVenta(
+                // Marcado
+                FilaBidonCombinable(
                     tipo = TipoBidon.MARCADO,
-                    nombre = "Marcado",
+                    nombre = "Marcado / Sello",
                     disponibles = inventario?.bidonesLlenosMarcados ?: 0,
-                    seleccionado = tipoBidonSeleccionado == TipoBidon.MARCADO,
-                    onSelect = { tipoBidonSeleccionado = TipoBidon.MARCADO },
-                    modifier = Modifier.weight(1f)
+                    cantidad = cantRecargaMarc,
+                    onCambio = {
+                        cantRecargaMarc = it
+                        if (it > 0) tipoBidonSeleccionado = TipoBidon.MARCADO
+                    }
                 )
             }
         }
@@ -386,24 +437,19 @@ fun NuevaVentaSheet(
             ) {
                 Column {
                     Text(
-                        text = "Recargas normales (20L)",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = "Precio por recarga de bidón",
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Baja 1 lleno, sube 1 vacío",
+                        text = "Total recargas a entregar: $cantRecarga un.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextoSecundario
                     )
                 }
-
-                ControlContador(
-                    valor = cantRecarga,
-                    onCambio = { cantRecarga = it }
-                )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -574,79 +620,191 @@ fun NuevaVentaSheet(
         }
 
         item {
-            Text(
-                text = "3. FORMA DE PAGO",
-                style = MaterialTheme.typography.labelLarge,
-                color = TextoSecundario
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                BotonFormaPago(
-                    titulo = "Efectivo",
-                    icono = Icons.Default.Money,
-                    seleccionado = formaPago == FormaPago.EFECTIVO,
-                    onSelect = { formaPago = FormaPago.EFECTIVO },
-                    modifier = Modifier.weight(1f)
+                Text(
+                    text = "3. FORMA DE PAGO",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TextoSecundario
                 )
-                BotonFormaPago(
-                    titulo = "Transf.",
-                    icono = Icons.Default.CreditCard,
-                    seleccionado = formaPago == FormaPago.TRANSFERENCIA,
-                    onSelect = { formaPago = FormaPago.TRANSFERENCIA },
-                    modifier = Modifier.weight(1f)
-                )
-                BotonFormaPago(
-                    titulo = "Crédito",
-                    icono = Icons.Default.Payments,
-                    seleccionado = formaPago == FormaPago.CREDITO,
-                    onSelect = { formaPago = FormaPago.CREDITO },
-                    modifier = Modifier.weight(1f)
+
+                FilterChip(
+                    selected = modoPagoMixto,
+                    onClick = {
+                        modoPagoMixto = !modoPagoMixto
+                        if (modoPagoMixto && pagoMixtoEfectivo.isBlank() && pagoMixtoCredito.isBlank()) {
+                            pagoMixtoEfectivo = String.format(Locale.US, "%.2f", totalGeneral)
+                        }
+                    },
+                    label = {
+                        Text(
+                            text = if (modoPagoMixto) "✓ Pago Combinado (Activo)" else "+ Combinar Pagos",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    }
                 )
             }
-
             Spacer(modifier = Modifier.height(6.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                BotonFormaPago(
-                    titulo = "Abono",
-                    icono = Icons.Default.Payments,
-                    seleccionado = formaPago == FormaPago.ABONO,
-                    onSelect = {
-                        formaPago = FormaPago.ABONO
-                        if (montoAbonoTexto.isBlank()) montoAbonoTexto = String.format(Locale.US, "%.2f", totalGeneral)
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                BotonFormaPago(
-                    titulo = "Cancelado",
-                    icono = Icons.Default.DoneAll,
-                    seleccionado = formaPago == FormaPago.CANCELADO,
-                    onSelect = {
-                        formaPago = FormaPago.CANCELADO
-                        val deudaPrevia = clienteSeleccionado?.deudaMonetaria ?: 0.0
-                        montoAbonoTexto = String.format(Locale.US, "%.2f", totalGeneral + deudaPrevia)
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            if (!modoPagoMixto) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    BotonFormaPago(
+                        titulo = "Efectivo",
+                        icono = Icons.Default.Money,
+                        seleccionado = formaPago == FormaPago.EFECTIVO,
+                        onSelect = { formaPago = FormaPago.EFECTIVO },
+                        modifier = Modifier.weight(1f)
+                    )
+                    BotonFormaPago(
+                        titulo = "Transf.",
+                        icono = Icons.Default.CreditCard,
+                        seleccionado = formaPago == FormaPago.TRANSFERENCIA,
+                        onSelect = { formaPago = FormaPago.TRANSFERENCIA },
+                        modifier = Modifier.weight(1f)
+                    )
+                    BotonFormaPago(
+                        titulo = "Crédito",
+                        icono = Icons.Default.Payments,
+                        seleccionado = formaPago == FormaPago.CREDITO,
+                        onSelect = { formaPago = FormaPago.CREDITO },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
-            if (formaPago == FormaPago.ABONO || formaPago == FormaPago.CANCELADO) {
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = montoAbonoTexto,
-                    onValueChange = { montoAbonoTexto = it },
-                    label = { Text("Monto pagado / abonado ($)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    BotonFormaPago(
+                        titulo = "Abono",
+                        icono = Icons.Default.Payments,
+                        seleccionado = formaPago == FormaPago.ABONO,
+                        onSelect = {
+                            formaPago = FormaPago.ABONO
+                            if (montoAbonoTexto.isBlank()) montoAbonoTexto = String.format(Locale.US, "%.2f", totalGeneral)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    BotonFormaPago(
+                        titulo = "Cancelado",
+                        icono = Icons.Default.DoneAll,
+                        seleccionado = formaPago == FormaPago.CANCELADO,
+                        onSelect = {
+                            formaPago = FormaPago.CANCELADO
+                            val deudaPrevia = clienteSeleccionado?.deudaMonetaria ?: 0.0
+                            montoAbonoTexto = String.format(Locale.US, "%.2f", totalGeneral + deudaPrevia)
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                if (formaPago == FormaPago.ABONO || formaPago == FormaPago.CANCELADO) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = montoAbonoTexto,
+                        onValueChange = { montoAbonoTexto = it },
+                        label = { Text("Monto pagado / abonado ($)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            } else {
+                // Interfaz para combinar múltiples formas de pago a la vez
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AguaPrimary),
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "DIVIDIR TOTAL ($${String.format(Locale.US, "%.2f", totalGeneral)}) ENTRE FORMAS DE PAGO:",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Black,
+                            color = AguaPrimaryDark
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = pagoMixtoEfectivo,
+                                onValueChange = { pagoMixtoEfectivo = it },
+                                label = { Text("Efectivo ($)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = pagoMixtoCredito,
+                                onValueChange = { pagoMixtoCredito = it },
+                                label = { Text("A Crédito ($)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = pagoMixtoTransferencia,
+                                onValueChange = { pagoMixtoTransferencia = it },
+                                label = { Text("Transferencia ($)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = pagoMixtoAbonoDeuda,
+                                onValueChange = { pagoMixtoAbonoDeuda = it },
+                                label = { Text("Abono Deuda Anterior ($)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        val sumaCubierta = (pagoMixtoEfectivo.toDoubleOrNull() ?: 0.0) +
+                                (pagoMixtoCredito.toDoubleOrNull() ?: 0.0) +
+                                (pagoMixtoTransferencia.toDoubleOrNull() ?: 0.0)
+                        val diferencia = totalGeneral - sumaCubierta
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        if (Math.abs(diferencia) > 0.01) {
+                            Text(
+                                text = if (diferencia > 0) "⚠️ Falta asignar: $${String.format(Locale.US, "%.2f", diferencia)}"
+                                else "⚠️ Asignado en exceso: $${String.format(Locale.US, "%.2f", -diferencia)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AmbarAdvertencia,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            Text(
+                                text = "✓ El total cuadra exactamente ($${String.format(Locale.US, "%.2f", totalGeneral)})",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = VerdeEfectivo,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -665,6 +823,11 @@ fun NuevaVentaSheet(
                         if (textoBusquedaCliente.isBlank()) "Cliente de Paso" else textoBusquedaCliente.trim()
                     } else null
 
+                    val mEf = if (modoPagoMixto) (pagoMixtoEfectivo.toDoubleOrNull() ?: 0.0) else 0.0
+                    val mTr = if (modoPagoMixto) (pagoMixtoTransferencia.toDoubleOrNull() ?: 0.0) else 0.0
+                    val mCr = if (modoPagoMixto) (pagoMixtoCredito.toDoubleOrNull() ?: 0.0) else 0.0
+                    val mAb = if (modoPagoMixto) (pagoMixtoAbonoDeuda.toDoubleOrNull() ?: 0.0) else 0.0
+
                     onConfirmarVenta(
                         clienteSeleccionado?.id,
                         nombreFinal,
@@ -680,7 +843,15 @@ fun NuevaVentaSheet(
                         cantMinis,
                         formaPago,
                         pagado,
-                        nota
+                        nota,
+                        cantRecargaTrans,
+                        cantRecargaAzul,
+                        cantRecargaMarc,
+                        mEf,
+                        mTr,
+                        mCr,
+                        mAb,
+                        0.0
                     )
                 },
                 modifier = Modifier
@@ -822,6 +993,54 @@ private fun FilaContadorMovimiento(
             Text(text = subtitulo, style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
         }
         ControlContador(valor = valor, onCambio = onCambio)
+    }
+}
+
+@Composable
+private fun FilaBidonCombinable(
+    tipo: TipoBidon,
+    nombre: String,
+    disponibles: Int,
+    cantidad: Int,
+    onCambio: (Int) -> Unit
+) {
+    Surface(
+        color = Color(0xFFF8FAFC),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                BidonIllustration(tipo = tipo, size = 38.dp)
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = nombre,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextoOscuro
+                    )
+                    Text(
+                        text = "Disponibles en camión: $disponibles",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (disponibles <= 10) RojoAlerta else TextoSecundario,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            ControlContador(valor = cantidad, onCambio = onCambio)
+        }
     }
 }
 

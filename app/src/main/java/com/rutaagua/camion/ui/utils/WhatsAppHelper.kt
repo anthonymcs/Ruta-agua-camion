@@ -3,10 +3,13 @@ package com.rutaagua.camion.ui.utils
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.content.FileProvider
+import com.rutaagua.camion.data.local.entity.CierreCajaEntity
 import com.rutaagua.camion.data.local.entity.ClienteEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
 import com.rutaagua.camion.data.local.model.FormaPago
 import com.rutaagua.camion.data.local.model.TipoBidon
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -93,8 +96,8 @@ object WhatsAppHelper {
         fechaDisplay: String = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
     ): String {
         return buildString {
-            appendLine("💧 *ESTADO DE CUENTA - RUTA AGUA* 🚚")
-            appendLine("Hola *${cliente.nombre}*, un cordial saludo de parte del equipo de *Ruta Agua*.")
+            appendLine("💧 *ESTADO DE CUENTA - AQUA APOLO* 🚚")
+            appendLine("Hola *${cliente.nombre}*, un cordial saludo de parte del equipo de *Aqua Apolo*.")
             appendLine("📅 *Fecha:* $fechaDisplay")
             appendLine("─────────────────────────")
             appendLine("📊 *RESUMEN DE SU CUENTA:*")
@@ -120,7 +123,7 @@ object WhatsAppHelper {
 
             appendLine("─────────────────────────")
             appendLine("¡Agradecemos mucho su preferencia! Si necesita agua purificada o tiene alguna consulta, con gusto le atendemos.")
-            appendLine("🚚 *Ruta Agua - Reparto a Domicilio*")
+            appendLine("Gracias por confiar en nosotros. Atentamente, Aqua Apolo 💧🚚")
         }
     }
 
@@ -136,24 +139,40 @@ object WhatsAppHelper {
         val nombre = cliente?.nombre ?: transaccion.nombreClientePaso ?: "Estimado(a) Cliente"
 
         return buildString {
-            appendLine("💧 *RECIBO DE ENTREGA - RUTA AGUA* 🚚")
+            appendLine("💧 *RECIBO DE ENTREGA - AQUA APOLO* 🚚")
             appendLine("Hola *$nombre*, confirmamos su entrega de hoy.")
             appendLine("📅 *Fecha:* $fechaDisplay • ⏰ *Hora:* $horaTexto")
             appendLine("─────────────────────────")
             appendLine("📦 *PRODUCTOS ENTREGADOS:*")
 
-            val totalBidones = transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesVendidosEnvase
-            if (totalBidones > 0) {
-                val tipoNombre = when (transaccion.tipoBidon) {
-                    TipoBidon.TRANSPARENTE -> "PET Transparente"
-                    TipoBidon.AZUL -> "Azul Estándar"
-                    TipoBidon.MARCADO -> "Marcado"
+            val tieneMulti = (transaccion.recargaTransparentes + transaccion.recargaAzules + transaccion.recargaMarcados) > 0
+            if (tieneMulti) {
+                if (transaccion.recargaTransparentes > 0) {
+                    appendLine("  • Recarga Bidón 20L (PET Transparente): *${transaccion.recargaTransparentes} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)}")
                 }
-                if (transaccion.cantidadBidonesRecarga > 0) {
-                    appendLine("  • Recarga Bidón 20L ($tipoNombre): *${transaccion.cantidadBidonesRecarga} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)}")
+                if (transaccion.recargaAzules > 0) {
+                    appendLine("  • Recarga Bidón 20L (Azul Estándar): *${transaccion.recargaAzules} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)}")
+                }
+                if (transaccion.recargaMarcados > 0) {
+                    appendLine("  • Recarga Bidón 20L (Marcado): *${transaccion.recargaMarcados} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)}")
                 }
                 if (transaccion.cantidadBidonesVendidosEnvase > 0) {
-                    appendLine("  • Bidón Nuevo + Agua ($tipoNombre): *${transaccion.cantidadBidonesVendidosEnvase} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidonVendido)}")
+                    appendLine("  • Bidón con Todo / Nuevo: *${transaccion.cantidadBidonesVendidosEnvase} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidonVendido)}")
+                }
+            } else {
+                val totalBidones = transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesVendidosEnvase
+                if (totalBidones > 0) {
+                    val tipoNombre = when (transaccion.tipoBidon) {
+                        TipoBidon.TRANSPARENTE -> "PET Transparente"
+                        TipoBidon.AZUL -> "Azul Estándar"
+                        TipoBidon.MARCADO -> "Marcado"
+                    }
+                    if (transaccion.cantidadBidonesRecarga > 0) {
+                        appendLine("  • Recarga Bidón 20L ($tipoNombre): *${transaccion.cantidadBidonesRecarga} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)}")
+                    }
+                    if (transaccion.cantidadBidonesVendidosEnvase > 0) {
+                        appendLine("  • Bidón Nuevo + Agua ($tipoNombre): *${transaccion.cantidadBidonesVendidosEnvase} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidonVendido)}")
+                    }
                 }
             }
 
@@ -178,12 +197,22 @@ object WhatsAppHelper {
             appendLine("─────────────────────────")
             appendLine("💰 *TOTAL DE LA ENTREGA:* *$${String.format(Locale.US, "%.2f", transaccion.totalImporte)}*")
 
-            val detallePago = when (transaccion.formaPagoPrincipal) {
-                FormaPago.EFECTIVO -> "Efectivo ($${String.format(Locale.US, "%.2f", transaccion.totalImporte)})"
-                FormaPago.TRANSFERENCIA -> "Transferencia bancaria ($${String.format(Locale.US, "%.2f", transaccion.totalImporte)})"
-                FormaPago.CREDITO -> "Crédito pendiente ($${String.format(Locale.US, "%.2f", transaccion.totalImporte)})"
-                FormaPago.ABONO -> "Abono a cuenta ($${String.format(Locale.US, "%.2f", transaccion.montoAbono)})"
-                FormaPago.CANCELADO -> "Deuda cancelada ($${String.format(Locale.US, "%.2f", transaccion.montoCanceladoDeuda)})"
+            val partesPago = mutableListOf<String>()
+            if (transaccion.montoEfectivo > 0) partesPago.add("Efectivo: $${String.format(Locale.US, "%.2f", transaccion.montoEfectivo)}")
+            if (transaccion.montoTransferencia > 0) partesPago.add("Transferencia: $${String.format(Locale.US, "%.2f", transaccion.montoTransferencia)}")
+            if (transaccion.montoCredito > 0) partesPago.add("Crédito: $${String.format(Locale.US, "%.2f", transaccion.montoCredito)}")
+            if (transaccion.montoAbono > 0) partesPago.add("Abono Deuda: $${String.format(Locale.US, "%.2f", transaccion.montoAbono)}")
+
+            val detallePago = if (partesPago.size > 1) {
+                partesPago.joinToString(" + ")
+            } else {
+                when (transaccion.formaPagoPrincipal) {
+                    FormaPago.EFECTIVO -> "Efectivo ($${String.format(Locale.US, "%.2f", transaccion.totalImporte)})"
+                    FormaPago.TRANSFERENCIA -> "Transferencia bancaria ($${String.format(Locale.US, "%.2f", transaccion.totalImporte)})"
+                    FormaPago.CREDITO -> "Crédito pendiente ($${String.format(Locale.US, "%.2f", transaccion.totalImporte)})"
+                    FormaPago.ABONO -> "Abono a cuenta ($${String.format(Locale.US, "%.2f", transaccion.montoAbono)})"
+                    FormaPago.CANCELADO -> "Deuda cancelada ($${String.format(Locale.US, "%.2f", transaccion.montoCanceladoDeuda)})"
+                }
             }
             appendLine("💳 *Forma de Pago:* $detallePago")
 
@@ -209,7 +238,99 @@ object WhatsAppHelper {
 
             appendLine("─────────────────────────")
             appendLine("¡Muchas gracias por su compra! Que tenga un excelente día.")
-            appendLine("🚚 *Ruta Agua - Reparto a Domicilio*")
+            appendLine("Gracias por confiar en nosotros. Atentamente, Aqua Apolo 💧🚚")
+        }
+    }
+
+    /**
+     * Genera el mensaje de cortesía con foto cuando el cliente no estaba en casa.
+     */
+    fun generarMensajeVisitaFallida(nombreCliente: String, fecha: String, hora: String): String {
+        return "¡Hola $nombreCliente! 🚚💧 Pasamos hoy $fecha a las $hora para realizar su entrega de agua, pero no encontramos a nadie en casa. Le adjuntamos la foto de constancia de nuestra visita. Escríbanos a este número de ruta si desea que pasemos más tarde.\n\nGracias por confiar en nosotros. Atentamente, Aqua Apolo 💧🚚"
+    }
+
+    /**
+     * Envía la constancia de visita fallida con foto adjunta mediante WhatsApp.
+     */
+    fun enviarVisitaFallidaConFoto(
+        context: Context,
+        telefonoRaw: String?,
+        mensaje: String,
+        fotoPath: String?
+    ) {
+        val numeroNormalizado = normalizarNumeroWhatsApp(telefonoRaw)
+        val uriFoto = if (!fotoPath.isNullOrBlank()) {
+            val file = File(fotoPath)
+            if (file.exists()) {
+                try {
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
+                } catch (_: Exception) {
+                    null
+                }
+            } else null
+        } else null
+
+        if (uriFoto != null) {
+            val intentFoto = Intent(Intent.ACTION_SEND).apply {
+                type = "image/jpeg"
+                putExtra(Intent.EXTRA_STREAM, uriFoto)
+                putExtra(Intent.EXTRA_TEXT, mensaje)
+                if (!numeroNormalizado.isNullOrBlank()) {
+                    putExtra("jid", "$numeroNormalizado@s.whatsapp.net")
+                }
+                setPackage("com.whatsapp")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            try {
+                context.startActivity(intentFoto)
+                return
+            } catch (_: Exception) {
+                // Fallback sin fijar package com.whatsapp
+                try {
+                    val chooser = Intent.createChooser(
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "image/jpeg"
+                            putExtra(Intent.EXTRA_STREAM, uriFoto)
+                            putExtra(Intent.EXTRA_TEXT, mensaje)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        },
+                        "Enviar constancia de visita"
+                    )
+                    context.startActivity(chooser)
+                    return
+                } catch (_: Exception) {}
+            }
+        }
+
+        // Si no hay foto válida, enviar solo texto
+        abrirChatWhatsApp(context, telefonoRaw, mensaje)
+    }
+
+    /**
+     * Genera el texto del resumen de Cierre Ciego para enviar por WhatsApp a Rolando.
+     */
+    fun generarMensajeCierreCajaOperador(cierre: CierreCajaEntity): String {
+        val total = cierre.totalDeclarado
+        val efectivo = cierre.efectivoDeclarado
+        val transferencias = cierre.transferenciasDeclaradas
+        val vehiculo = if (cierre.vehiculo == "CAMIONETA") "CAMIONETA" else "CAMIÓN"
+
+        return buildString {
+            appendLine("🔒 *CIERRE DE JORNADA - $vehiculo* 🚚💧")
+            appendLine("📅 *Fecha:* ${cierre.fechaIso}")
+            appendLine("─────────────────────────")
+            appendLine("💵 *Efectivo contado a entregar:* $${String.format(Locale.US, "%.2f", efectivo)}")
+            appendLine("📱 *Transferencias verificadas:* $${String.format(Locale.US, "%.2f", transferencias)}")
+            appendLine("💰 *TOTAL DECLARADO A ENTREGAR:* *$${String.format(Locale.US, "%.2f", total)}*")
+            if (cierre.observaciones.isNotBlank()) {
+                appendLine("📝 *Observaciones:* ${cierre.observaciones}")
+            }
+            appendLine("─────────────────────────")
+            appendLine("Enviado desde Aqua Apolo • Sistema de Cierre Ciego 💧🚚")
         }
     }
 }

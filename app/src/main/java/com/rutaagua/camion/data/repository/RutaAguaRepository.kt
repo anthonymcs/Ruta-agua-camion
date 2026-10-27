@@ -3,10 +3,12 @@ package com.rutaagua.camion.data.repository
 import androidx.room.withTransaction
 import com.rutaagua.camion.data.local.RutaAguaDatabase
 import com.rutaagua.camion.data.local.entity.ClienteEntity
+import com.rutaagua.camion.data.local.entity.CierreCajaEntity
 import com.rutaagua.camion.data.local.entity.GastoExtraEntity
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
 import com.rutaagua.camion.data.local.entity.RecargaPlantaEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
+import com.rutaagua.camion.data.local.entity.VisitaFallidaEntity
 import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.RecargaCalculada
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
@@ -31,6 +33,8 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     private val transaccionDao = database.transaccionDao()
     private val recargaPlantaDao = database.recargaPlantaDao()
     private val gastoDao = database.gastoDao()
+    private val cierreCajaDao = database.cierreCajaDao()
+    private val visitaFallidaDao = database.visitaFallidaDao()
 
     var syncManager: FirestoreSyncManager? = null
 
@@ -210,6 +214,91 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     fun obtenerRecargasPorFecha(fechaTexto: String, vehiculo: String? = null): Flow<List<RecargaPlantaEntity>> =
         recargaPlantaDao.obtenerRecargasPorFechaYVehiculoFlow(fechaTexto, vehiculo)
 
+    /**
+     * Elimina una recarga en planta y descuenta su stock del inventario de forma segura.
+     */
+    suspend fun eliminarRecargaPlanta(recarga: RecargaPlantaEntity) = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            val actual = inventarioDao.obtenerInventarioPorVehiculoDirecto(recarga.vehiculo)
+            if (actual != null) {
+                val transRestante = maxOf(0, actual.bidonesLlenosTransparentes - recarga.bidonesCargadosTransparentes)
+                val azulRestante = maxOf(0, actual.bidonesLlenosAzules - recarga.bidonesCargadosAzules)
+                val marcRestante = maxOf(0, actual.bidonesLlenosMarcados - recarga.bidonesCargadosMarcados)
+                val vaciosRestaurados = actual.bidonesVacios + recarga.bidonesVaciosDescargados
+                val galRestante = maxOf(0, actual.galonesLlenos - recarga.galonesCargados)
+                val pacasRestante = maxOf(0, actual.pacasLlenas - recarga.pacasCargadas)
+                val minisRestante = maxOf(0, actual.minisLlenas - recarga.minisCargadas)
+
+                val inventarioActualizado = actual.copy(
+                    bidonesLlenosTransparentes = transRestante,
+                    bidonesLlenosAzules = azulRestante,
+                    bidonesLlenosMarcados = marcRestante,
+                    bidonesVacios = vaciosRestaurados,
+                    galonesLlenos = galRestante,
+                    pacasLlenas = pacasRestante,
+                    minisLlenas = minisRestante,
+                    fechaUltimaActualizacion = System.currentTimeMillis()
+                )
+                inventarioDao.insertarOActualizar(inventarioActualizado)
+                syncManager?.subirInventario(inventarioActualizado)
+            }
+            recargaPlantaDao.eliminar(recarga)
+            syncManager?.eliminarRecarga(recarga.id)
+        }
+    }
+
+    /**
+     * Edita una recarga en planta revirtiendo la anterior y aplicando la nueva.
+     */
+    suspend fun editarRecargaPlanta(
+        recargaAnterior: RecargaPlantaEntity,
+        recargaNueva: RecargaPlantaEntity
+    ) = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            val actual = inventarioDao.obtenerInventarioPorVehiculoDirecto(recargaAnterior.vehiculo)
+                ?: InventarioCamionEntity(
+                    id = if (recargaAnterior.vehiculo == "CAMIONETA") 2 else 1,
+                    vehiculo = recargaAnterior.vehiculo
+                )
+
+            // 1. Revertir anterior
+            val trans1 = maxOf(0, actual.bidonesLlenosTransparentes - recargaAnterior.bidonesCargadosTransparentes)
+            val azul1 = maxOf(0, actual.bidonesLlenosAzules - recargaAnterior.bidonesCargadosAzules)
+            val marc1 = maxOf(0, actual.bidonesLlenosMarcados - recargaAnterior.bidonesCargadosMarcados)
+            val vacios1 = actual.bidonesVacios + recargaAnterior.bidonesVaciosDescargados
+            val gal1 = maxOf(0, actual.galonesLlenos - recargaAnterior.galonesCargados)
+            val pac1 = maxOf(0, actual.pacasLlenas - recargaAnterior.pacasCargadas)
+            val min1 = maxOf(0, actual.minisLlenas - recargaAnterior.minisCargadas)
+
+            // 2. Aplicar nueva
+            val trans2 = trans1 + recargaNueva.bidonesCargadosTransparentes
+            val azul2 = azul1 + recargaNueva.bidonesCargadosAzules
+            val marc2 = marc1 + recargaNueva.bidonesCargadosMarcados
+            val vacios2 = maxOf(0, vacios1 - recargaNueva.bidonesVaciosDescargados)
+            val gal2 = gal1 + recargaNueva.galonesCargados
+            val pac2 = pac1 + recargaNueva.pacasCargadas
+            val min2 = min1 + recargaNueva.minisCargadas
+
+            val inventarioActualizado = actual.copy(
+                bidonesLlenosTransparentes = trans2,
+                bidonesLlenosAzules = azul2,
+                bidonesLlenosMarcados = marc2,
+                bidonesVacios = vacios2,
+                galonesLlenos = gal2,
+                pacasLlenas = pac2,
+                minisLlenas = min2,
+                fechaUltimaActualizacion = System.currentTimeMillis()
+            )
+
+            inventarioDao.insertarOActualizar(inventarioActualizado)
+            recargaPlantaDao.actualizar(recargaNueva.copy(id = recargaAnterior.id))
+
+            val recargaConId = recargaNueva.copy(id = recargaAnterior.id)
+            syncManager?.subirRecarga(recargaConId)
+            syncManager?.subirInventario(inventarioActualizado)
+        }
+    }
+
     // ==========================================
     // TRANSACCIÓN DE VENTA, EDICIÓN Y REVERSIÓN
     // ==========================================
@@ -259,18 +348,33 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
                 vehiculo = transaccion.vehiculo
             )
 
-        val bidonesQueBajan = transaccion.cantidadBidonesRecarga +
-                transaccion.cantidadBidonesPrestados +
-                transaccion.cantidadBidonesVendidosEnvase
-
         var transLlenos = inventarioActual.bidonesLlenosTransparentes
         var azulLlenos = inventarioActual.bidonesLlenosAzules
         var marcLlenos = inventarioActual.bidonesLlenosMarcados
 
-        when (transaccion.tipoBidon) {
-            TipoBidon.TRANSPARENTE -> transLlenos = maxOf(0, transLlenos - bidonesQueBajan)
-            TipoBidon.AZUL -> azulLlenos = maxOf(0, azulLlenos - bidonesQueBajan)
-            TipoBidon.MARCADO -> marcLlenos = maxOf(0, marcLlenos - bidonesQueBajan)
+        val tieneMulti = (transaccion.recargaTransparentes + transaccion.recargaAzules + transaccion.recargaMarcados +
+                transaccion.envasesVendidosTransparentes + transaccion.envasesVendidosAzules + transaccion.envasesVendidosMarcados) > 0
+
+        if (tieneMulti) {
+            val totalTransBajan = transaccion.recargaTransparentes + transaccion.envasesVendidosTransparentes +
+                    if (transaccion.tipoBidon == TipoBidon.TRANSPARENTE) transaccion.cantidadBidonesPrestados else 0
+            val totalAzulBajan = transaccion.recargaAzules + transaccion.envasesVendidosAzules +
+                    if (transaccion.tipoBidon == TipoBidon.AZUL) transaccion.cantidadBidonesPrestados else 0
+            val totalMarcBajan = transaccion.recargaMarcados + transaccion.envasesVendidosMarcados +
+                    if (transaccion.tipoBidon == TipoBidon.MARCADO) transaccion.cantidadBidonesPrestados else 0
+
+            transLlenos = maxOf(0, transLlenos - totalTransBajan)
+            azulLlenos = maxOf(0, azulLlenos - totalAzulBajan)
+            marcLlenos = maxOf(0, marcLlenos - totalMarcBajan)
+        } else {
+            val bidonesQueBajan = transaccion.cantidadBidonesRecarga +
+                    transaccion.cantidadBidonesPrestados +
+                    transaccion.cantidadBidonesVendidosEnvase
+            when (transaccion.tipoBidon) {
+                TipoBidon.TRANSPARENTE -> transLlenos = maxOf(0, transLlenos - bidonesQueBajan)
+                TipoBidon.AZUL -> azulLlenos = maxOf(0, azulLlenos - bidonesQueBajan)
+                TipoBidon.MARCADO -> marcLlenos = maxOf(0, marcLlenos - bidonesQueBajan)
+            }
         }
 
         val galonesLlenos = maxOf(0, inventarioActual.galonesLlenos - transaccion.cantidadGalones)
@@ -327,16 +431,31 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
                 id = if (t.vehiculo == "CAMIONETA") 2 else 1,
                 vehiculo = t.vehiculo
             )
-        val bidonesQueHabianBajado = t.cantidadBidonesRecarga + t.cantidadBidonesPrestados + t.cantidadBidonesVendidosEnvase
-
         var trans = inventario.bidonesLlenosTransparentes
         var azul = inventario.bidonesLlenosAzules
         var marc = inventario.bidonesLlenosMarcados
 
-        when (t.tipoBidon) {
-            TipoBidon.TRANSPARENTE -> trans += bidonesQueHabianBajado
-            TipoBidon.AZUL -> azul += bidonesQueHabianBajado
-            TipoBidon.MARCADO -> marc += bidonesQueHabianBajado
+        val tieneMulti = (t.recargaTransparentes + t.recargaAzules + t.recargaMarcados +
+                t.envasesVendidosTransparentes + t.envasesVendidosAzules + t.envasesVendidosMarcados) > 0
+
+        if (tieneMulti) {
+            val totalTransBajan = t.recargaTransparentes + t.envasesVendidosTransparentes +
+                    if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesPrestados else 0
+            val totalAzulBajan = t.recargaAzules + t.envasesVendidosAzules +
+                    if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesPrestados else 0
+            val totalMarcBajan = t.recargaMarcados + t.envasesVendidosMarcados +
+                    if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesPrestados else 0
+
+            trans += totalTransBajan
+            azul += totalAzulBajan
+            marc += totalMarcBajan
+        } else {
+            val bidonesQueHabianBajado = t.cantidadBidonesRecarga + t.cantidadBidonesPrestados + t.cantidadBidonesVendidosEnvase
+            when (t.tipoBidon) {
+                TipoBidon.TRANSPARENTE -> trans += bidonesQueHabianBajado
+                TipoBidon.AZUL -> azul += bidonesQueHabianBajado
+                TipoBidon.MARCADO -> marc += bidonesQueHabianBajado
+            }
         }
 
         val galones = inventario.galonesLlenos + t.cantidadGalones
@@ -401,11 +520,20 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             var min = 0
             var env = 0
             for (t in transacciones) {
-                val b = t.cantidadBidonesRecarga + t.cantidadBidonesVendidosEnvase
-                when (t.tipoBidon) {
-                    TipoBidon.TRANSPARENTE -> trans += b
-                    TipoBidon.AZUL -> azul += b
-                    TipoBidon.MARCADO -> marc += b
+                val tieneDesgloseMulti = (t.recargaTransparentes + t.recargaAzules + t.recargaMarcados +
+                        t.envasesVendidosTransparentes + t.envasesVendidosAzules + t.envasesVendidosMarcados) > 0
+
+                if (tieneDesgloseMulti) {
+                    trans += (t.recargaTransparentes + t.envasesVendidosTransparentes)
+                    azul += (t.recargaAzules + t.envasesVendidosAzules)
+                    marc += (t.recargaMarcados + t.envasesVendidosMarcados)
+                } else {
+                    val b = t.cantidadBidonesRecarga + t.cantidadBidonesVendidosEnvase
+                    when (t.tipoBidon) {
+                        TipoBidon.TRANSPARENTE -> trans += b
+                        TipoBidon.AZUL -> azul += b
+                        TipoBidon.MARCADO -> marc += b
+                    }
                 }
                 gal += t.cantidadGalones
                 pac += t.cantidadPacas
@@ -503,7 +631,7 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         vehiculoLabel: String = "🚚 Camión"
     ): String {
         return buildString {
-            appendLine("💧 *REPORTE RUTA AGUA - CIERRE DEL DÍA* $vehiculoLabel")
+            appendLine("💧 *REPORTE AQUA APOLO - CIERRE DEL DÍA* $vehiculoLabel")
             appendLine("📅 *Fecha:* $fechaDisplay")
             appendLine("─────────────────────────")
             appendLine("📦 *TOTAL BIDONES VENDIDOS: ${resumen.totalBidonesVendidos}*")
@@ -518,17 +646,11 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
                 appendLine("• Envases Recuperados/Devueltos: *${resumen.totalBidonesDevueltos}*")
             }
             if (estadisticas.envasesNuevosVendidos > 0) {
-                appendLine("• Envases Nuevos Vendidos: *${estadisticas.envasesNuevosVendidos}*")
+                appendLine("• Bidón con Todo (Envase Nuevo Vendido): *${estadisticas.envasesNuevosVendidos} un.*")
             }
-            if (resumen.totalGalonesVendidos > 0) {
-                appendLine("• Galones (4L): *${resumen.totalGalonesVendidos}*")
-            }
-            if (resumen.totalPacasVendidas > 0) {
-                appendLine("• Pacas (24x500ml): *${resumen.totalPacasVendidas}*")
-            }
-            if (resumen.totalMinisVendidas > 0) {
-                appendLine("• Minis (12x500ml): *${resumen.totalMinisVendidas}*")
-            }
+            appendLine("• Galones (4L): *${resumen.totalGalonesVendidos}*")
+            appendLine("• Pacas (24x500ml): *${resumen.totalPacasVendidas}*")
+            appendLine("• Minis (12x500ml): *${resumen.totalMinisVendidas}*")
 
             appendLine("─────────────────────────")
             appendLine("💰 *CONTABILIDAD:*")
@@ -551,7 +673,51 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             appendLine("🧾 *GASTOS EN RUTA:* *$${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}*")
             appendLine("💵 *EFECTIVO NETO A ENTREGAR:* *$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}*")
             appendLine("─────────────────────────")
-            appendLine("💧 *Ruta Agua - Sistema Offline & Sincronizado*")
+            appendLine("Gracias por confiar en nosotros. Atentamente, Aqua Apolo 💧🚚")
         }
+    }
+
+    // ==========================================
+    // CIERRES DE CAJA (ESTILO RP3 GASOLINERA)
+    // ==========================================
+
+    fun obtenerCierrePorFechaYVehiculo(fechaIso: String, vehiculo: String): Flow<CierreCajaEntity?> =
+        cierreCajaDao.obtenerCierrePorFechaYVehiculoFlow(fechaIso, vehiculo)
+
+    fun obtenerUltimoCierrePorFecha(fechaIso: String): Flow<CierreCajaEntity?> =
+        cierreCajaDao.obtenerUltimoCierrePorFechaFlow(fechaIso)
+
+    fun obtenerTodosLosCierres(): Flow<List<CierreCajaEntity>> =
+        cierreCajaDao.obtenerTodosFlow()
+
+    suspend fun guardarCierreCaja(cierre: CierreCajaEntity): Long = withContext(Dispatchers.IO) {
+        val id = if (cierre.id == 0L) {
+            cierreCajaDao.insertar(cierre)
+        } else {
+            cierreCajaDao.actualizar(cierre)
+            cierre.id
+        }
+        cierreCajaDao.obtenerPorId(id)?.let {
+            syncManager?.subirCierreCaja(it)
+        }
+        id
+    }
+
+    // ==========================================
+    // VISITAS FALLIDAS (CLIENTE NO ESTABA EN CASA)
+    // ==========================================
+
+    fun obtenerVisitasFallidasPorFecha(fechaIso: String): Flow<List<VisitaFallidaEntity>> =
+        visitaFallidaDao.obtenerVisitasPorFechaFlow(fechaIso)
+
+    fun obtenerVisitaFallidaClienteHoy(clienteId: Long, fechaIso: String): Flow<VisitaFallidaEntity?> =
+        visitaFallidaDao.obtenerVisitaPorClienteYFechaFlow(clienteId, fechaIso)
+
+    suspend fun registrarVisitaFallida(visita: VisitaFallidaEntity): Long = withContext(Dispatchers.IO) {
+        val id = visitaFallidaDao.insertar(visita)
+        visitaFallidaDao.obtenerPorId(id)?.let {
+            syncManager?.subirVisitaFallida(it)
+        }
+        id
     }
 }

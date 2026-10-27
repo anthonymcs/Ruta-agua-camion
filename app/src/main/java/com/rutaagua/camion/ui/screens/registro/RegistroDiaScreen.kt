@@ -68,6 +68,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.Lock
+import com.rutaagua.camion.data.local.prefs.RolUsuario
+import com.rutaagua.camion.data.local.entity.CierreCajaEntity
 import com.rutaagua.camion.data.local.entity.GastoExtraEntity
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
@@ -113,6 +116,9 @@ fun RegistroDiaScreen(
     val filtroVehiculo by viewModel.filtroVehiculoState.collectAsState()
     val resumen by viewModel.resumenCierreDiaState.collectAsState()
     val todosLosClientes by viewModel.todosLosClientesState.collectAsState()
+    val rolActivo by viewModel.rolActivo.collectAsState()
+    val cierreHoy by viewModel.cierreHoyState.collectAsState()
+    val mostrarDialogoCierre by viewModel.mostrarDialogoCierre.collectAsState()
 
     val mostrarModalVenta by viewModel.mostrarModalNuevaVenta.collectAsState()
     val clientePreseleccionado by viewModel.clientePreseleccionado.collectAsState()
@@ -171,9 +177,55 @@ fun RegistroDiaScreen(
                 .padding(innerPadding),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
-            // 1. Tarjetas Horizontales de Cuadre Diario
+            // 1. Tarjetas Horizontales de Cuadre Diario (Con Privacidad para Chofer)
             item {
-                FilaTarjetasCuadre(resumen = resumen)
+                FilaTarjetasCuadre(
+                    resumen = resumen,
+                    esModoAdmin = (rolActivo == RolUsuario.ADMIN_ROLANDO)
+                )
+            }
+
+            // 1.1 Si es el Perfil de Rolando (Administrador), mostrar Auditoría RP3 de Control Financiero
+            if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
+                item {
+                    AuditoriaCierreRP3Card(
+                        cierre = cierreHoy,
+                        resumen = resumen,
+                        costoPlantaBidon = viewModel.costoPlantaBidon,
+                        costoPlantaGalon = viewModel.costoPlantaGalon,
+                        costoPlantaPaca = viewModel.costoPlantaPaca,
+                        costoPlantaMini = viewModel.costoPlantaMini
+                    )
+                }
+            }
+
+            // 1.2 Botón Destacado: Realizar Cierre de Caja Ciego (Fin de Jornada)
+            item {
+                Button(
+                    onClick = { viewModel.abrirDialogoCierre() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (cierreHoy != null) Color(0xFF0F766E) else Color(0xFF0F172A)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .height(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (cierreHoy != null) "🔒 Cierre Declarado ($${String.format(Locale.US, "%.2f", cierreHoy?.totalDeclarado)}) • Modificar" else "🔒 Realizar Cierre de Caja (Fin de Jornada)",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 14.sp
+                    )
+                }
             }
 
             // 2. Barra de Botones de Acción Rápida (Gasto Extra y Compartir)
@@ -208,27 +260,29 @@ fun RegistroDiaScreen(
                 }
             }
 
-            // 2.1 Selector de Vista por Vehículo
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FiltroVehiculoRegistro.entries.forEach { filtro ->
-                        val seleccionado = filtroVehiculo == filtro
-                        FilterChip(
-                            selected = seleccionado,
-                            onClick = { viewModel.cambiarFiltroVehiculo(filtro) },
-                            label = {
-                                Text(
-                                    text = filtro.titulo,
-                                    fontWeight = if (seleccionado) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        )
+            // 2.1 Selector de Vista por Vehículo (Visible solo para Administrador)
+            if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FiltroVehiculoRegistro.entries.forEach { filtro ->
+                            val seleccionado = filtroVehiculo == filtro
+                            FilterChip(
+                                selected = seleccionado,
+                                onClick = { viewModel.cambiarFiltroVehiculo(filtro) },
+                                label = {
+                                    Text(
+                                        text = filtro.titulo,
+                                        fontWeight = if (seleccionado) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -319,7 +373,7 @@ fun RegistroDiaScreen(
                 clientePreseleccionado = clientePreseleccionado,
                 transaccionAEditar = transaccionEnEdicion,
                 inventario = inventario,
-                onConfirmarVenta = { cId, nomPaso, tipoB, cRec, pBidon, cPrest, cDev, cVendEnv, pEnv, cGal, cPac, cMin, fPago, mPag, nota ->
+                onConfirmarVenta = { cId, nomPaso, tipoB, cRec, pBidon, cPrest, cDev, cVendEnv, pEnv, cGal, cPac, cMin, fPago, mPag, nota, rTrans, rAzul, rMarc, mEf, mTr, mCr, mAb, mCanc ->
                     viewModel.registrarOEditarVenta(
                         clienteId = cId,
                         nombreClientePaso = nomPaso,
@@ -335,7 +389,15 @@ fun RegistroDiaScreen(
                         cantidadMinis = cMin,
                         formaPago = fPago,
                         montoPagado = mPag,
-                        nota = nota
+                        nota = nota,
+                        recargaTransparentes = rTrans,
+                        recargaAzules = rAzul,
+                        recargaMarcados = rMarc,
+                        montoEfectivo = mEf,
+                        montoTransferencia = mTr,
+                        montoCredito = mCr,
+                        montoAbono = mAb,
+                        montoCanceladoDeuda = mCanc
                     )
                 },
                 onCancelar = { viewModel.cerrarModalNuevaVenta() }
@@ -371,6 +433,17 @@ fun RegistroDiaScreen(
                     Text("Cancelar")
                 }
             }
+        )
+    }
+
+    // Diálogo de Cierre de Caja Ciego (Estilo RP3)
+    if (mostrarDialogoCierre) {
+        CierreCajaDialog(
+            cierreExistente = cierreHoy,
+            onConfirmarCierre = { ef, tr, obs ->
+                viewModel.registrarCierreCaja(ef, tr, obs)
+            },
+            onDismissRequest = { viewModel.cerrarDialogoCierre() }
         )
     }
 
@@ -541,9 +614,10 @@ private fun MiniChipStock(
 
 /**
  * Fila desplazable de tarjetas del Cuadre de Caja Diario.
+ * En Modo Operador (Teléfono de Ruta) se oculta estrictamente el efectivo neto esperado para el cierre ciego.
  */
 @Composable
-private fun FilaTarjetasCuadre(resumen: ResumenCierreDia) {
+private fun FilaTarjetasCuadre(resumen: ResumenCierreDia, esModoAdmin: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -558,12 +632,15 @@ private fun FilaTarjetasCuadre(resumen: ResumenCierreDia) {
             colorValor = AguaPrimary
         )
 
-        TarjetaMetricaCuadre(
-            titulo = "Efectivo Neto en Caja",
-            valor = "$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}",
-            subtitulo = "Cobrado ventas - gastos",
-            colorValor = VerdeEfectivo
-        )
+        // En Modo Operador de Ruta se OCULTA estrictamente el efectivo neto esperado (Cierre Ciego RP3)
+        if (esModoAdmin) {
+            TarjetaMetricaCuadre(
+                titulo = "Efectivo Neto en Caja",
+                valor = "$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}",
+                subtitulo = "Cobrado ventas - gastos",
+                colorValor = VerdeEfectivo
+            )
+        }
 
         TarjetaMetricaCuadre(
             titulo = "Cobro Transferencias",
@@ -656,14 +733,14 @@ private fun TarjetaRegistroItem(
             .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Fila 1: Hora, Nombre de Cliente, Badge y Botones de Editar/Eliminar
+            // Fila 1: Hora, Nombre de Cliente y Botones
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
@@ -679,30 +756,37 @@ private fun TarjetaRegistroItem(
                         )
                     }
                     Spacer(modifier = Modifier.width(6.dp))
-                    Surface(
-                        color = if (transaccion.vehiculo == "CAMIONETA") Color(0xFFF0F9FF) else Color(0xFFF1F5F9),
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Text(
-                            text = if (transaccion.vehiculo == "CAMIONETA") "🛻 Camioneta" else "🚚 Camión",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = if (transaccion.vehiculo == "CAMIONETA") AzulCorporativo else AguaPrimary,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = nombreCliente,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Black,
-                        color = TextoOscuro,
-                        maxLines = 1
+                        color = TextoOscuro
                     )
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    BadgeFormaPago(formaPago = transaccion.formaPagoPrincipal)
+                    val esPagoMixto = (transaccion.montoEfectivo > 0 && transaccion.montoCredito > 0) ||
+                            (transaccion.montoEfectivo > 0 && transaccion.montoTransferencia > 0) ||
+                            (transaccion.montoTransferencia > 0 && transaccion.montoCredito > 0) ||
+                            (transaccion.montoAbono > 0 && transaccion.montoCredito > 0)
+
+                    if (esPagoMixto) {
+                        Surface(
+                            color = Color(0xFFEFF6FF),
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
+                        ) {
+                            Text(
+                                text = "Mixto",
+                                color = Color(0xFF1D4ED8),
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else {
+                        BadgeFormaPago(formaPago = transaccion.formaPagoPrincipal)
+                    }
                     Spacer(modifier = Modifier.width(4.dp))
                     IconButton(onClick = onEditar, modifier = Modifier.size(28.dp)) {
                         Icon(
@@ -749,7 +833,31 @@ private fun TarjetaRegistroItem(
                 ) {
                     // Bidones de 20L
                     val totalBidones = transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesVendidosEnvase
-                    if (totalBidones > 0) {
+                    val tieneMulti = (transaccion.recargaTransparentes + transaccion.recargaAzules + transaccion.recargaMarcados) > 0
+
+                    if (tieneMulti) {
+                        if (transaccion.recargaTransparentes > 0) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                BidonIllustration(tipo = TipoBidon.TRANSPARENTE, size = 24.dp)
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(text = "${transaccion.recargaTransparentes}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        if (transaccion.recargaAzules > 0) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                BidonIllustration(tipo = TipoBidon.AZUL, size = 24.dp)
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(text = "${transaccion.recargaAzules}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        if (transaccion.recargaMarcados > 0) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                BidonIllustration(tipo = TipoBidon.MARCADO, size = 24.dp)
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(text = "${transaccion.recargaMarcados}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    } else if (totalBidones > 0) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             BidonIllustration(tipo = transaccion.tipoBidon, size = 26.dp)
                             Spacer(modifier = Modifier.width(4.dp))
@@ -808,12 +916,28 @@ private fun TarjetaRegistroItem(
                 }
 
                 // Monto Total Cobrado
-                Text(
-                    text = "$${String.format(Locale.US, "%.2f", transaccion.totalImporte)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black,
-                    color = AguaPrimary
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "$${String.format(Locale.US, "%.2f", transaccion.totalImporte)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = AguaPrimary
+                    )
+                    val partesPago = mutableListOf<String>()
+                    if (transaccion.montoEfectivo > 0) partesPago.add("Ef: $${String.format(Locale.US, "%.2f", transaccion.montoEfectivo)}")
+                    if (transaccion.montoTransferencia > 0) partesPago.add("Tr: $${String.format(Locale.US, "%.2f", transaccion.montoTransferencia)}")
+                    if (transaccion.montoCredito > 0) partesPago.add("Fiado: $${String.format(Locale.US, "%.2f", transaccion.montoCredito)}")
+                    if (transaccion.montoAbono > 0) partesPago.add("Ab: $${String.format(Locale.US, "%.2f", transaccion.montoAbono)}")
+
+                    if (partesPago.size > 1) {
+                        Text(
+                            text = partesPago.joinToString(" • "),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextoSecundario,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))

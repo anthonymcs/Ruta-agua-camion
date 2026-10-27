@@ -153,3 +153,115 @@
    - Exportación completa de base de datos a archivo JSON local con opción de compartir vía WhatsApp u otras aplicaciones.
    - Importación y restauración segura de respaldos JSON mediante selector de archivos del sistema.
    - Comprobador de actualizaciones Over-The-Air (`OTAUpdateChecker`) con descarga e instalación automática del APK más reciente mediante `DownloadManager` y `FileProvider`.
+
+---
+
+## 10. Pantalla de Selección de Vehículo e Ilustraciones Vectoriales de Camión y Camioneta
+1. **Ilustraciones Vectoriales en Compose Canvas (`VehiculoIllustrations.kt`)**:
+   - **`CamionIllustration`**: Camión repartidor moderno (cabina blanca/azul corporativo, ventanas con visera de protección solar, chasis, parachoques y carrocería trasera con múltiples estantes de bidones celestes PET y azules con tapones blancos, llantas dobles con aros de acero y sombra de apoyo).
+   - **`CamionetaIllustration`**: Camioneta pickup de reparto (cabina deportiva en azul acero y plata, balde/paila de carga con barandas metálicas protectoras, bidones de 20L apilados en el platón, luces frontales y posteriores, rines deportivos y sombra).
+   - **`VehiculoThumbnail`**: Componente compacto de miniatura vectorial (22.dp a 28.dp) para usar en badges y estados de entrega.
+2. **Pantalla de Entrada Obligatoria (`SeleccionVehiculoScreen.kt`)**:
+   - Al abrir la aplicación, antes de entrar al menú de pestañas, se presenta la pantalla de selección obligatoria.
+   - Muestra dos tarjetas interactivas de gran tamaño: **🚚 CAMIÓN REPARTIDOR (Capacidad 218)** y **🛻 CAMIONETA DE APOYO (Capacidad 80)**.
+   - Cada tarjeta muestra la ilustración vectorial, el stock actual de bidones llenos en tiempo real extraído de Room, la capacidad máxima configurada y un botón de entrada directo (`"Entrar al Camión →"` / `"Entrar a la Camioneta →"`).
+3. **Aislamiento Operativo de Sesión**:
+   - La sesión seleccionada queda fijada en `RutaAguaNavHost`.
+   - El TopBar muestra la miniatura vectorial del vehículo activo junto a su nombre y un botón de acceso rápido **"Cambiar"** para volver a la pantalla de selección.
+   - La pantalla de Inventario muestra la ilustración correspondiente del vehículo activo y un botón para alternar de vehículo.
+   - En `ClientesScreen` y `CalendarioRutaScreen`, las entregas realizadas hoy por cualquier vehículo muestran la miniatura gráfica del vehículo (`VehiculoThumbnail`) junto con la hora y los bidones entregados.
+
+---
+
+## 11. Roles Operativos, Privacidad de Datos y Cierre de Caja Ciego RP3
+1. **Roles y Privacidad Estricta (`RolUsuario`)**:
+   - **`OPERADOR_RUTA` (Teléfono de Ruta - Camión)**:
+     - Chofer y ayudante en ruta.
+     - **Regla estricta de privacidad**: Se ocultan completamente los costos de planta, utilidad bruta, utilidad neta y el efectivo esperado en caja durante el arqueo para evitar manipulaciones o presiones indebidas.
+   - **`ADMIN_ROLANDO` (Camioneta / Administrador)**:
+     - Protegido por PIN de 4 dígitos (`1234` configurable).
+     - Acceso al **Panel Financiero de Rolando** y la **Auditoría de Caja RP3**.
+2. **Cierre de Caja Ciego Estilo "RP3 Gasolinera" (`CierreCajaEntity` + `CierreCajaDialog`)**:
+   - Al terminar la jornada, el chofer/operador abre **"🔒 Realizar Cierre de Caja (Fin de Jornada)"**.
+   - Solo declara lo que contó físicamente:
+     - `efectivoDeclarado`: Billetes y monedas contados.
+     - `transferenciasDeclaradas`: Suma de comprobantes bancarios verificados.
+     - `observaciones`: Novedades del día.
+   - Al confirmar, el sistema NO le revela si sobra o falta dinero; solo muestra `"Total Declarado a Entregar a Rolando: $XX.XX"` y permite enviar el resumen formal por WhatsApp a Rolando.
+   - En el perfil de Rolando (Administrador), la tarjeta **Auditoría RP3** audita automáticamente en tiempo real:
+     - Declarado por Ruta vs Sistema (Ventas reales - Gastos).
+     - Diferencia: 🔴 Faltante, 🟢 Cuadrado ($0.00), 🔵 Sobrante.
+     - Costos de planta, Utilidad Bruta y Utilidad Neta.
+
+---
+
+## 12. Función "Cliente No Estaba en Casa" y Rediseño de Calendario de Ruta
+1. **Registro de Visita Fallida con Evidencia Fotográfica (`VisitaFallidaEntity`)**:
+   - Botón directo **"🚪 No estaba"** en `CalendarioRutaScreen` y `ClientesScreen`.
+   - Abre la cámara del dispositivo mediante `FileProvider` para capturar la fachada/puerta como evidencia física.
+   - Registra el cliente hoy como **"⚠️ Visitado - No estaba en casa (Hora)"** y lo sincroniza en tiempo real en Firestore.
+   - Lanza WhatsApp automáticamente al cliente con la foto adjunta (`Intent.ACTION_SEND` con `EXTRA_STREAM`) y el mensaje prellenado de cortesía para coordinar una segunda visita o entrega más tarde.
+2. **Rediseño Visual del Calendario de Ruta (`CalendarioRutaScreen.kt`)**:
+   - Selector estilizado en píldoras compactas para Lunes a Sábado con contador de clientes y distintivo "HOY".
+   - Barra de progreso visual segmentada: Atendidos (Verde), No estaban (Ámbar), Pendientes (Gris).
+   - Filtros rápidos en chips: `Todos`, `Pendientes`, `Atendidos`, `No estaban`.
+   - Tarjetas de cliente con estado de entrega visual claro y 2 botones de acción inferiores: **"💧 Entregar Agua"** y **"🚪 No estaba (Foto)"**, más acceso a WhatsApp.
+
+---
+
+## 13. Menú Lateral (ModalNavigationDrawer), Dieta de Texto y UI Minimalista
+1. **Menú Lateral Ejecutivo (`ModalNavigationDrawer`)**:
+   - Accesible desde el ícono de menú `☰` en el `TopAppBar`.
+   - **Header del Drawer**: Ilustración vectorial destacada del vehículo activo (`CamionIllustration` / `CamionetaIllustration`), nombre del rol activo, indicador `🟢 En línea (Firebase)` y botón directo **"🔄 Cambiar Vehículo"**.
+   - **Ítems del Menú Lateral**:
+     1) `📅 Ruta del Día (Calendario)`
+     2) `👥 Clientes`
+     3) `🚚 Inventario y Recargas`
+     4) `💵 Caja y Cierre Diario`
+     5) `📊 Panel de Rolando (Auditoría y Utilidades)` *(Visible de manera exclusiva cuando el perfil activo es Camioneta / Rolando)*.
+     6) `💾 Respaldo y Ajustes`
+2. **Dieta de Texto y Tarjetas Colapsables Minimalistas**:
+   - En `CalendarioRutaScreen` y `ClientesScreen`, las tarjetas muestran a primera vista exclusivamente:
+     - Nombre del cliente y Barrio/Sector corto.
+     - Pastillas compactas de color: Deuda (`💲 $X.XX`), Envases adeudados (`🍾 X`), Estado de atención o visita fallida hoy.
+     - Fila de 4 botones de acción directos: `[💧 Vender / Re-entregar]`, `[🚪 No estaba]`, `[🧭 Mapa]` y `[💬 WhatsApp]`.
+   - Al tocar la tarjeta, se despliegan suavemente los detalles secundarios: foto de fachada con ampliador, tipo de bidón preferido, precio unitario negociado, teléfono, días de ruta y botón `[📍 Guardar / Editar GPS]`.
+
+---
+
+## 14. Geolocalización GPS Offline-First ($0.00), Navegación Google Maps Directa y Notificaciones Push Locales
+1. **Ubicación GPS a Costo $0.00 (`GpsLocationHelper.kt` + `GuardarUbicacionDialog.kt`)**:
+   - Integración con el sensor GPS nativo del dispositivo (`LocationManager`) con permisos `ACCESS_FINE_LOCATION` y `ACCESS_COARSE_LOCATION`.
+   - Permite al chofer fijar las coordenadas exactas de la casa en 1 toque al estar estacionado frente a ella, o pegar un enlace de Google Maps / WhatsApp (con extractor automático de coordenadas `lat,lng`).
+   - Si el cliente ya tiene ubicación registrada, al presionar `[🧭 Mapa]`, abre directamente Google Maps en modo navegación guiada punto a punto: `google.navigation:q=${lat},${lng}&mode=d`.
+   - Si no tiene ubicación, abre instantáneamente el diálogo para capturarla.
+2. **Notificaciones Locales en Tiempo Real entre Vehículos (`RutaNotificationHelper.kt`)**:
+   - Canal de alta prioridad (`IMPORTANCE_HIGH`) con sonido y vibración en Android 8.0+.
+   - En `FirestoreSyncManager`, cuando ingresa una nueva transacción de venta realizada por el OTRO vehículo después de iniciar la aplicación (`fecha >= appStartTimestamp && vehiculo != miVehiculo`), dispara una notificación en la barra de estado del celular:
+     - *"🚨 Ruta Actualizada: [🛻 CAMIONETA / 🚚 CAMIÓN] acaba de atender a [Nombre Cliente] ([Hora])."*
+
+---
+
+## 15. Rediseño Visual Estilo Duolingo, Navegación Exclusiva por Drawer y Firma "Aqua Apolo"
+1. **Navegación Exclusiva por Menú Lateral (`ModalNavigationDrawer`)**:
+   - Se removió por completo la barra inferior (`bottomBar` en `Scaffold`) para maximizar el área de visualización en pantallas móviles y evitar redundancia.
+   - Navegación centralizada vía Drawer (`☰`) con opciones claras, íconos grandes y etiquetas oficiales:
+     - `📅 Ruta del Día`
+     - `👥 Clientes`
+     - `🚚 Inventario`
+     - `💵 Caja y Cierre`
+     - `📊 Panel de Rolando (Administrador)` *(Exclusivo para rol Administrador)*
+     - `⚙️ Ajustes`
+2. **Rediseño Táctil Estilo Duolingo (Ultra-Visual y Ergonómico en Movimiento)**:
+   - Tarjetas de cliente en `CalendarioRutaScreen.kt` y `ClientesScreen.kt` con pastillas de datos rápidos (`💲 $X.XX`, `🍾 X`, `✅ Atendido`, `🚪 No estaba`).
+   - Botones grandes redondeados (`shape = RoundedCornerShape(14.dp)`, altura 44–46.dp) con paleta de alto contraste y respuesta táctil:
+     - 💧 **Vender** (`#22C55E` Verde vibrante) con ícono de gota de agua.
+     - 🚪 **No estaba** (`#F59E0B` Ámbar vibrante / `#D97706`) con ícono de cámara fotográfica para captura de evidencia.
+     - 🧭 **Mapa GPS** (`#0284C7` Azul técnico) para navegación punto a punto en Google Maps.
+     - 💬 **WhatsApp** (`#25D366` Verde WhatsApp oficial) para contacto y envío de recibo o estado de cuenta.
+3. **Firma Oficial y Marca "Aqua Apolo" en WhatsApp**:
+   - En `WhatsAppHelper.kt` y `RutaAguaRepository.kt`, todos los comprobantes, estados de cuenta, avisos de visita fallida y reportes diarios concluyen con la firma oficial:
+     `"Gracias por confiar en nosotros. Atentamente, Aqua Apolo 💧🚚"`.
+4. **Privacidad Operativa y Arqueo Ciego RP3 por Perfil**:
+   - Perfil `CAMION`: Interfaz simplificada sin acceso a costos unitarios de planta, utilidades ni descuadres de caja. El chofer realiza su cierre ciego declarando valores físicos y envía el balance a Rolando.
+   - Perfil `CAMIONETA` (Rolando): Acceso total a auditorías, balances detallados, utilidad bruta/neta y control del negocio.

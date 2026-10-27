@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="fotos_clientes" path="fotos_clientes/" />
+    <files-path name="fotos_evidencia" path="fotos_evidencia/" />
+    <files-path name="internal_files" path="." />
     <cache-path name="fotos_cache" path="." />
 </paths>
