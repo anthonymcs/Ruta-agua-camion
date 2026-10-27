@@ -1,11 +1,13 @@
 package com.rutaagua.camion.ui.screens.registro
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,29 +16,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,20 +58,30 @@ import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
 import com.rutaagua.camion.data.local.model.FormaPago
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.ui.components.BidonIllustration
+import com.rutaagua.camion.ui.components.ClayBadge
+import com.rutaagua.camion.ui.components.ClayButton
+import com.rutaagua.camion.ui.components.ClayCard
+import com.rutaagua.camion.ui.components.ClayEditableCounter
+import com.rutaagua.camion.ui.components.ClayInsetBox
 import com.rutaagua.camion.ui.components.GalonIllustration
 import com.rutaagua.camion.ui.components.MiniIllustration
 import com.rutaagua.camion.ui.components.PacaIllustration
 import com.rutaagua.camion.ui.theme.AguaPrimary
 import com.rutaagua.camion.ui.theme.AguaPrimaryDark
-import com.rutaagua.camion.ui.theme.AguaPrimaryLight
 import com.rutaagua.camion.ui.theme.AmbarAdvertencia
 import com.rutaagua.camion.ui.theme.AmbarFondo
+import com.rutaagua.camion.ui.theme.BidonAzulColor
+import com.rutaagua.camion.ui.theme.BidonMarcadoColor
+import com.rutaagua.camion.ui.theme.BidonTransparenteColor
+import com.rutaagua.camion.ui.theme.ClayInsetBackground
+import com.rutaagua.camion.ui.theme.ClayRimShadow
 import com.rutaagua.camion.ui.theme.RojoAlerta
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 import com.rutaagua.camion.ui.theme.VerdeEfectivo
 import com.rutaagua.camion.ui.theme.VerdeEfectivoFondo
 import java.util.Locale
+import kotlin.math.abs
 
 @Composable
 fun NuevaVentaSheet(
@@ -104,13 +112,16 @@ fun NuevaVentaSheet(
         montoTransferencia: Double,
         montoCredito: Double,
         montoAbono: Double,
-        montoCanceladoDeuda: Double
+        montoCanceladoDeuda: Double,
+        prestadosTransparentes: Int,
+        prestadosAzules: Int,
+        prestadosMarcados: Int,
+        cantidadBidonesGratis: Int,
+        totalPersonalizado: Double?
     ) -> Unit,
     onCancelar: () -> Unit
 ) {
-    // ------------------------------------------------------------------
-    // SECCIÓN 1: CLIENTE
-    // ------------------------------------------------------------------
+    // 1. CLIENTE
     val clienteInicial = clientePreseleccionado ?: transaccionAEditar?.clienteId?.let { id ->
         clientes.find { it.id == id }
     }
@@ -121,9 +132,7 @@ fun NuevaVentaSheet(
     }
     var esClienteDePaso by remember { mutableStateOf(clienteInicial == null) }
 
-    // ------------------------------------------------------------------
-    // SECCIÓN 2: PRODUCTOS Y MOVIMIENTO
-    // ------------------------------------------------------------------
+    // 2. RECARGAS (CON ENVASE VACÍO DE RETORNO)
     var tipoBidonSeleccionado by remember {
         mutableStateOf(transaccionAEditar?.tipoBidon ?: clienteInicial?.tipoBidonPreferido ?: TipoBidon.AZUL)
     }
@@ -132,15 +141,44 @@ fun NuevaVentaSheet(
         mutableDoubleStateOf(transaccionAEditar?.precioUnitarioBidon ?: clienteInicial?.precioHabitual ?: 1.00)
     }
 
-    val inicioTrans = transaccionAEditar?.recargaTransparentes ?: if (transaccionAEditar?.tipoBidon == TipoBidon.TRANSPARENTE) transaccionAEditar.cantidadBidonesRecarga else 0
-    val inicioAzul = transaccionAEditar?.recargaAzules ?: if (transaccionAEditar?.tipoBidon == TipoBidon.AZUL) transaccionAEditar.cantidadBidonesRecarga else if (transaccionAEditar == null && clienteInicial?.tipoBidonPreferido == TipoBidon.AZUL) 1 else if (transaccionAEditar == null && clienteInicial == null) 1 else 0
-    val inicioMarc = transaccionAEditar?.recargaMarcados ?: if (transaccionAEditar?.tipoBidon == TipoBidon.MARCADO) transaccionAEditar.cantidadBidonesRecarga else 0
+    val inicioTrans = transaccionAEditar?.recargaTransparentes
+        ?: if (transaccionAEditar?.tipoBidon == TipoBidon.TRANSPARENTE) transaccionAEditar.cantidadBidonesRecarga else 0
+    val inicioAzul = transaccionAEditar?.recargaAzules
+        ?: if (transaccionAEditar?.tipoBidon == TipoBidon.AZUL) transaccionAEditar.cantidadBidonesRecarga
+        else if (transaccionAEditar == null && (clienteInicial?.tipoBidonPreferido == TipoBidon.AZUL || clienteInicial == null)) 1 else 0
+    val inicioMarc = transaccionAEditar?.recargaMarcados
+        ?: if (transaccionAEditar?.tipoBidon == TipoBidon.MARCADO) transaccionAEditar.cantidadBidonesRecarga else 0
 
     var cantRecargaTrans by remember { mutableIntStateOf(inicioTrans) }
     var cantRecargaAzul by remember { mutableIntStateOf(inicioAzul) }
     var cantRecargaMarc by remember { mutableIntStateOf(inicioMarc) }
 
     val cantRecarga = cantRecargaTrans + cantRecargaAzul + cantRecargaMarc
+
+    // 3. BIDONES PRESTADOS (BAJAN LLENOS DEL CAMIÓN Y SE COBRAN HOY, PERO EL ENVASE SE RECOGE DESPUÉS)
+    var cantPrestados by remember {
+        mutableIntStateOf(transaccionAEditar?.cantidadBidonesPrestados ?: 0)
+    }
+    var tipoBidonPrestado by remember {
+        mutableStateOf(
+            when {
+                (transaccionAEditar?.prestadosTransparentes ?: 0) > 0 -> TipoBidon.TRANSPARENTE
+                (transaccionAEditar?.prestadosMarcados ?: 0) > 0 -> TipoBidon.MARCADO
+                (transaccionAEditar?.prestadosAzules ?: 0) > 0 -> TipoBidon.AZUL
+                else -> clienteInicial?.tipoBidonPreferido ?: TipoBidon.AZUL
+            }
+        )
+    }
+
+    // 4. CORTESÍA / GRATIS (EJ. "35+1": BAJA DEL CAMIÓN PERO NO SE COBRA)
+    var cantGratis by remember {
+        mutableIntStateOf(transaccionAEditar?.cantidadBidonesGratis ?: 0)
+    }
+
+    // 5. DEVUELTOS Y ENVASE NUEVO
+    var cantDevueltos by remember {
+        mutableIntStateOf(transaccionAEditar?.cantidadBidonesDevueltos ?: 0)
+    }
     var cantVendidosEnvase by remember {
         mutableIntStateOf(transaccionAEditar?.cantidadBidonesVendidosEnvase ?: 0)
     }
@@ -152,26 +190,30 @@ fun NuevaVentaSheet(
         )
     }
 
-    var cantPrestados by remember {
-        mutableIntStateOf(transaccionAEditar?.cantidadBidonesPrestados ?: 0)
-    }
-    var cantDevueltos by remember {
-        mutableIntStateOf(transaccionAEditar?.cantidadBidonesDevueltos ?: 0)
+    // 6. OTROS PRODUCTOS
+    var cantGalones by remember { mutableIntStateOf(transaccionAEditar?.cantidadGalones ?: 0) }
+    var cantPacas by remember { mutableIntStateOf(transaccionAEditar?.cantidadPacas ?: 0) }
+    var cantMinis by remember { mutableIntStateOf(transaccionAEditar?.cantidadMinis ?: 0) }
+
+    // 7. CÁLCULO DE TOTALES (RECARGAS + PRESTADOS SE COBRAN, MENOS GRATIS)
+    val totalAguaEntregada = cantRecarga + cantPrestados
+    val bidonesAguaACobrar = maxOf(0, totalAguaEntregada - cantGratis)
+    val totalAgua = bidonesAguaACobrar * precioUnitarioBidon
+    val totalEnvaseVendido = cantVendidosEnvase * precioEnvaseVendido
+    val totalGalones = cantGalones * 0.75
+    val totalPacas = cantPacas * 3.75
+    val totalMinis = cantMinis * 1.75
+    val totalCalculado = totalAgua + totalEnvaseVendido + totalGalones + totalPacas + totalMinis
+
+    var usarTotalManual by remember { mutableStateOf(false) }
+    var totalManualTexto by remember { mutableStateOf("") }
+    val totalGeneral = if (usarTotalManual) {
+        totalManualTexto.replace(',', '.').toDoubleOrNull() ?: totalCalculado
+    } else {
+        totalCalculado
     }
 
-    var cantGalones by remember {
-        mutableIntStateOf(transaccionAEditar?.cantidadGalones ?: 0)
-    }
-    var cantPacas by remember {
-        mutableIntStateOf(transaccionAEditar?.cantidadPacas ?: 0)
-    }
-    var cantMinis by remember {
-        mutableIntStateOf(transaccionAEditar?.cantidadMinis ?: 0)
-    }
-
-    // ------------------------------------------------------------------
-    // SECCIÓN 3: PAGO MIXTO Y FORMAS DE PAGO
-    // ------------------------------------------------------------------
+    // 8. FORMA DE PAGO Y PAGO COMBINADO
     var modoPagoMixto by remember {
         mutableStateOf(
             if (transaccionAEditar != null) {
@@ -198,7 +240,6 @@ fun NuevaVentaSheet(
         )
     }
 
-    // Campos para pago mixto / combinado
     var pagoMixtoEfectivo by remember {
         mutableStateOf(if (transaccionAEditar != null && transaccionAEditar.montoEfectivo > 0) transaccionAEditar.montoEfectivo.toString() else "")
     }
@@ -213,412 +254,15 @@ fun NuevaVentaSheet(
     }
 
     var nota by remember { mutableStateOf(transaccionAEditar?.nota ?: "") }
-
-    // Cálculos de Total
-    val totalRecarga = cantRecarga * precioUnitarioBidon
-    val totalEnvaseVendido = cantVendidosEnvase * precioEnvaseVendido
-    val totalGalones = cantGalones * 0.75
-    val totalPacas = cantPacas * 3.75
-    val totalMinis = cantMinis * 1.75
-    val totalGeneral = totalRecarga + totalEnvaseVendido + totalGalones + totalPacas + totalMinis
-
     val esEdicion = transaccionAEditar != null
 
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 18.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Encabezado
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = if (esEdicion) "EDITAR ENTREGA REGISTRADA" else "GUARDAR ENTREGA / VENTA",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Black,
-                        color = AguaPrimaryDark
-                    )
-                    Text(
-                        text = if (esEdicion) "Modifica los datos y se recalculará el inventario y saldos" else "Registro rápido en ruta física",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextoSecundario
-                    )
-                }
-                IconButton(onClick = onCancelar) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = "Cerrar")
-                }
-            }
-        }
-
-        // ==============================================================
-        // 1. SELECCIÓN DE CLIENTE
-        // ==============================================================
-        item {
-            Text(
-                text = "1. CLIENTE",
-                style = MaterialTheme.typography.labelLarge,
-                color = TextoSecundario
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-
-            OutlinedTextField(
-                value = textoBusquedaCliente,
-                onValueChange = {
-                    textoBusquedaCliente = it
-                    if (clienteSeleccionado != null && it != clienteSeleccionado?.nombre) {
-                        clienteSeleccionado = null
-                        esClienteDePaso = true
-                    }
-                },
-                placeholder = { Text("Buscar cliente o escribir nombre al paso...") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = if (clienteSeleccionado != null) Icons.Default.Person else Icons.Default.Search,
-                        contentDescription = null,
-                        tint = if (clienteSeleccionado != null) VerdeEfectivo else AguaPrimary
-                    )
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            val sugerencias = remember(textoBusquedaCliente, clientes, clienteSeleccionado) {
-                if (clienteSeleccionado == null && textoBusquedaCliente.isNotBlank()) {
-                    clientes.filter {
-                        it.nombre.contains(textoBusquedaCliente, ignoreCase = true) ||
-                                it.ubicacion.contains(textoBusquedaCliente, ignoreCase = true)
-                    }.take(3)
-                } else emptyList()
-            }
-
-            if (sugerencias.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-                ) {
-                    Column {
-                        sugerencias.forEach { cliente ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        clienteSeleccionado = cliente
-                                        textoBusquedaCliente = cliente.nombre
-                                        esClienteDePaso = false
-                                        tipoBidonSeleccionado = cliente.tipoBidonPreferido
-                                        precioUnitarioBidon = cliente.precioHabitual
-                                    }
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                BidonIllustration(tipo = cliente.tipoBidonPreferido, size = 28.dp)
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(text = cliente.nombre, fontWeight = FontWeight.Bold)
-                                    Text(
-                                        text = "${cliente.ubicacion} • $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextoSecundario
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            clienteSeleccionado?.let { cliente ->
-                val tieneDeuda = cliente.deudaMonetaria > 0.0
-                val tienePrestados = cliente.bidonesPrestados > 0
-                if (tieneDeuda || tienePrestados) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = AmbarFondo),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "⚠️ SALDOS PENDIENTES: ",
-                                fontWeight = FontWeight.Black,
-                                color = AmbarAdvertencia,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                            if (tieneDeuda) {
-                                Text(
-                                    text = "Debe $${String.format(Locale.US, "%.2f", cliente.deudaMonetaria)} ",
-                                    fontWeight = FontWeight.Bold,
-                                    color = RojoAlerta,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            if (tienePrestados) {
-                                Text(
-                                    text = "• Debe ${cliente.bidonesPrestados} envases",
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextoOscuro,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ==============================================================
-        // 2. SELECCIÓN DE BIDONES DE 20L Y PRECIO (PERMITE COMBINAR)
-        // ==============================================================
-        item {
-            Text(
-                text = "2. RECARGAS DE BOTELLÓN DE 20L (COMBINA TIPOS)",
-                style = MaterialTheme.typography.labelLarge,
-                color = TextoSecundario
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // PET Cristal
-                FilaBidonCombinable(
-                    tipo = TipoBidon.TRANSPARENTE,
-                    nombre = "PET Cristal (Transparente)",
-                    disponibles = inventario?.bidonesLlenosTransparentes ?: 0,
-                    cantidad = cantRecargaTrans,
-                    onCambio = {
-                        cantRecargaTrans = it
-                        if (it > 0) tipoBidonSeleccionado = TipoBidon.TRANSPARENTE
-                    }
-                )
-
-                // Azul Fuerte
-                FilaBidonCombinable(
-                    tipo = TipoBidon.AZUL,
-                    nombre = "Azul Fuerte (Estándar)",
-                    disponibles = inventario?.bidonesLlenosAzules ?: 0,
-                    cantidad = cantRecargaAzul,
-                    onCambio = {
-                        cantRecargaAzul = it
-                        if (it > 0) tipoBidonSeleccionado = TipoBidon.AZUL
-                    }
-                )
-
-                // Marcado
-                FilaBidonCombinable(
-                    tipo = TipoBidon.MARCADO,
-                    nombre = "Marcado / Sello",
-                    disponibles = inventario?.bidonesLlenosMarcados ?: 0,
-                    cantidad = cantRecargaMarc,
-                    onCambio = {
-                        cantRecargaMarc = it
-                        if (it > 0) tipoBidonSeleccionado = TipoBidon.MARCADO
-                    }
-                )
-            }
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Precio por recarga de bidón",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Total recargas a entregar: $cantRecarga un.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextoSecundario
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                listOf(0.75, 0.85, 1.00, 1.25).forEach { precio ->
-                    val sel = precioUnitarioBidon == precio
-                    FilterChip(
-                        selected = sel,
-                        onClick = { precioUnitarioBidon = precio },
-                        label = { Text("$$precio", fontWeight = FontWeight.Bold) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-
-        // ==============================================================
-        // CONTROL DE ENVASES (PRESTADOS, DEVUELTOS, ENVASE NUEVO)
-        // ==============================================================
-        item {
-            Text(
-                text = "MOVIMIENTO DE ENVASES Y OTROS CASOS",
-                style = MaterialTheme.typography.labelLarge,
-                color = TextoSecundario
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    FilaContadorMovimiento(
-                        titulo = "Bidón Prestado (No deja vacío)",
-                        subtitulo = "Baja lleno, queda debiendo envase",
-                        color = AmbarAdvertencia,
-                        valor = cantPrestados,
-                        onCambio = { cantPrestados = it }
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    FilaContadorMovimiento(
-                        titulo = "Bidón Devuelto (Devuelve vacío)",
-                        subtitulo = "Sube vacío, resta deuda de envase",
-                        color = VerdeEfectivo,
-                        valor = cantDevueltos,
-                        onCambio = { cantDevueltos = it }
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Venta Envase Nuevo (Lleno)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                FilterChip(
-                                    selected = precioEnvaseVendido == 5.50,
-                                    onClick = { precioEnvaseVendido = 5.50 },
-                                    label = { Text("$5.50", fontSize = 12.sp) }
-                                )
-                                FilterChip(
-                                    selected = precioEnvaseVendido == 6.00,
-                                    onClick = { precioEnvaseVendido = 6.00 },
-                                    label = { Text("$6.00", fontSize = 12.sp) }
-                                )
-                            }
-                        }
-                        ControlContador(
-                            valor = cantVendidosEnvase,
-                            onCambio = { cantVendidosEnvase = it }
-                        )
-                    }
-                }
-            }
-        }
-
-        // ==============================================================
-        // OTROS PRODUCTOS (GALONES, PACAS, MINIS)
-        // ==============================================================
-        item {
-            Text(
-                text = "OTROS PRODUCTOS",
-                style = MaterialTheme.typography.labelLarge,
-                color = TextoSecundario
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TarjetaSelectorSecundario(
-                    nombre = "Galón (4L)",
-                    precio = "$0.75",
-                    disponibles = inventario?.galonesLlenos ?: 0,
-                    valor = cantGalones,
-                    ilustracion = { GalonIllustration(size = 36.dp) },
-                    onCambio = { cantGalones = it },
-                    modifier = Modifier.weight(1f)
-                )
-
-                TarjetaSelectorSecundario(
-                    nombre = "Paca 24x",
-                    precio = "$3.75",
-                    disponibles = inventario?.pacasLlenas ?: 0,
-                    valor = cantPacas,
-                    ilustracion = { PacaIllustration(size = 36.dp) },
-                    onCambio = { cantPacas = it },
-                    modifier = Modifier.weight(1f)
-                )
-
-                TarjetaSelectorSecundario(
-                    nombre = "Mini 12x",
-                    precio = "$1.75",
-                    disponibles = inventario?.minisLlenas ?: 0,
-                    valor = cantMinis,
-                    ilustracion = { MiniIllustration(size = 36.dp) },
-                    onCambio = { cantMinis = it },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // ==============================================================
-        // 3. TOTAL Y FORMA DE PAGO
-        // ==============================================================
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = VerdeEfectivoFondo),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "TOTAL A COBRAR",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = VerdeEfectivo
-                        )
-                        Text(
-                            text = "$${String.format(Locale.US, "%.2f", totalGeneral)}",
-                            style = MaterialTheme.typography.displayMedium,
-                            fontWeight = FontWeight.Black,
-                            color = VerdeEfectivo
-                        )
-                    }
-                }
-            }
-        }
-
+        // Cabecera limpia
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -626,207 +270,814 @@ fun NuevaVentaSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "3. FORMA DE PAGO",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = TextoSecundario
+                    text = if (esEdicion) "Editar Entrega" else "Nueva Entrega",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    color = TextoOscuro
                 )
+                IconButton(onClick = onCancelar) {
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Cerrar")
+                }
+            }
+        }
 
-                FilterChip(
-                    selected = modoPagoMixto,
-                    onClick = {
-                        modoPagoMixto = !modoPagoMixto
-                        if (modoPagoMixto && pagoMixtoEfectivo.isBlank() && pagoMixtoCredito.isBlank()) {
-                            pagoMixtoEfectivo = String.format(Locale.US, "%.2f", totalGeneral)
+        // 1. CLIENTE
+        item {
+            ClayCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 20.dp,
+                contentPadding = PaddingValues(14.dp)
+            ) {
+                OutlinedTextField(
+                    value = textoBusquedaCliente,
+                    onValueChange = {
+                        textoBusquedaCliente = it
+                        if (clienteSeleccionado != null && it != clienteSeleccionado?.nombre) {
+                            clienteSeleccionado = null
+                            esClienteDePaso = true
                         }
                     },
-                    label = {
-                        Text(
-                            text = if (modoPagoMixto) "✓ Pago Combinado (Activo)" else "+ Combinar Pagos",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+                    placeholder = { Text("Nombre del cliente...") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (clienteSeleccionado != null) Icons.Default.Person else Icons.Default.Search,
+                            contentDescription = null,
+                            tint = if (clienteSeleccionado != null) VerdeEfectivo else AguaPrimary
                         )
-                    }
-                )
-            }
-            Spacer(modifier = Modifier.height(6.dp))
-
-            if (!modoPagoMixto) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    BotonFormaPago(
-                        titulo = "Efectivo",
-                        icono = Icons.Default.Money,
-                        seleccionado = formaPago == FormaPago.EFECTIVO,
-                        onSelect = { formaPago = FormaPago.EFECTIVO },
-                        modifier = Modifier.weight(1f)
-                    )
-                    BotonFormaPago(
-                        titulo = "Transf.",
-                        icono = Icons.Default.CreditCard,
-                        seleccionado = formaPago == FormaPago.TRANSFERENCIA,
-                        onSelect = { formaPago = FormaPago.TRANSFERENCIA },
-                        modifier = Modifier.weight(1f)
-                    )
-                    BotonFormaPago(
-                        titulo = "Crédito",
-                        icono = Icons.Default.Payments,
-                        seleccionado = formaPago == FormaPago.CREDITO,
-                        onSelect = { formaPago = FormaPago.CREDITO },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    BotonFormaPago(
-                        titulo = "Abono",
-                        icono = Icons.Default.Payments,
-                        seleccionado = formaPago == FormaPago.ABONO,
-                        onSelect = {
-                            formaPago = FormaPago.ABONO
-                            if (montoAbonoTexto.isBlank()) montoAbonoTexto = String.format(Locale.US, "%.2f", totalGeneral)
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                    BotonFormaPago(
-                        titulo = "Cancelado",
-                        icono = Icons.Default.DoneAll,
-                        seleccionado = formaPago == FormaPago.CANCELADO,
-                        onSelect = {
-                            formaPago = FormaPago.CANCELADO
-                            val deudaPrevia = clienteSeleccionado?.deudaMonetaria ?: 0.0
-                            montoAbonoTexto = String.format(Locale.US, "%.2f", totalGeneral + deudaPrevia)
-                        },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                if (formaPago == FormaPago.ABONO || formaPago == FormaPago.CANCELADO) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = montoAbonoTexto,
-                        onValueChange = { montoAbonoTexto = it },
-                        label = { Text("Monto pagado / abonado ($)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            } else {
-                // Interfaz para combinar múltiples formas de pago a la vez
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AguaPrimary),
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AguaPrimary,
+                        unfocusedBorderColor = ClayRimShadow,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = ClayInsetBackground
+                    ),
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text(
-                            text = "DIVIDIR TOTAL ($${String.format(Locale.US, "%.2f", totalGeneral)}) ENTRE FORMAS DE PAGO:",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Black,
-                            color = AguaPrimaryDark
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = pagoMixtoEfectivo,
-                                onValueChange = { pagoMixtoEfectivo = it },
-                                label = { Text("Efectivo ($)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                singleLine = true,
-                                modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = pagoMixtoCredito,
-                                onValueChange = { pagoMixtoCredito = it },
-                                label = { Text("A Crédito ($)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                singleLine = true,
-                                modifier = Modifier.weight(1f)
-                            )
+                val sugerencias = remember(textoBusquedaCliente, clientes, clienteSeleccionado) {
+                    if (clienteSeleccionado == null && textoBusquedaCliente.isNotBlank()) {
+                        clientes.filter {
+                            it.nombre.contains(textoBusquedaCliente, ignoreCase = true) ||
+                                    it.ubicacion.contains(textoBusquedaCliente, ignoreCase = true)
+                        }.take(4)
+                    } else emptyList()
+                }
+
+                if (sugerencias.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        sugerencias.forEach { cliente ->
+                            ClayInsetBox(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        clienteSeleccionado = cliente
+                                        textoBusquedaCliente = cliente.nombre
+                                        esClienteDePaso = false
+                                        tipoBidonSeleccionado = cliente.tipoBidonPreferido
+                                        tipoBidonPrestado = cliente.tipoBidonPreferido
+                                        precioUnitarioBidon = cliente.precioHabitual
+                                    },
+                                cornerRadius = 12.dp,
+                                contentPadding = PaddingValues(10.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    BidonIllustration(tipo = cliente.tipoBidonPreferido, size = 26.dp)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(text = cliente.nombre, fontWeight = FontWeight.Bold, color = TextoOscuro)
+                                        Text(
+                                            text = "${cliente.ubicacion} • $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}",
+                                            fontSize = 12.sp,
+                                            color = TextoSecundario
+                                        )
+                                    }
+                                }
+                            }
                         }
+                    }
+                }
 
+                clienteSeleccionado?.let { cliente ->
+                    if (cliente.deudaMonetaria > 0.0 || cliente.bidonesPrestados > 0) {
                         Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Surface(
+                            color = AmbarFondo,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, AmbarAdvertencia.copy(alpha = 0.35f)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            OutlinedTextField(
-                                value = pagoMixtoTransferencia,
-                                onValueChange = { pagoMixtoTransferencia = it },
-                                label = { Text("Transferencia ($)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                singleLine = true,
-                                modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = pagoMixtoAbonoDeuda,
-                                onValueChange = { pagoMixtoAbonoDeuda = it },
-                                label = { Text("Abono Deuda Anterior ($)") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                singleLine = true,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        val sumaCubierta = (pagoMixtoEfectivo.toDoubleOrNull() ?: 0.0) +
-                                (pagoMixtoCredito.toDoubleOrNull() ?: 0.0) +
-                                (pagoMixtoTransferencia.toDoubleOrNull() ?: 0.0)
-                        val diferencia = totalGeneral - sumaCubierta
-
-                        Spacer(modifier = Modifier.height(6.dp))
-                        if (Math.abs(diferencia) > 0.01) {
-                            Text(
-                                text = if (diferencia > 0) "⚠️ Falta asignar: $${String.format(Locale.US, "%.2f", diferencia)}"
-                                else "⚠️ Asignado en exceso: $${String.format(Locale.US, "%.2f", -diferencia)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = AmbarAdvertencia,
-                                fontWeight = FontWeight.Bold
-                            )
-                        } else {
-                            Text(
-                                text = "✓ El total cuadra exactamente ($${String.format(Locale.US, "%.2f", totalGeneral)})",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = VerdeEfectivo,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Saldo actual:",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = AmbarAdvertencia
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    if (cliente.deudaMonetaria > 0.0) {
+                                        Text(
+                                            text = "Debe $${String.format(Locale.US, "%.2f", cliente.deudaMonetaria)}",
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 12.sp,
+                                            color = RojoAlerta
+                                        )
+                                    }
+                                    if (cliente.bidonesPrestados > 0) {
+                                        Text(
+                                            text = "${cliente.bidonesPrestados} prestados",
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 12.sp,
+                                            color = TextoOscuro
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // Botón Confirmar
+        // 2. RECARGAS DE 20L (CON RETORNO DE VACÍO)
         item {
-            Spacer(modifier = Modifier.height(10.dp))
-            Button(
+            ClayCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 20.dp,
+                contentPadding = PaddingValues(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Recargas (Recibe vacío)",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 15.sp,
+                        color = TextoOscuro
+                    )
+                    ClayBadge(
+                        text = "$cantRecarga recargas",
+                        containerColor = Color(0xFFDBEAFE),
+                        contentColor = AguaPrimaryDark
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilaBidonClay(
+                        tipo = TipoBidon.TRANSPARENTE,
+                        nombre = "Transparente (PET)",
+                        disponibles = inventario?.bidonesLlenosTransparentes ?: 0,
+                        cantidad = cantRecargaTrans,
+                        accentColor = BidonTransparenteColor,
+                        onCambio = {
+                            cantRecargaTrans = it
+                            if (it > 0) {
+                                tipoBidonSeleccionado = TipoBidon.TRANSPARENTE
+                                if (cantPrestados == 0) tipoBidonPrestado = TipoBidon.TRANSPARENTE
+                            }
+                        }
+                    )
+
+                    FilaBidonClay(
+                        tipo = TipoBidon.AZUL,
+                        nombre = "Azul Estándar",
+                        disponibles = inventario?.bidonesLlenosAzules ?: 0,
+                        cantidad = cantRecargaAzul,
+                        accentColor = BidonAzulColor,
+                        onCambio = {
+                            cantRecargaAzul = it
+                            if (it > 0) {
+                                tipoBidonSeleccionado = TipoBidon.AZUL
+                                if (cantPrestados == 0) tipoBidonPrestado = TipoBidon.AZUL
+                            }
+                        }
+                    )
+
+                    FilaBidonClay(
+                        tipo = TipoBidon.MARCADO,
+                        nombre = "Marcado / Sello",
+                        disponibles = inventario?.bidonesLlenosMarcados ?: 0,
+                        cantidad = cantRecargaMarc,
+                        accentColor = BidonMarcadoColor,
+                        onCambio = {
+                            cantRecargaMarc = it
+                            if (it > 0) {
+                                tipoBidonSeleccionado = TipoBidon.MARCADO
+                                if (cantPrestados == 0) tipoBidonPrestado = TipoBidon.MARCADO
+                            }
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Selector rápido de precio unitario
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Precio:",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = TextoSecundario,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    listOf(0.75, 0.85, 1.00, 1.25).forEach { precio ->
+                        val sel = abs(precioUnitarioBidon - precio) < 0.001
+                        FilterChip(
+                            selected = sel,
+                            onClick = { precioUnitarioBidon = precio },
+                            label = { Text("$${String.format(Locale.US, "%.2f", precio)}", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = AguaPrimary,
+                                selectedLabelColor = Color.White
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 3. BIDONES PRESTADOS, CORTESÍAS ("35+1"), DEVUELTOS Y ENVASE NUEVO
+        item {
+            ClayCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 20.dp,
+                contentPadding = PaddingValues(14.dp)
+            ) {
+                Text(
+                    text = "Préstamos, Cortesías (35+1) y Envases",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp,
+                    color = TextoOscuro
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // A. Bidones Prestados (Se cobran hoy + Descuentan carga del camión + Queda debiendo envase)
+                ClayInsetBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 14.dp,
+                    contentPadding = PaddingValues(12.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Bidones Prestados Hoy",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 14.sp,
+                                    color = AmbarAdvertencia
+                                )
+                                Text(
+                                    text = "Se cobran hoy y descuentan carga del camión",
+                                    fontSize = 11.sp,
+                                    color = TextoSecundario
+                                )
+                            }
+                            ClayEditableCounter(
+                                valor = cantPrestados,
+                                onCambio = { cantPrestados = it },
+                                accentColor = AmbarAdvertencia
+                            )
+                        }
+
+                        AnimatedVisibility(visible = cantPrestados > 0) {
+                            Column(modifier = Modifier.padding(top = 8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Tipo prestado:",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextoSecundario
+                                    )
+                                    TipoBidon.entries.forEach { t ->
+                                        val sel = tipoBidonPrestado == t
+                                        val label = when (t) {
+                                            TipoBidon.TRANSPARENTE -> "PET"
+                                            TipoBidon.AZUL -> "Azul"
+                                            TipoBidon.MARCADO -> "Marcado"
+                                        }
+                                        FilterChip(
+                                            selected = sel,
+                                            onClick = { tipoBidonPrestado = t },
+                                            label = { Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // B. Bidón Gratis / Cortesía (Ej. 35+1)
+                ClayInsetBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 14.dp,
+                    contentPadding = PaddingValues(12.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Bidón Gratis / Cortesía (Ej. 35+1)",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 14.sp,
+                                    color = AguaPrimaryDark
+                                )
+                                Text(
+                                    text = "Incluido en los $totalAguaEntregada entregados, no se cobra",
+                                    fontSize = 11.sp,
+                                    color = TextoSecundario
+                                )
+                            }
+                            ClayEditableCounter(
+                                valor = cantGratis,
+                                onCambio = { cantGratis = it.coerceAtMost(maxOf(1, totalAguaEntregada)) },
+                                accentColor = AguaPrimary
+                            )
+                        }
+
+                        if (cantGratis > 0 && totalAguaEntregada > 0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Surface(
+                                color = Color(0xFFDBEAFE),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Anote: ${bidonesAguaACobrar}+${cantGratis}  •  Bajan $totalAguaEntregada del camión, se cobran $bidonesAguaACobrar ($${String.format(Locale.US, "%.2f", totalAgua)})",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 12.sp,
+                                    color = AguaPrimaryDark,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // C. Envases Vacíos Devueltos de préstamos anteriores
+                ClayInsetBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 14.dp,
+                    contentPadding = PaddingValues(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Envases Prestados Devueltos",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = VerdeEfectivo
+                            )
+                            Text(
+                                text = "Recoge vacíos pendientes sin llevar agua",
+                                fontSize = 11.sp,
+                                color = TextoSecundario
+                            )
+                        }
+                        ClayEditableCounter(
+                            valor = cantDevueltos,
+                            onCambio = { cantDevueltos = it },
+                            accentColor = VerdeEfectivo
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // D. Venta de Bidón con Todo (Envase Nuevo)
+                ClayInsetBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 14.dp,
+                    contentPadding = PaddingValues(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Bidón con Todo (Envase Nuevo)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = TextoOscuro
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                FilterChip(
+                                    selected = precioEnvaseVendido == 5.50,
+                                    onClick = { precioEnvaseVendido = 5.50 },
+                                    label = { Text("$5.50", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                                )
+                                FilterChip(
+                                    selected = precioEnvaseVendido == 6.00,
+                                    onClick = { precioEnvaseVendido = 6.00 },
+                                    label = { Text("$6.00", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                                )
+                            }
+                        }
+                        ClayEditableCounter(
+                            valor = cantVendidosEnvase,
+                            onCambio = { cantVendidosEnvase = it },
+                            accentColor = AguaPrimary
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. OTROS PRODUCTOS (GALONES, PACAS, MINIS)
+        item {
+            ClayCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 20.dp,
+                contentPadding = PaddingValues(14.dp)
+            ) {
+                Text(
+                    text = "Galones, Pacas y Minis",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp,
+                    color = TextoOscuro
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TarjetaSelectorSecundarioClay(
+                        nombre = "Galón 4L",
+                        precio = "$0.75",
+                        disponibles = inventario?.galonesLlenos ?: 0,
+                        valor = cantGalones,
+                        ilustracion = { GalonIllustration(size = 32.dp) },
+                        onCambio = { cantGalones = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TarjetaSelectorSecundarioClay(
+                        nombre = "Paca 24x",
+                        precio = "$3.75",
+                        disponibles = inventario?.pacasLlenas ?: 0,
+                        valor = cantPacas,
+                        ilustracion = { PacaIllustration(size = 32.dp) },
+                        onCambio = { cantPacas = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TarjetaSelectorSecundarioClay(
+                        nombre = "Mini 12x",
+                        precio = "$1.75",
+                        disponibles = inventario?.minisLlenas ?: 0,
+                        valor = cantMinis,
+                        ilustracion = { MiniIllustration(size = 32.dp) },
+                        onCambio = { cantMinis = it },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        // 5. TOTAL A COBRAR (CON OPCIÓN DE AJUSTE MANUAL) Y FORMA DE PAGO
+        item {
+            ClayCard(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = VerdeEfectivoFondo,
+                accentBorderColor = VerdeEfectivo,
+                cornerRadius = 22.dp,
+                contentPadding = PaddingValues(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = if (cantGratis > 0) {
+                                "TOTAL A COBRAR (${bidonesAguaACobrar}+${cantGratis} bidones)"
+                            } else if (cantPrestados > 0) {
+                                "TOTAL A COBRAR ($cantRecarga rec. + $cantPrestados prest.)"
+                            } else {
+                                "TOTAL A COBRAR"
+                            },
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp,
+                            color = VerdeEfectivo
+                        )
+                        Text(
+                            text = "$${String.format(Locale.US, "%.2f", totalGeneral)}",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Black,
+                            color = VerdeEfectivo
+                        )
+                    }
+
+                    Surface(
+                        onClick = {
+                            usarTotalManual = !usarTotalManual
+                            if (usarTotalManual && totalManualTexto.isBlank()) {
+                                totalManualTexto = String.format(Locale.US, "%.2f", totalCalculado)
+                            }
+                        },
+                        color = Color.White,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, VerdeEfectivo.copy(alpha = 0.4f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
+                                tint = VerdeEfectivo,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (usarTotalManual) "Automático" else "Editar Monto",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = VerdeEfectivo
+                            )
+                        }
+                    }
+                }
+
+                AnimatedVisibility(visible = usarTotalManual) {
+                    Column(modifier = Modifier.padding(top = 10.dp)) {
+                        OutlinedTextField(
+                            value = totalManualTexto,
+                            onValueChange = { totalManualTexto = it },
+                            label = { Text("Monto total personalizado ($)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color.White
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        }
+
+        // 6. FORMA DE PAGO
+        item {
+            ClayCard(
+                modifier = Modifier.fillMaxWidth(),
+                cornerRadius = 20.dp,
+                contentPadding = PaddingValues(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Forma de Pago",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 15.sp,
+                        color = TextoOscuro
+                    )
+
+                    FilterChip(
+                        selected = modoPagoMixto,
+                        onClick = {
+                            modoPagoMixto = !modoPagoMixto
+                            if (modoPagoMixto && pagoMixtoEfectivo.isBlank() && pagoMixtoCredito.isBlank()) {
+                                pagoMixtoEfectivo = String.format(Locale.US, "%.2f", totalGeneral)
+                            }
+                        },
+                        label = {
+                            Text(
+                                text = if (modoPagoMixto) "Pago Combinado Activo" else "+ Combinar Pagos",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            )
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (!modoPagoMixto) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        BotonFormaPagoClay(
+                            titulo = "Efectivo",
+                            icono = Icons.Default.Money,
+                            seleccionado = formaPago == FormaPago.EFECTIVO,
+                            onSelect = { formaPago = FormaPago.EFECTIVO },
+                            modifier = Modifier.weight(1f)
+                        )
+                        BotonFormaPagoClay(
+                            titulo = "Transf.",
+                            icono = Icons.Default.CreditCard,
+                            seleccionado = formaPago == FormaPago.TRANSFERENCIA,
+                            onSelect = { formaPago = FormaPago.TRANSFERENCIA },
+                            modifier = Modifier.weight(1f)
+                        )
+                        BotonFormaPagoClay(
+                            titulo = "Crédito",
+                            icono = Icons.Default.Payments,
+                            seleccionado = formaPago == FormaPago.CREDITO,
+                            onSelect = { formaPago = FormaPago.CREDITO },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        BotonFormaPagoClay(
+                            titulo = "Abono",
+                            icono = Icons.Default.Payments,
+                            seleccionado = formaPago == FormaPago.ABONO,
+                            onSelect = {
+                                formaPago = FormaPago.ABONO
+                                if (montoAbonoTexto.isBlank()) montoAbonoTexto = String.format(Locale.US, "%.2f", totalGeneral)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        BotonFormaPagoClay(
+                            titulo = "Cancelado",
+                            icono = Icons.Default.DoneAll,
+                            seleccionado = formaPago == FormaPago.CANCELADO,
+                            onSelect = {
+                                formaPago = FormaPago.CANCELADO
+                                val deudaPrevia = clienteSeleccionado?.deudaMonetaria ?: 0.0
+                                montoAbonoTexto = String.format(Locale.US, "%.2f", totalGeneral + deudaPrevia)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    if (formaPago == FormaPago.ABONO || formaPago == FormaPago.CANCELADO) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = montoAbonoTexto,
+                            onValueChange = { montoAbonoTexto = it },
+                            label = { Text("Monto pagado / abonado ($)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    ClayInsetBox(
+                        modifier = Modifier.fillMaxWidth(),
+                        cornerRadius = 14.dp,
+                        contentPadding = PaddingValues(12.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = "Distribuir Total ($${String.format(Locale.US, "%.2f", totalGeneral)}):",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black,
+                                color = AguaPrimaryDark
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = pagoMixtoEfectivo,
+                                    onValueChange = { pagoMixtoEfectivo = it },
+                                    label = { Text("Efectivo ($)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = pagoMixtoCredito,
+                                    onValueChange = { pagoMixtoCredito = it },
+                                    label = { Text("Crédito / Fiado ($)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = pagoMixtoTransferencia,
+                                    onValueChange = { pagoMixtoTransferencia = it },
+                                    label = { Text("Transferencia ($)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = pagoMixtoAbonoDeuda,
+                                    onValueChange = { pagoMixtoAbonoDeuda = it },
+                                    label = { Text("Abono Deuda ($)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            val sumaCubierta = (pagoMixtoEfectivo.replace(',', '.').toDoubleOrNull() ?: 0.0) +
+                                    (pagoMixtoCredito.replace(',', '.').toDoubleOrNull() ?: 0.0) +
+                                    (pagoMixtoTransferencia.replace(',', '.').toDoubleOrNull() ?: 0.0)
+                            val diferencia = totalGeneral - sumaCubierta
+
+                            Spacer(modifier = Modifier.height(6.dp))
+                            if (abs(diferencia) > 0.01) {
+                                Text(
+                                    text = if (diferencia > 0) "Falta asignar: $${String.format(Locale.US, "%.2f", diferencia)}"
+                                    else "Exceso asignado: $${String.format(Locale.US, "%.2f", -diferencia)}",
+                                    fontSize = 11.sp,
+                                    color = AmbarAdvertencia,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else {
+                                Text(
+                                    text = "Monto cuadrado ($${String.format(Locale.US, "%.2f", totalGeneral)})",
+                                    fontSize = 11.sp,
+                                    color = VerdeEfectivo,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Botón Confirmar Clay
+        item {
+            ClayButton(
                 onClick = {
                     val pagado = when (formaPago) {
                         FormaPago.EFECTIVO, FormaPago.TRANSFERENCIA -> totalGeneral
                         FormaPago.CREDITO -> 0.0
-                        FormaPago.ABONO, FormaPago.CANCELADO -> montoAbonoTexto.toDoubleOrNull() ?: totalGeneral
+                        FormaPago.ABONO, FormaPago.CANCELADO -> montoAbonoTexto.replace(',', '.').toDoubleOrNull() ?: totalGeneral
                     }
 
                     val nombreFinal = if (esClienteDePaso || clienteSeleccionado == null) {
                         if (textoBusquedaCliente.isBlank()) "Cliente de Paso" else textoBusquedaCliente.trim()
                     } else null
 
-                    val mEf = if (modoPagoMixto) (pagoMixtoEfectivo.toDoubleOrNull() ?: 0.0) else 0.0
-                    val mTr = if (modoPagoMixto) (pagoMixtoTransferencia.toDoubleOrNull() ?: 0.0) else 0.0
-                    val mCr = if (modoPagoMixto) (pagoMixtoCredito.toDoubleOrNull() ?: 0.0) else 0.0
-                    val mAb = if (modoPagoMixto) (pagoMixtoAbonoDeuda.toDoubleOrNull() ?: 0.0) else 0.0
+                    val mEf = if (modoPagoMixto) (pagoMixtoEfectivo.replace(',', '.').toDoubleOrNull() ?: 0.0) else 0.0
+                    val mTr = if (modoPagoMixto) (pagoMixtoTransferencia.replace(',', '.').toDoubleOrNull() ?: 0.0) else 0.0
+                    val mCr = if (modoPagoMixto) (pagoMixtoCredito.replace(',', '.').toDoubleOrNull() ?: 0.0) else 0.0
+                    val mAb = if (modoPagoMixto) (pagoMixtoAbonoDeuda.replace(',', '.').toDoubleOrNull() ?: 0.0) else 0.0
+
+                    val pTrans = if (tipoBidonPrestado == TipoBidon.TRANSPARENTE) cantPrestados else 0
+                    val pAzul = if (tipoBidonPrestado == TipoBidon.AZUL) cantPrestados else 0
+                    val pMarc = if (tipoBidonPrestado == TipoBidon.MARCADO) cantPrestados else 0
 
                     onConfirmarVenta(
                         clienteSeleccionado?.id,
@@ -851,76 +1102,84 @@ fun NuevaVentaSheet(
                         mTr,
                         mCr,
                         mAb,
-                        0.0
+                        0.0,
+                        pTrans,
+                        pAzul,
+                        pMarc,
+                        cantGratis,
+                        if (usarTotalManual) totalGeneral else null
                     )
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(60.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = VerdeEfectivo),
-                shape = RoundedCornerShape(14.dp)
+                containerColor = VerdeEfectivo,
+                modifier = Modifier.fillMaxWidth(),
+                height = 58.dp
             ) {
                 Icon(imageVector = Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (esEdicion) "GUARDAR CAMBIOS ($${String.format(Locale.US, "%.2f", totalGeneral)})" else "CONFIRMAR ENTREGA ($${String.format(Locale.US, "%.2f", totalGeneral)})",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = if (esEdicion) "Guardar Cambios ($${String.format(Locale.US, "%.2f", totalGeneral)})"
+                    else "Confirmar Entrega ($${String.format(Locale.US, "%.2f", totalGeneral)})",
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Black
                 )
             }
-            Spacer(modifier = Modifier.height(30.dp))
+            Spacer(modifier = Modifier.height(28.dp))
         }
     }
 }
 
 @Composable
-private fun TarjetaSelectorBidonVenta(
+private fun FilaBidonClay(
     tipo: TipoBidon,
     nombre: String,
     disponibles: Int,
-    seleccionado: Boolean,
-    onSelect: () -> Unit,
-    modifier: Modifier = Modifier
+    cantidad: Int,
+    accentColor: Color,
+    onCambio: (Int) -> Unit
 ) {
-    Card(
-        modifier = modifier
-            .clickable { onSelect() }
-            .border(
-                width = if (seleccionado) 2.dp else 1.dp,
-                color = if (seleccionado) AguaPrimary else Color(0xFFE2E8F0),
-                shape = RoundedCornerShape(12.dp)
-            ),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (seleccionado) AguaPrimaryLight.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface
-        )
+    ClayInsetBox(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 14.dp,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp, horizontal = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            BidonIllustration(tipo = tipo, size = 42.dp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = nombre,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (seleccionado) FontWeight.Black else FontWeight.Normal,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "Quedan: $disponibles",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (disponibles <= 10) RojoAlerta else TextoSecundario,
-                fontSize = 11.sp
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                BidonIllustration(tipo = tipo, size = 34.dp)
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = nombre,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = TextoOscuro
+                    )
+                    Text(
+                        text = "En vehículo: $disponibles",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (disponibles <= 5) RojoAlerta else TextoSecundario
+                    )
+                }
+            }
+
+            ClayEditableCounter(
+                valor = cantidad,
+                onCambio = onCambio,
+                accentColor = accentColor
             )
         }
     }
 }
 
 @Composable
-private fun TarjetaSelectorSecundario(
+private fun TarjetaSelectorSecundarioClay(
     nombre: String,
     precio: String,
     disponibles: Int,
@@ -929,157 +1188,32 @@ private fun TarjetaSelectorSecundario(
     onCambio: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    ClayInsetBox(
         modifier = modifier,
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+        cornerRadius = 14.dp,
+        contentPadding = PaddingValues(8.dp)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
                 ilustracion()
             }
-            Text(text = nombre, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            Text(text = "$precio (disp: $disponibles)", fontSize = 10.sp, color = TextoSecundario)
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = { if (valor > 0) onCambio(valor - 1) },
-                    modifier = Modifier
-                        .size(26.dp)
-                        .background(Color(0xFFE2E8F0), CircleShape)
-                ) {
-                    Icon(imageVector = Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(16.dp))
-                }
-                Text(
-                    text = "$valor",
-                    fontWeight = FontWeight.Black,
-                    modifier = Modifier.width(28.dp),
-                    textAlign = TextAlign.Center
-                )
-                IconButton(
-                    onClick = { onCambio(valor + 1) },
-                    modifier = Modifier
-                        .size(26.dp)
-                        .background(AguaPrimary, CircleShape)
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                }
-            }
+            Text(text = nombre, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextoOscuro)
+            Text(text = "$precio ($disponibles)", fontSize = 10.sp, color = TextoSecundario)
+            Spacer(modifier = Modifier.height(6.dp))
+            ClayEditableCounter(
+                valor = valor,
+                onCambio = onCambio,
+                compact = true
+            )
         }
     }
 }
 
 @Composable
-private fun FilaContadorMovimiento(
-    titulo: String,
-    subtitulo: String,
-    color: Color,
-    valor: Int,
-    onCambio: (Int) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = titulo, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = color)
-            Text(text = subtitulo, style = MaterialTheme.typography.bodySmall, color = TextoSecundario)
-        }
-        ControlContador(valor = valor, onCambio = onCambio)
-    }
-}
-
-@Composable
-private fun FilaBidonCombinable(
-    tipo: TipoBidon,
-    nombre: String,
-    disponibles: Int,
-    cantidad: Int,
-    onCambio: (Int) -> Unit
-) {
-    Surface(
-        color = Color(0xFFF8FAFC),
-        shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                BidonIllustration(tipo = tipo, size = 38.dp)
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text(
-                        text = nombre,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = TextoOscuro
-                    )
-                    Text(
-                        text = "Disponibles en camión: $disponibles",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (disponibles <= 10) RojoAlerta else TextoSecundario,
-                        fontSize = 11.sp
-                    )
-                }
-            }
-
-            ControlContador(valor = cantidad, onCambio = onCambio)
-        }
-    }
-}
-
-@Composable
-private fun ControlContador(
-    valor: Int,
-    onCambio: (Int) -> Unit
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(
-            onClick = { if (valor > 0) onCambio(valor - 1) },
-            modifier = Modifier
-                .size(36.dp)
-                .background(Color(0xFFE2E8F0), CircleShape)
-        ) {
-            Icon(imageVector = Icons.Default.Remove, contentDescription = "Menos", tint = TextoOscuro)
-        }
-
-        Text(
-            text = "$valor",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(44.dp)
-        )
-
-        IconButton(
-            onClick = { onCambio(valor + 1) },
-            modifier = Modifier
-                .size(36.dp)
-                .background(AguaPrimary, CircleShape)
-        ) {
-            Icon(imageVector = Icons.Default.Add, contentDescription = "Más", tint = Color.White)
-        }
-    }
-}
-
-@Composable
-private fun BotonFormaPago(
+private fun BotonFormaPagoClay(
     titulo: String,
     icono: androidx.compose.ui.graphics.vector.ImageVector,
     seleccionado: Boolean,
@@ -1087,15 +1221,18 @@ private fun BotonFormaPago(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier
-            .clickable { onSelect() }
-            .height(48.dp),
-        color = if (seleccionado) VerdeEfectivo else Color(0xFFF1F5F9),
-        shape = RoundedCornerShape(10.dp),
-        border = if (!seleccionado) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)) else null
+        onClick = onSelect,
+        modifier = modifier.height(46.dp),
+        color = if (seleccionado) VerdeEfectivo else ClayInsetBackground,
+        shape = RoundedCornerShape(14.dp),
+        shadowElevation = if (seleccionado) 3.dp else 0.dp,
+        border = BorderStroke(
+            1.dp,
+            if (seleccionado) Color.White.copy(alpha = 0.35f) else ClayRimShadow
+        )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 4.dp),
+            modifier = Modifier.padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
@@ -1103,13 +1240,13 @@ private fun BotonFormaPago(
                 imageVector = icono,
                 contentDescription = null,
                 tint = if (seleccionado) Color.White else TextoOscuro,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = titulo,
                 color = if (seleccionado) Color.White else TextoOscuro,
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
         }

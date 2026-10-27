@@ -197,6 +197,10 @@ class FirestoreSyncManager(
                             val recTrans = doc.getLong("recargaTransparentes")?.toInt() ?: 0
                             val recAzul = doc.getLong("recargaAzules")?.toInt() ?: 0
                             val recMarc = doc.getLong("recargaMarcados")?.toInt() ?: 0
+                            val prestTrans = doc.getLong("prestadosTransparentes")?.toInt() ?: 0
+                            val prestAzul = doc.getLong("prestadosAzules")?.toInt() ?: 0
+                            val prestMarc = doc.getLong("prestadosMarcados")?.toInt() ?: 0
+                            val cantGratis = doc.getLong("cantidadBidonesGratis")?.toInt() ?: 0
                             val envVendTrans = doc.getLong("envasesVendidosTransparentes")?.toInt() ?: 0
                             val envVendAzul = doc.getLong("envasesVendidosAzules")?.toInt() ?: 0
                             val envVendMarc = doc.getLong("envasesVendidosMarcados")?.toInt() ?: 0
@@ -232,9 +236,13 @@ class FirestoreSyncManager(
                                 recargaTransparentes = recTrans,
                                 recargaAzules = recAzul,
                                 recargaMarcados = recMarc,
+                                prestadosTransparentes = prestTrans,
+                                prestadosAzules = prestAzul,
+                                prestadosMarcados = prestMarc,
                                 envasesVendidosTransparentes = envVendTrans,
                                 envasesVendidosAzules = envVendAzul,
                                 envasesVendidosMarcados = envVendMarc,
+                                cantidadBidonesGratis = cantGratis,
                                 cantidadGalones = cantGal,
                                 precioUnitarioGalon = pGal,
                                 cantidadPacas = cantPac,
@@ -501,6 +509,10 @@ class FirestoreSyncManager(
             "recargaTransparentes" to transaccion.recargaTransparentes,
             "recargaAzules" to transaccion.recargaAzules,
             "recargaMarcados" to transaccion.recargaMarcados,
+            "prestadosTransparentes" to transaccion.prestadosTransparentes,
+            "prestadosAzules" to transaccion.prestadosAzules,
+            "prestadosMarcados" to transaccion.prestadosMarcados,
+            "cantidadBidonesGratis" to transaccion.cantidadBidonesGratis,
             "envasesVendidosTransparentes" to transaccion.envasesVendidosTransparentes,
             "envasesVendidosAzules" to transaccion.envasesVendidosAzules,
             "envasesVendidosMarcados" to transaccion.envasesVendidosMarcados,

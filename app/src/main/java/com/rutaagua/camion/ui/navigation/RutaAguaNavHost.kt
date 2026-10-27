@@ -1,11 +1,10 @@
 package com.rutaagua.camion.ui.navigation
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,9 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.LocalShipping
@@ -24,14 +23,10 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -43,8 +38,6 @@ import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -56,7 +49,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -77,7 +69,11 @@ import com.rutaagua.camion.data.local.prefs.RolUsuario
 import com.rutaagua.camion.data.repository.RutaAguaRepository
 import com.rutaagua.camion.ui.components.CamionIllustration
 import com.rutaagua.camion.ui.components.CamionetaIllustration
+import com.rutaagua.camion.ui.components.ClayBadge
+import com.rutaagua.camion.ui.components.ClayButton
+import com.rutaagua.camion.ui.components.ClayCard
 import com.rutaagua.camion.ui.components.VehiculoThumbnail
+import com.rutaagua.camion.ui.components.obtenerClayThemePorVehiculo
 import com.rutaagua.camion.ui.screens.SeleccionVehiculoScreen
 import com.rutaagua.camion.ui.screens.calendario.CalendarioRutaScreen
 import com.rutaagua.camion.ui.screens.clientes.ClientesScreen
@@ -88,15 +84,10 @@ import com.rutaagua.camion.ui.screens.inventario.InventarioCamionViewModel
 import com.rutaagua.camion.ui.screens.registro.RegistroDiaScreen
 import com.rutaagua.camion.ui.screens.registro.RegistroDiaViewModel
 import com.rutaagua.camion.ui.screens.rolando.PanelRolandoScreen
-import com.rutaagua.camion.ui.theme.AguaPrimary
-import com.rutaagua.camion.ui.theme.AguaPrimaryLight
 import com.rutaagua.camion.ui.theme.AzulCorporativo
 import com.rutaagua.camion.ui.theme.BordeSutil
-import com.rutaagua.camion.ui.theme.FondoGrisClaro
-import com.rutaagua.camion.ui.theme.SuperficieBlanca
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
-import com.rutaagua.camion.ui.theme.VerdeEfectivo
 import kotlinx.coroutines.launch
 
 class RutaAguaViewModelFactory(
@@ -120,10 +111,6 @@ class RutaAguaViewModelFactory(
     }
 }
 
-/**
- * Scaffold principal con ModalNavigationDrawer (Menú Lateral), TopAppBar limpio,
- * barra inferior de navegación y NavHost con separación estricta de perfiles.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RutaAguaNavHost(
@@ -140,6 +127,8 @@ fun RutaAguaNavHost(
     }
     var mostrarModalAjustes by rememberSaveable { mutableStateOf(false) }
 
+    val clayTheme = obtenerClayThemePorVehiculo(vehiculoActivo)
+
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
 
@@ -153,7 +142,7 @@ fun RutaAguaNavHost(
     val inventarioViewModel: InventarioCamionViewModel = viewModel(factory = factory)
     val clientesViewModel: ClientesViewModel = viewModel(factory = factory)
 
-    // Si aún no ha seleccionado el vehículo en esta sesión, mostramos la pantalla de bienvenida y elección
+    // Si aún no ha iniciado sesión, mostramos la pantalla Clay de Login por unidad
     if (vehiculoSeleccionado == null) {
         SeleccionVehiculoScreen(
             repository = repository,
@@ -181,177 +170,101 @@ fun RutaAguaNavHost(
         gesturesEnabled = true,
         drawerContent = {
             ModalDrawerSheet(
-                modifier = Modifier.width(310.dp),
-                drawerContainerColor = Color.White
+                modifier = Modifier.width(305.dp),
+                drawerContainerColor = clayTheme.canvasColor
             ) {
-                // Header del Menú Lateral
+                // Header Claymórfico del Menú Lateral
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xFF0F172A))
-                        .padding(horizontal = 20.dp, vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(16.dp)
                 ) {
-                    // Ilustración vectorial grande del vehículo en operación
-                    Box(
-                        modifier = Modifier
-                            .size(110.dp)
-                            .background(Color(0xFF1E293B), RoundedCornerShape(16.dp))
-                            .padding(8.dp),
-                        contentAlignment = Alignment.Center
+                    ClayCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = clayTheme.cardColor,
+                        cornerRadius = 24.dp,
+                        elevation = 6.dp
                     ) {
-                        if (vehiculoActivo == TipoVehiculo.CAMIONETA) {
-                            CamionetaIllustration(modifier = Modifier.fillMaxSize())
-                        } else {
-                            CamionIllustration(modifier = Modifier.fillMaxSize())
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val nombreVehiculo = if (vehiculoActivo == TipoVehiculo.CAMIONETA) "CAMIONETA" else "CAMIÓN"
-                    Text(
-                        text = if (rolActivo == RolUsuario.ADMIN_ROLANDO) "$nombreVehiculo (ROLANDO)" else "$nombreVehiculo (OPERADOR)",
-                        color = Color.White,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 17.sp
-                    )
-
-                    Text(
-                        text = if (rolActivo == RolUsuario.ADMIN_ROLANDO) "Panel Administrador" else "Teléfono de Ruta",
-                        color = Color(0xFF94A3B8),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Indicador de conexión en tiempo real
-                    Surface(
-                        color = Color(0xFF1E293B),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color(0xFF334155))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(VerdeEfectivo)
+                                    .size(92.dp)
+                                    .background(clayTheme.accentBgColor, RoundedCornerShape(22.dp))
+                                    .padding(10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (vehiculoActivo == TipoVehiculo.CAMIONETA) {
+                                    CamionetaIllustration(modifier = Modifier.fillMaxSize())
+                                } else {
+                                    CamionIllustration(modifier = Modifier.fillMaxSize())
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            ClayBadge(
+                                text = if (rolActivo == RolUsuario.ADMIN_ROLANDO) "ADMINISTRACIÓN" else clayTheme.badgeLabel,
+                                backgroundColor = clayTheme.accentBgColor,
+                                textColor = clayTheme.primaryDarkColor
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
                             Text(
-                                text = "🟢 En línea (Firebase)",
-                                color = VerdeEfectivo,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
+                                text = clayTheme.vehicleTitle,
+                                color = TextoOscuro,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 18.sp
                             )
+
+                            Text(
+                                text = clayTheme.capacityLabel,
+                                color = TextoSecundario,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            ClayButton(
+                                onClick = {
+                                    coroutineScope.launch { drawerState.close() }
+                                    appPreferences.guardarSesionIniciada(false)
+                                    vehiculoSeleccionado = null
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp),
+                                containerColor = clayTheme.primaryColor,
+                                contentColor = Color.White,
+                                cornerRadius = 14.dp,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Logout,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Cambiar Unidad / Salir",
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 12.sp
+                                )
+                            }
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Botón para alternar vehículo
-                    Button(
-                        onClick = {
-                            coroutineScope.launch { drawerState.close() }
-                            appPreferences.guardarSesionIniciada(false)
-                            vehiculoSeleccionado = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = AzulCorporativo),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(40.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Sync,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "🔄 Cambiar Vehículo",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Ítem 1: Ruta del Día (Calendario)
+                // Opciones de navegación
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.CalendarMonth, contentDescription = null, modifier = Modifier.size(24.dp)) },
-                    label = { Text("📅 Ruta del Día", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
-                    selected = currentRoute == AppDestinations.CALENDARIO.ruta,
-                    onClick = {
-                        coroutineScope.launch { drawerState.close() }
-                        navController.navigate(AppDestinations.CALENDARIO.ruta) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = AguaPrimaryLight.copy(alpha = 0.2f),
-                        selectedIconColor = AguaPrimary,
-                        selectedTextColor = AguaPrimary
-                    )
-                )
-
-                // Ítem 2: Clientes
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.People, contentDescription = null, modifier = Modifier.size(24.dp)) },
-                    label = { Text("👥 Clientes", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
-                    selected = currentRoute == AppDestinations.CLIENTES.ruta,
-                    onClick = {
-                        coroutineScope.launch { drawerState.close() }
-                        navController.navigate(AppDestinations.CLIENTES.ruta) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = AguaPrimaryLight.copy(alpha = 0.2f),
-                        selectedIconColor = AguaPrimary,
-                        selectedTextColor = AguaPrimary
-                    )
-                )
-
-                // Ítem 3: Inventario
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.LocalShipping, contentDescription = null, modifier = Modifier.size(24.dp)) },
-                    label = { Text("🚚 Inventario", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
-                    selected = currentRoute == AppDestinations.CAMION.ruta,
-                    onClick = {
-                        coroutineScope.launch { drawerState.close() }
-                        navController.navigate(AppDestinations.CAMION.ruta) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
-                    colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = AguaPrimaryLight.copy(alpha = 0.2f),
-                        selectedIconColor = AguaPrimary,
-                        selectedTextColor = AguaPrimary
-                    )
-                )
-
-                // Ítem 4: Caja y Cierre
-                NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.PointOfSale, contentDescription = null, modifier = Modifier.size(24.dp)) },
-                    label = { Text("💵 Caja y Cierre", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+                    icon = { Icon(Icons.Default.PointOfSale, contentDescription = null) },
+                    label = { Text("Ventas y Caja", fontWeight = FontWeight.Bold) },
                     selected = currentRoute == AppDestinations.REGISTRO.ruta,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
@@ -361,19 +274,78 @@ fun RutaAguaNavHost(
                             restoreState = true
                         }
                     },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
                     colors = NavigationDrawerItemDefaults.colors(
-                        selectedContainerColor = AguaPrimaryLight.copy(alpha = 0.2f),
-                        selectedIconColor = AguaPrimary,
-                        selectedTextColor = AguaPrimary
+                        selectedContainerColor = clayTheme.accentBgColor,
+                        selectedIconColor = clayTheme.primaryDarkColor,
+                        selectedTextColor = clayTheme.primaryDarkColor
                     )
                 )
 
-                // Ítem 5: Panel de Rolando (Administrador) - SOLO visible para Rolando
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.LocalShipping, contentDescription = null) },
+                    label = { Text("Carga e Inventario", fontWeight = FontWeight.Bold) },
+                    selected = currentRoute == AppDestinations.CAMION.ruta,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate(AppDestinations.CAMION.ruta) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = clayTheme.accentBgColor,
+                        selectedIconColor = clayTheme.primaryDarkColor,
+                        selectedTextColor = clayTheme.primaryDarkColor
+                    )
+                )
+
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.People, contentDescription = null) },
+                    label = { Text("Clientes", fontWeight = FontWeight.Bold) },
+                    selected = currentRoute == AppDestinations.CLIENTES.ruta,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate(AppDestinations.CLIENTES.ruta) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = clayTheme.accentBgColor,
+                        selectedIconColor = clayTheme.primaryDarkColor,
+                        selectedTextColor = clayTheme.primaryDarkColor
+                    )
+                )
+
+                NavigationDrawerItem(
+                    icon = { Icon(Icons.Default.CalendarMonth, contentDescription = null) },
+                    label = { Text("Ruta por Día", fontWeight = FontWeight.Bold) },
+                    selected = currentRoute == AppDestinations.CALENDARIO.ruta,
+                    onClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        navController.navigate(AppDestinations.CALENDARIO.ruta) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                    colors = NavigationDrawerItemDefaults.colors(
+                        selectedContainerColor = clayTheme.accentBgColor,
+                        selectedIconColor = clayTheme.primaryDarkColor,
+                        selectedTextColor = clayTheme.primaryDarkColor
+                    )
+                )
+
                 if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
                     NavigationDrawerItem(
-                        icon = { Icon(Icons.Default.Analytics, contentDescription = null, tint = AzulCorporativo, modifier = Modifier.size(24.dp)) },
-                        label = { Text("📊 Panel de Rolando (Administrador)", fontWeight = FontWeight.Black, color = AzulCorporativo, fontSize = 15.sp) },
+                        icon = { Icon(Icons.Default.Analytics, contentDescription = null, tint = AzulCorporativo) },
+                        label = { Text("Panel Rolando", fontWeight = FontWeight.Black, color = AzulCorporativo) },
                         selected = currentRoute == AppDestinations.PANEL_ROLANDO.ruta,
                         onClick = {
                             coroutineScope.launch { drawerState.close() }
@@ -383,7 +355,7 @@ fun RutaAguaNavHost(
                                 restoreState = true
                             }
                         },
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
                         colors = NavigationDrawerItemDefaults.colors(
                             selectedContainerColor = AzulCorporativo.copy(alpha = 0.15f),
                             selectedIconColor = AzulCorporativo,
@@ -394,112 +366,220 @@ fun RutaAguaNavHost(
 
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = BordeSutil)
 
-                // Ítem 6: Ajustes
                 NavigationDrawerItem(
-                    icon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(24.dp)) },
-                    label = { Text("⚙️ Ajustes", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+                    icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                    label = { Text("Precios y Respaldo", fontWeight = FontWeight.Bold) },
                     selected = false,
                     onClick = {
                         coroutineScope.launch { drawerState.close() }
                         mostrarModalAjustes = true
                     },
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
                 )
             }
         }
     ) {
         Scaffold(
             modifier = modifier.fillMaxSize(),
+            containerColor = clayTheme.canvasColor,
             topBar = {
-                TopAppBar(
-                    navigationIcon = {
-                        IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "Menú Principal",
-                                tint = TextoOscuro,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    },
-                    title = {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            // Ilustración + Nombre del Vehículo en Operación y Rol
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                VehiculoThumbnail(
-                                    tipo = vehiculoActivo,
-                                    size = 38.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    val nombreVehiculo = if (vehiculoActivo == TipoVehiculo.CAMIONETA) "CAMIONETA" else "CAMIÓN"
-                                    Text(
-                                        text = if (rolActivo == RolUsuario.ADMIN_ROLANDO) "$nombreVehiculo (Rolando)" else "$nombreVehiculo (Ruta)",
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 15.sp,
-                                        color = TextoOscuro
-                                    )
-                                    Text(
-                                        text = if (rolActivo == RolUsuario.ADMIN_ROLANDO) "Panel Administrador" else "Modo Operador • 100% Offline",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (rolActivo == RolUsuario.ADMIN_ROLANDO) Color(0xFF0284C7) else VerdeEfectivo,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Botón "Cambiar" rápido
-                                Surface(
-                                    color = FondoGrisClaro,
-                                    shape = RoundedCornerShape(10.dp),
-                                    border = BorderStroke(1.dp, BordeSutil),
-                                    modifier = Modifier.clickable {
-                                        appPreferences.guardarSesionIniciada(false)
-                                        vehiculoSeleccionado = null
-                                    }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Sync,
-                                            contentDescription = "Cambiar Vehículo",
-                                            tint = AguaPrimary,
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "Cambiar",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp,
-                                            color = AguaPrimary
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.width(4.dp))
-
-                                IconButton(onClick = { mostrarModalAjustes = true }) {
+                Surface(
+                    color = clayTheme.canvasColor,
+                    shadowElevation = 0.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ClayCard(
+                                modifier = Modifier.size(42.dp),
+                                containerColor = clayTheme.cardColor,
+                                cornerRadius = 14.dp,
+                                elevation = 3.dp,
+                                onClick = { coroutineScope.launch { drawerState.open() } }
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                     Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "Ajustes",
+                                        imageVector = Icons.Default.Menu,
+                                        contentDescription = "Menú",
                                         tint = TextoOscuro,
                                         modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
+                            VehiculoThumbnail(
+                                tipo = vehiculoActivo,
+                                size = 36.dp
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Column {
+                                Text(
+                                    text = clayTheme.vehicleTitle,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 15.sp,
+                                    color = TextoOscuro
+                                )
+                                Text(
+                                    text = if (rolActivo == RolUsuario.ADMIN_ROLANDO) "Modo Rolando" else clayTheme.capacityLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = clayTheme.primaryColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = SuperficieBlanca
-                    )
-                )
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ClayCard(
+                                containerColor = clayTheme.cardColor,
+                                cornerRadius = 12.dp,
+                                elevation = 3.dp,
+                                onClick = {
+                                    appPreferences.guardarSesionIniciada(false)
+                                    vehiculoSeleccionado = null
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Logout,
+                                        contentDescription = "Salir",
+                                        tint = clayTheme.primaryColor,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Salir",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 11.sp,
+                                        color = clayTheme.primaryColor
+                                    )
+                                }
+                            }
+
+                            ClayCard(
+                                modifier = Modifier.size(38.dp),
+                                containerColor = clayTheme.cardColor,
+                                cornerRadius = 12.dp,
+                                elevation = 3.dp,
+                                onClick = { mostrarModalAjustes = true }
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Ajustes",
+                                        tint = TextoOscuro,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            bottomBar = {
+                Surface(
+                    color = clayTheme.cardColor,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                    shadowElevation = 10.dp
+                ) {
+                    NavigationBar(
+                        containerColor = Color.Transparent,
+                        tonalElevation = 0.dp
+                    ) {
+                        val items = listOf(
+                            Triple(AppDestinations.REGISTRO, "Ventas", Icons.Default.PointOfSale),
+                            Triple(AppDestinations.CAMION, "Vehículo", Icons.Default.LocalShipping),
+                            Triple(AppDestinations.CLIENTES, "Clientes", Icons.Default.People),
+                            Triple(AppDestinations.CALENDARIO, "Ruta", Icons.Default.CalendarMonth)
+                        )
+
+                        items.forEach { (dest, label, icon) ->
+                            val selected = currentRoute == dest.ruta
+                            NavigationBarItem(
+                                selected = selected,
+                                onClick = {
+                                    navController.navigate(dest.ruta) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = label
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
+                                        fontSize = 11.sp
+                                    )
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = clayTheme.primaryDarkColor,
+                                    selectedTextColor = clayTheme.primaryDarkColor,
+                                    indicatorColor = clayTheme.accentBgColor,
+                                    unselectedIconColor = TextoSecundario,
+                                    unselectedTextColor = TextoSecundario
+                                )
+                            )
+                        }
+
+                        if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
+                            val selected = currentRoute == AppDestinations.PANEL_ROLANDO.ruta
+                            NavigationBarItem(
+                                selected = selected,
+                                onClick = {
+                                    navController.navigate(AppDestinations.PANEL_ROLANDO.ruta) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Analytics,
+                                        contentDescription = "Rolando"
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = "Rolando",
+                                        fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
+                                        fontSize = 11.sp
+                                    )
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = AzulCorporativo,
+                                    selectedTextColor = AzulCorporativo,
+                                    indicatorColor = AzulCorporativo.copy(alpha = 0.16f),
+                                    unselectedIconColor = TextoSecundario,
+                                    unselectedTextColor = TextoSecundario
+                                )
+                            )
+                        }
+                    }
+                }
             }
         ) { innerPadding ->
             NavHost(
@@ -507,12 +587,10 @@ fun RutaAguaNavHost(
                 startDestination = AppDestinations.REGISTRO.ruta,
                 modifier = Modifier.padding(innerPadding)
             ) {
-                // Pestaña 1: Registro Diario de Ventas, Arqueo de Caja y WhatsApp
                 composable(AppDestinations.REGISTRO.ruta) {
                     RegistroDiaScreen(viewModel = registroDiaViewModel)
                 }
 
-                // Pestaña 2: Inventario en vivo y Recarga en Planta (Camión / Camioneta)
                 composable(AppDestinations.CAMION.ruta) {
                     InventarioCamionScreen(
                         viewModel = inventarioViewModel,
@@ -523,12 +601,10 @@ fun RutaAguaNavHost(
                     )
                 }
 
-                // Pestaña 3: Directorio de Clientes y Saldos
                 composable(AppDestinations.CLIENTES.ruta) {
                     ClientesScreen(viewModel = clientesViewModel)
                 }
 
-                // Pestaña 4: Calendario de Ruta Semanal (Lunes a Sábado)
                 composable(AppDestinations.CALENDARIO.ruta) {
                     CalendarioRutaScreen(
                         viewModel = clientesViewModel,
@@ -545,7 +621,6 @@ fun RutaAguaNavHost(
                     )
                 }
 
-                // Destino 5: Panel de Rolando (Auditoría y Utilidades)
                 composable(AppDestinations.PANEL_ROLANDO.ruta) {
                     PanelRolandoScreen(viewModel = registroDiaViewModel)
                 }

@@ -74,7 +74,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.rutaagua.camion.data.local.prefs.AppPreferences
+import com.rutaagua.camion.ui.components.ClayButton
+import com.rutaagua.camion.ui.components.ClayCard
+import com.rutaagua.camion.ui.components.ClayInsetBox
+import com.rutaagua.camion.ui.components.obtenerClayThemePorVehiculo
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -137,6 +143,10 @@ fun ClientesScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val appPreferences = remember { AppPreferences.getInstance(context) }
+    val vehiculoActivo by appPreferences.vehiculoActivo.collectAsState()
+    val clayTheme = obtenerClayThemePorVehiculo(vehiculoActivo)
+
     val clientes by viewModel.clientesFiltradosState.collectAsState()
     val transaccionesHoyClientes by viewModel.transaccionesHoyClientesState.collectAsState()
     val visitasFallidasHoy by viewModel.visitasFallidasHoyState.collectAsState()
@@ -200,23 +210,19 @@ fun ClientesScreen(
 
     Scaffold(
         modifier = modifier,
+        containerColor = clayTheme.canvasColor,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(
+            ClayButton(
                 onClick = { viewModel.abrirCrearCliente() },
-                containerColor = AguaPrimary,
+                containerColor = clayTheme.primaryColor,
                 contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.padding(bottom = 16.dp)
+                cornerRadius = 20.dp,
+                modifier = Modifier.padding(bottom = 8.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Nuevo Cliente")
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "NUEVO CLIENTE", fontWeight = FontWeight.Bold)
-                }
+                Icon(imageVector = Icons.Default.Add, contentDescription = "Nuevo Cliente")
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = "NUEVO CLIENTE", fontWeight = FontWeight.Black)
             }
         }
     ) { innerPadding ->
@@ -530,26 +536,16 @@ private fun TarjetaClienteItem(
     onNoEstabaClick: () -> Unit
 ) {
     val context = LocalContext.current
-    var expandido by remember { mutableStateOf(false) }
+    var expandido by rememberSaveable(cliente.id) { mutableStateOf(false) }
 
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                transaccionHoy != null -> Color(0xFFF0FDF4)
-                visitaFallidaHoy != null -> Color(0xFFFFFBEB)
-                else -> Color.White
-            }
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(
-            width = 1.dp,
-            color = when {
-                transaccionHoy != null -> Color(0xFF86EFAC)
-                visitaFallidaHoy != null -> Color(0xFFFDE68A)
-                else -> BordeSutil
-            }
-        ),
+    ClayCard(
+        cornerRadius = 20.dp,
+        containerColor = when {
+            transaccionHoy != null -> Color(0xFFF0FDF4)
+            visitaFallidaHoy != null -> Color(0xFFFFFBEB)
+            else -> Color.White
+        },
+        elevation = 4.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -907,14 +903,15 @@ private fun ModalFormularioCliente(
     ) -> Unit,
     onCancelar: () -> Unit
 ) {
-    var nombre by remember { mutableStateOf(clienteExistente?.nombre ?: "") }
-    var telefono by remember { mutableStateOf(clienteExistente?.telefono ?: "") }
-    var ubicacion by remember { mutableStateOf(clienteExistente?.ubicacion ?: "") }
-    var tipoCliente by remember { mutableStateOf(clienteExistente?.tipoCliente ?: TipoCliente.RUTA) }
-    var fotoReferenciaPath by remember { mutableStateOf(clienteExistente?.fotoReferenciaPath) }
+    val editId = clienteExistente?.id ?: -1L
+    var nombre by rememberSaveable(editId) { mutableStateOf(clienteExistente?.nombre ?: "") }
+    var telefono by rememberSaveable(editId) { mutableStateOf(clienteExistente?.telefono ?: "") }
+    var ubicacion by rememberSaveable(editId) { mutableStateOf(clienteExistente?.ubicacion ?: "") }
+    var tipoCliente by rememberSaveable(editId) { mutableStateOf(clienteExistente?.tipoCliente ?: TipoCliente.RUTA) }
+    var fotoReferenciaPath by rememberSaveable(editId) { mutableStateOf(clienteExistente?.fotoReferenciaPath) }
 
     // Días de visita
-    val diasSeleccionados = remember {
+    val diasSeleccionados = remember(editId) {
         mutableStateListOf<DiaSemana>().apply {
             if (clienteExistente != null && clienteExistente.diasVisita.isNotBlank()) {
                 val existentes = clienteExistente.diasVisita.split(",")
@@ -928,19 +925,19 @@ private fun ModalFormularioCliente(
         }
     }
 
-    var tipoBidonPreferido by remember {
+    var tipoBidonPreferido by rememberSaveable(editId) {
         mutableStateOf(clienteExistente?.tipoBidonPreferido ?: TipoBidon.AZUL)
     }
 
-    var precioHabitualTexto by remember {
+    var precioHabitualTexto by rememberSaveable(editId) {
         mutableStateOf(clienteExistente?.precioHabitual?.let { String.format(Locale.US, "%.2f", it) } ?: "1.00")
     }
 
-    var deudaInicialTexto by remember {
+    var deudaInicialTexto by rememberSaveable(editId) {
         mutableStateOf(clienteExistente?.deudaMonetaria?.let { String.format(Locale.US, "%.2f", it) } ?: "0.00")
     }
 
-    var bidonesPrestadosTexto by remember {
+    var bidonesPrestadosTexto by rememberSaveable(editId) {
         mutableStateOf(clienteExistente?.bidonesPrestados?.toString() ?: "0")
     }
 
@@ -952,15 +949,10 @@ private fun ModalFormularioCliente(
     ) {
         item {
             Text(
-                text = if (clienteExistente == null) "REGISTRAR NUEVO CLIENTE" else "EDITAR CLIENTE",
+                text = if (clienteExistente == null) "NUEVO CLIENTE" else "EDITAR CLIENTE",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Black,
                 color = AguaPrimaryDark
-            )
-            Text(
-                text = "Datos de contacto, tipo de envase y frecuencia de entrega",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextoSecundario
             )
         }
 

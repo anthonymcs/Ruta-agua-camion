@@ -143,18 +143,19 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             if (inv == null) {
                 StockAlertas()
             } else {
-                val transBajos = inv.bidonesLlenosTransparentes <= 5
-                val azulBajos = inv.bidonesLlenosAzules <= 10
-                val marcBajos = inv.bidonesLlenosMarcados <= 5
-                val galBajos = inv.galonesLlenos <= 5
+                val esCamioneta = vehiculo == "CAMIONETA"
+                val transBajos = inv.bidonesLlenosTransparentes <= if (esCamioneta) 3 else 5
+                val azulBajos = inv.bidonesLlenosAzules <= if (esCamioneta) 5 else 10
+                val marcBajos = inv.bidonesLlenosMarcados <= if (esCamioneta) 3 else 5
+                val galBajos = inv.galonesLlenos <= if (esCamioneta) 3 else 5
                 val pacBajas = inv.pacasLlenas <= 1
                 val minBajas = inv.minisLlenas <= 1
 
                 val mensajes = mutableListOf<String>()
-                if (transBajos) mensajes.add("Pocos Transparentes (${inv.bidonesLlenosTransparentes})")
-                if (azulBajos) mensajes.add("Pocos Azules (${inv.bidonesLlenosAzules})")
-                if (marcBajos) mensajes.add("Pocos Marcados (${inv.bidonesLlenosMarcados})")
-                if (galBajos) mensajes.add("Pocos Galones (${inv.galonesLlenos})")
+                if (transBajos) mensajes.add("Transparentes (${inv.bidonesLlenosTransparentes})")
+                if (azulBajos) mensajes.add("Azules (${inv.bidonesLlenosAzules})")
+                if (marcBajos) mensajes.add("Marcados (${inv.bidonesLlenosMarcados})")
+                if (galBajos) mensajes.add("Galones (${inv.galonesLlenos})")
 
                 StockAlertas(
                     transparentesBajos = transBajos,
@@ -163,7 +164,7 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
                     galonesBajos = galBajos,
                     pacasBajas = pacBajas,
                     minisBajas = minBajas,
-                    mensajeAlerta = if (mensajes.isNotEmpty()) mensajes.joinToString(", ") else null
+                    mensajeAlerta = if (mensajes.isNotEmpty()) mensajes.joinToString(" • ") else null
                 )
             }
         }
@@ -341,6 +342,34 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         }
     }
 
+    /**
+     * Calcula cuántos bidones llenos de cada tipo (Transparente, Azul, Marcado) salen del vehículo
+     * sumando recargas normales, bidones prestados y envases nuevos vendidos.
+     */
+    private fun calcularDesgloseSalidaPorTipo(t: TransaccionVentaEntity): Triple<Int, Int, Int> {
+        val tieneMultiRecarga = (t.recargaTransparentes + t.recargaAzules + t.recargaMarcados) > 0
+        val tieneMultiEnvase = (t.envasesVendidosTransparentes + t.envasesVendidosAzules + t.envasesVendidosMarcados) > 0
+        val tieneMultiPrestados = (t.prestadosTransparentes + t.prestadosAzules + t.prestadosMarcados) > 0
+
+        val recTrans = if (tieneMultiRecarga) t.recargaTransparentes else if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesRecarga else 0
+        val recAzul = if (tieneMultiRecarga) t.recargaAzules else if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesRecarga else 0
+        val recMarc = if (tieneMultiRecarga) t.recargaMarcados else if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesRecarga else 0
+
+        val envTrans = if (tieneMultiEnvase) t.envasesVendidosTransparentes else if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesVendidosEnvase else 0
+        val envAzul = if (tieneMultiEnvase) t.envasesVendidosAzules else if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesVendidosEnvase else 0
+        val envMarc = if (tieneMultiEnvase) t.envasesVendidosMarcados else if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesVendidosEnvase else 0
+
+        val prestTrans = if (tieneMultiPrestados) t.prestadosTransparentes else if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesPrestados else 0
+        val prestAzul = if (tieneMultiPrestados) t.prestadosAzules else if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesPrestados else 0
+        val prestMarc = if (tieneMultiPrestados) t.prestadosMarcados else if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesPrestados else 0
+
+        return Triple(
+            recTrans + envTrans + prestTrans,
+            recAzul + envAzul + prestAzul,
+            recMarc + envMarc + prestMarc
+        )
+    }
+
     private suspend fun aplicarImpactoVenta(transaccion: TransaccionVentaEntity) {
         val inventarioActual = inventarioDao.obtenerInventarioPorVehiculoDirecto(transaccion.vehiculo)
             ?: InventarioCamionEntity(
@@ -352,29 +381,42 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         var azulLlenos = inventarioActual.bidonesLlenosAzules
         var marcLlenos = inventarioActual.bidonesLlenosMarcados
 
-        val tieneMulti = (transaccion.recargaTransparentes + transaccion.recargaAzules + transaccion.recargaMarcados +
-                transaccion.envasesVendidosTransparentes + transaccion.envasesVendidosAzules + transaccion.envasesVendidosMarcados) > 0
+        val (bajanTrans, bajanAzul, bajanMarc) = calcularDesgloseSalidaPorTipo(transaccion)
 
-        if (tieneMulti) {
-            val totalTransBajan = transaccion.recargaTransparentes + transaccion.envasesVendidosTransparentes +
-                    if (transaccion.tipoBidon == TipoBidon.TRANSPARENTE) transaccion.cantidadBidonesPrestados else 0
-            val totalAzulBajan = transaccion.recargaAzules + transaccion.envasesVendidosAzules +
-                    if (transaccion.tipoBidon == TipoBidon.AZUL) transaccion.cantidadBidonesPrestados else 0
-            val totalMarcBajan = transaccion.recargaMarcados + transaccion.envasesVendidosMarcados +
-                    if (transaccion.tipoBidon == TipoBidon.MARCADO) transaccion.cantidadBidonesPrestados else 0
-
-            transLlenos = maxOf(0, transLlenos - totalTransBajan)
-            azulLlenos = maxOf(0, azulLlenos - totalAzulBajan)
-            marcLlenos = maxOf(0, marcLlenos - totalMarcBajan)
+        // Descontar de cada tipo y absorber eventual déficit en los otros tipos disponibles para que el total de carga siempre cuadre
+        var deficit = 0
+        if (transLlenos >= bajanTrans) {
+            transLlenos -= bajanTrans
         } else {
-            val bidonesQueBajan = transaccion.cantidadBidonesRecarga +
-                    transaccion.cantidadBidonesPrestados +
-                    transaccion.cantidadBidonesVendidosEnvase
-            when (transaccion.tipoBidon) {
-                TipoBidon.TRANSPARENTE -> transLlenos = maxOf(0, transLlenos - bidonesQueBajan)
-                TipoBidon.AZUL -> azulLlenos = maxOf(0, azulLlenos - bidonesQueBajan)
-                TipoBidon.MARCADO -> marcLlenos = maxOf(0, marcLlenos - bidonesQueBajan)
-            }
+            deficit += (bajanTrans - transLlenos)
+            transLlenos = 0
+        }
+
+        if (azulLlenos >= bajanAzul) {
+            azulLlenos -= bajanAzul
+        } else {
+            deficit += (bajanAzul - azulLlenos)
+            azulLlenos = 0
+        }
+
+        if (marcLlenos >= bajanMarc) {
+            marcLlenos -= bajanMarc
+        } else {
+            deficit += (bajanMarc - marcLlenos)
+            marcLlenos = 0
+        }
+
+        if (deficit > 0) {
+            val descAzul = minOf(azulLlenos, deficit)
+            azulLlenos -= descAzul
+            deficit -= descAzul
+
+            val descTrans = minOf(transLlenos, deficit)
+            transLlenos -= descTrans
+            deficit -= descTrans
+
+            val descMarc = minOf(marcLlenos, deficit)
+            marcLlenos -= descMarc
         }
 
         val galonesLlenos = maxOf(0, inventarioActual.galonesLlenos - transaccion.cantidadGalones)
@@ -435,28 +477,10 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         var azul = inventario.bidonesLlenosAzules
         var marc = inventario.bidonesLlenosMarcados
 
-        val tieneMulti = (t.recargaTransparentes + t.recargaAzules + t.recargaMarcados +
-                t.envasesVendidosTransparentes + t.envasesVendidosAzules + t.envasesVendidosMarcados) > 0
-
-        if (tieneMulti) {
-            val totalTransBajan = t.recargaTransparentes + t.envasesVendidosTransparentes +
-                    if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesPrestados else 0
-            val totalAzulBajan = t.recargaAzules + t.envasesVendidosAzules +
-                    if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesPrestados else 0
-            val totalMarcBajan = t.recargaMarcados + t.envasesVendidosMarcados +
-                    if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesPrestados else 0
-
-            trans += totalTransBajan
-            azul += totalAzulBajan
-            marc += totalMarcBajan
-        } else {
-            val bidonesQueHabianBajado = t.cantidadBidonesRecarga + t.cantidadBidonesPrestados + t.cantidadBidonesVendidosEnvase
-            when (t.tipoBidon) {
-                TipoBidon.TRANSPARENTE -> trans += bidonesQueHabianBajado
-                TipoBidon.AZUL -> azul += bidonesQueHabianBajado
-                TipoBidon.MARCADO -> marc += bidonesQueHabianBajado
-            }
-        }
+        val (bajanTrans, bajanAzul, bajanMarc) = calcularDesgloseSalidaPorTipo(t)
+        trans += bajanTrans
+        azul += bajanAzul
+        marc += bajanMarc
 
         val galones = inventario.galonesLlenos + t.cantidadGalones
         val pacas = inventario.pacasLlenas + t.cantidadPacas
@@ -520,21 +544,10 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             var min = 0
             var env = 0
             for (t in transacciones) {
-                val tieneDesgloseMulti = (t.recargaTransparentes + t.recargaAzules + t.recargaMarcados +
-                        t.envasesVendidosTransparentes + t.envasesVendidosAzules + t.envasesVendidosMarcados) > 0
-
-                if (tieneDesgloseMulti) {
-                    trans += (t.recargaTransparentes + t.envasesVendidosTransparentes)
-                    azul += (t.recargaAzules + t.envasesVendidosAzules)
-                    marc += (t.recargaMarcados + t.envasesVendidosMarcados)
-                } else {
-                    val b = t.cantidadBidonesRecarga + t.cantidadBidonesVendidosEnvase
-                    when (t.tipoBidon) {
-                        TipoBidon.TRANSPARENTE -> trans += b
-                        TipoBidon.AZUL -> azul += b
-                        TipoBidon.MARCADO -> marc += b
-                    }
-                }
+                val (bTrans, bAzul, bMarc) = calcularDesgloseSalidaPorTipo(t)
+                trans += bTrans
+                azul += bAzul
+                marc += bMarc
                 gal += t.cantidadGalones
                 pac += t.cantidadPacas
                 min += t.cantidadMinis
@@ -603,7 +616,7 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
 
             ResumenCierreDia(
                 fechaTexto = fechaTexto,
-                totalBidonesVendidos = totalBidonesRecarga + totalBidonesVendidosEnvase,
+                totalBidonesVendidos = totalBidonesRecarga + totalBidonesPrestados + totalBidonesVendidosEnvase,
                 totalBidonesPrestados = totalBidonesPrestados,
                 totalBidonesDevueltos = totalBidonesDevueltos,
                 totalGalonesVendidos = totalGalones,
@@ -622,28 +635,36 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     }
 
     /**
-     * Formatea el reporte para WhatsApp con desglose exacto por tipo de bidón y sin stock restante.
+     * Formatea el reporte para WhatsApp con desglose por tipo de bidón y listado de clientes con préstamos hoy.
      */
     fun formatearReporteWhatsApp(
         resumen: ResumenCierreDia,
         estadisticas: EstadisticasVentasTipo,
         fechaDisplay: String,
-        vehiculoLabel: String = "🚚 Camión"
+        vehiculoLabel: String = "Camión",
+        prestamosDetalle: List<Pair<String, Int>> = emptyList(),
+        totalGratisHoy: Int = 0
     ): String {
         return buildString {
-            appendLine("💧 *REPORTE AQUA APOLO - CIERRE DEL DÍA* $vehiculoLabel")
-            appendLine("📅 *Fecha:* $fechaDisplay")
+            appendLine("*CIERRE DE RUTA - AQUA APOLO* ($vehiculoLabel)")
+            appendLine("*Fecha:* $fechaDisplay")
             appendLine("─────────────────────────")
-            appendLine("📦 *TOTAL BIDONES VENDIDOS: ${resumen.totalBidonesVendidos}*")
+            appendLine("*TOTAL BIDONES ENTREGADOS: ${resumen.totalBidonesVendidos}*")
             appendLine("  • Transparentes (PET): *${estadisticas.transparentesVendidos}* (${String.format(Locale.US, "%.1f", estadisticas.porcentajeTransparentes)}%)")
             appendLine("  • Azules Estándar: *${estadisticas.azulesVendidos}* (${String.format(Locale.US, "%.1f", estadisticas.porcentajeAzules)}%)")
             appendLine("  • Marcados: *${estadisticas.marcadosVendidos}* (${String.format(Locale.US, "%.1f", estadisticas.porcentajeMarcados)}%)")
 
+            if (totalGratisHoy > 0) {
+                appendLine("• Cortesía (+1 incluido): *$totalGratisHoy un.*")
+            }
             if (resumen.totalBidonesPrestados > 0) {
-                appendLine("• Bidones Prestados (deben envase): *${resumen.totalBidonesPrestados}*")
+                appendLine("• Bidones Prestados Hoy: *${resumen.totalBidonesPrestados}*")
+                prestamosDetalle.forEach { (nombre, cant) ->
+                    appendLine("   ↳ $nombre: *$cant bidones*")
+                }
             }
             if (resumen.totalBidonesDevueltos > 0) {
-                appendLine("• Envases Recuperados/Devueltos: *${resumen.totalBidonesDevueltos}*")
+                appendLine("• Envases Recuperados: *${resumen.totalBidonesDevueltos}*")
             }
             if (estadisticas.envasesNuevosVendidos > 0) {
                 appendLine("• Bidón con Todo (Envase Nuevo Vendido): *${estadisticas.envasesNuevosVendidos} un.*")
@@ -653,14 +674,14 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             appendLine("• Minis (12x500ml): *${resumen.totalMinisVendidas}*")
 
             appendLine("─────────────────────────")
-            appendLine("💰 *CONTABILIDAD:*")
+            appendLine("*CONTABILIDAD:*")
             appendLine("• Venta Total Bruta: *$${String.format(Locale.US, "%.2f", resumen.granTotalVenta)}*")
             appendLine("• Cobro en Efectivo: *$${String.format(Locale.US, "%.2f", resumen.totalIngresoEfectivo)}*")
             if (resumen.totalIngresoTransferencia > 0) {
                 appendLine("• Transferencias: *$${String.format(Locale.US, "%.2f", resumen.totalIngresoTransferencia)}*")
             }
             if (resumen.totalCreditosOtorgados > 0) {
-                appendLine("• Créditos Otorgados (Fiado): *$${String.format(Locale.US, "%.2f", resumen.totalCreditosOtorgados)}*")
+                appendLine("• Créditos Otorgados: *$${String.format(Locale.US, "%.2f", resumen.totalCreditosOtorgados)}*")
             }
             if (resumen.totalAbonosRecibidos > 0) {
                 appendLine("• Abonos Recibidos: *$${String.format(Locale.US, "%.2f", resumen.totalAbonosRecibidos)}*")
@@ -670,10 +691,8 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             }
 
             appendLine("─────────────────────────")
-            appendLine("🧾 *GASTOS EN RUTA:* *$${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}*")
-            appendLine("💵 *EFECTIVO NETO A ENTREGAR:* *$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}*")
-            appendLine("─────────────────────────")
-            appendLine("Gracias por confiar en nosotros. Atentamente, Aqua Apolo 💧🚚")
+            appendLine("*GASTOS EN RUTA:* *$${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}*")
+            appendLine("*EFECTIVO NETO A ENTREGAR:* *$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}*")
         }
     }
 

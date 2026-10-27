@@ -126,4 +126,39 @@ class WhatsAppHelperTest {
         assertTrue(recibo.contains("Debe: 1 bidones"))
         assertTrue(recibo.contains("Dejar en la bodega trasera"))
     }
+
+    @Test
+    fun testRestauranteSabadoPrestadosY35Mas1() {
+        val cliente = ClienteEntity(
+            id = 25,
+            nombre = "Restaurante El Marino",
+            telefono = "0991234567",
+            deudaMonetaria = 0.0,
+            bidonesPrestados = 20
+        )
+
+        // 16 recargas + 20 prestados = 36 bidones entregados, con 1 gratis ("35+1"), cobrando 35 * $1.00 = $35.00
+        val transaccion = TransaccionVentaEntity(
+            id = 2,
+            clienteId = cliente.id,
+            fecha = 1776632400000L,
+            fechaTexto = "2026-10-24",
+            tipoBidon = TipoBidon.AZUL,
+            cantidadBidonesRecarga = 16,
+            recargaAzules = 16,
+            precioUnitarioBidon = 1.00,
+            cantidadBidonesPrestados = 20,
+            prestadosAzules = 20,
+            cantidadBidonesGratis = 1,
+            totalImporte = 35.00,
+            formaPagoPrincipal = FormaPago.EFECTIVO,
+            montoEfectivo = 35.00
+        )
+
+        val recibo = WhatsAppHelper.generarMensajeReciboEntrega(transaccion, cliente, fechaDisplay = "24/10/2026")
+        assertTrue(recibo.contains("Restaurante El Marino"))
+        assertTrue(recibo.contains("Envases prestados hoy: *+20 un.*"))
+        assertTrue(recibo.contains("Cortesía (35+1): *1 bidón gratis*"))
+        assertTrue(recibo.contains("TOTAL DE LA ENTREGA:* *$35.00*"))
+    }
 }

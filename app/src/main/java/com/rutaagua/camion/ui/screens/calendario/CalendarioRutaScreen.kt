@@ -58,7 +58,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.rutaagua.camion.data.local.prefs.AppPreferences
+import com.rutaagua.camion.ui.components.ClayCard
+import com.rutaagua.camion.ui.components.obtenerClayThemePorVehiculo
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -122,12 +126,16 @@ fun CalendarioRutaScreen(
     onRegistrarEntregaCliente: ((ClienteEntity) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val appPreferences = remember { AppPreferences.getInstance(context) }
+    val vehiculoActivo by appPreferences.vehiculoActivo.collectAsState()
+    val clayTheme = obtenerClayThemePorVehiculo(vehiculoActivo)
+
     val diaSeleccionado by viewModel.diaSeleccionadoCalendario.collectAsState()
     val clientesRuta by viewModel.clientesRutaDiaState.collectAsState()
     val conteoPorDia by viewModel.conteoPorDiaSemanaState.collectAsState()
     val diaActualHoy = ClientesViewModel.obtenerDiaSemanaActual()
 
-    var filtroEstadoSeleccionado by remember { mutableStateOf(FiltroEstadoRuta.TODOS) }
+    var filtroEstadoSeleccionado by rememberSaveable { mutableStateOf(FiltroEstadoRuta.TODOS) }
     var fotoZoomPath by remember { mutableStateOf<String?>(null) }
     var fotoZoomNombre by remember { mutableStateOf("") }
     var clienteParaUbicacion by remember { mutableStateOf<ClienteEntity?>(null) }
@@ -183,9 +191,9 @@ fun CalendarioRutaScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = FondoGrisClaro,
+        containerColor = clayTheme.canvasColor,
         topBar = {
-            HeaderCalendario()
+            HeaderCalendario(clayTheme.canvasColor, clayTheme.primaryColor)
         }
     ) { innerPadding ->
         Column(
@@ -307,33 +315,33 @@ fun CalendarioRutaScreen(
 }
 
 @Composable
-private fun HeaderCalendario() {
+private fun HeaderCalendario(canvasColor: Color, primaryColor: Color) {
     Surface(
-        color = SuperficieBlanca,
-        shadowElevation = 2.dp
+        color = canvasColor,
+        shadowElevation = 0.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = Icons.Default.CalendarMonth,
                 contentDescription = null,
-                tint = AguaPrimary,
-                modifier = Modifier.size(28.dp)
+                tint = primaryColor,
+                modifier = Modifier.size(26.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
             Column {
                 Text(
-                    text = "CALENDARIO DE RUTA",
+                    text = "RUTA POR DÍA",
                     style = MaterialTheme.typography.titleMedium,
                     color = TextoOscuro,
                     fontWeight = FontWeight.Black
                 )
                 Text(
-                    text = "Planificación semanal (Lunes a Sábado)",
+                    text = "Lunes a Sábado",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextoSecundario
                 )
@@ -662,26 +670,16 @@ private fun TarjetaClienteRutaRedisenada(
     val cliente = item.cliente
     val esAtendido = item.estado == EstadoEntregaRuta.ATENDIDO
     val noEstaba = item.estado == EstadoEntregaRuta.NO_ESTABA
-    var expandido by remember { mutableStateOf(false) }
+    var expandido by rememberSaveable(cliente.id) { mutableStateOf(false) }
 
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                esAtendido -> Color(0xFFF0FDF4)
-                noEstaba -> Color(0xFFFFFBEB)
-                else -> SuperficieBlanca
-            }
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (esAtendido) 1.dp else 2.dp),
-        border = BorderStroke(
-            width = 1.dp,
-            color = when {
-                esAtendido -> Color(0xFF86EFAC)
-                noEstaba -> Color(0xFFFDE68A)
-                else -> BordeSutil
-            }
-        ),
+    ClayCard(
+        cornerRadius = 20.dp,
+        containerColor = when {
+            esAtendido -> Color(0xFFF0FDF4)
+            noEstaba -> Color(0xFFFFFBEB)
+            else -> SuperficieBlanca
+        },
+        elevation = if (esAtendido) 2.dp else 4.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {

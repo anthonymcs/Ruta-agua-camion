@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.rutaagua.camion.data.local.converter.Converters
 import com.rutaagua.camion.data.local.dao.ClienteDao
@@ -35,7 +36,7 @@ import kotlinx.coroutines.launch
         CierreCajaEntity::class,
         VisitaFallidaEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -53,6 +54,15 @@ abstract class RutaAguaDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: RutaAguaDatabase? = null
 
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transacciones_ventas ADD COLUMN prestadosTransparentes INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE transacciones_ventas ADD COLUMN prestadosAzules INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE transacciones_ventas ADD COLUMN prestadosMarcados INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE transacciones_ventas ADD COLUMN cantidadBidonesGratis INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context, scope: CoroutineScope = CoroutineScope(Dispatchers.IO)): RutaAguaDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -60,6 +70,7 @@ abstract class RutaAguaDatabase : RoomDatabase() {
                     RutaAguaDatabase::class.java,
                     "ruta_agua_camion.db"
                 )
+                    .addMigrations(MIGRATION_6_7)
                     .addCallback(RutaAguaDatabaseCallback(scope))
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()

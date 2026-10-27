@@ -27,9 +27,9 @@ import java.util.Date
 import java.util.Locale
 
 enum class FiltroVehiculoRegistro(val titulo: String, val vehiculoKey: String?) {
-    CONSOLIDADO("📊 Consolidado", null),
-    CAMION("🚚 Solo Camión", "CAMION"),
-    CAMIONETA("🛻 Solo Camioneta", "CAMIONETA")
+    CONSOLIDADO("Consolidado", null),
+    CAMION("Camión", "CAMION"),
+    CAMIONETA("Camioneta", "CAMIONETA")
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -256,7 +256,12 @@ class RegistroDiaViewModel(
         montoTransferencia: Double = 0.0,
         montoCredito: Double = 0.0,
         montoAbono: Double = 0.0,
-        montoCanceladoDeuda: Double = 0.0
+        montoCanceladoDeuda: Double = 0.0,
+        prestadosTransparentes: Int = 0,
+        prestadosAzules: Int = 0,
+        prestadosMarcados: Int = 0,
+        cantidadBidonesGratis: Int = 0,
+        totalPersonalizado: Double? = null
     ) {
         viewModelScope.launch {
             val vehiculoOperativo = appPreferences.obtenerVehiculoActivo().name
@@ -265,51 +270,41 @@ class RegistroDiaViewModel(
 
             val inv = inventarioVehiculoActivoState.value
             val tieneMultiBidon = (recargaTransparentes + recargaAzules + recargaMarcados) > 0
+            val tieneMultiPrestados = (prestadosTransparentes + prestadosAzules + prestadosMarcados) > 0
 
-            // Validación de existencia en el vehículo correspondiente
-            if (inv != null) {
-                if (tieneMultiBidon) {
-                    val prevTrans = transaccionPrevia?.recargaTransparentes ?: 0
-                    val prevAzul = transaccionPrevia?.recargaAzules ?: 0
-                    val prevMarc = transaccionPrevia?.recargaMarcados ?: 0
+            val finalRecTrans = if (tieneMultiBidon) recargaTransparentes else if (tipoBidon == TipoBidon.TRANSPARENTE) cantidadRecarga else 0
+            val finalRecAzul = if (tieneMultiBidon) recargaAzules else if (tipoBidon == TipoBidon.AZUL) cantidadRecarga else 0
+            val finalRecMarc = if (tieneMultiBidon) recargaMarcados else if (tipoBidon == TipoBidon.MARCADO) cantidadRecarga else 0
 
-                    if (recargaTransparentes > (inv.bidonesLlenosTransparentes + prevTrans)) {
-                        _mensajeSnackbar.value = "Stock insuficiente en PET Cristal (disponibles: ${inv.bidonesLlenosTransparentes})"
-                        return@launch
-                    }
-                    if (recargaAzules > (inv.bidonesLlenosAzules + prevAzul)) {
-                        _mensajeSnackbar.value = "Stock insuficiente en Azul Estándar (disponibles: ${inv.bidonesLlenosAzules})"
-                        return@launch
-                    }
-                    if (recargaMarcados > (inv.bidonesLlenosMarcados + prevMarc)) {
-                        _mensajeSnackbar.value = "Stock insuficiente en Marcados (disponibles: ${inv.bidonesLlenosMarcados})"
-                        return@launch
-                    }
-                } else {
-                    val totalBidonesSalen = cantidadRecarga + cantidadPrestados + cantidadVendidosEnvase
-                    if (totalBidonesSalen > 0) {
-                        var disponibleTipo = inv.stockPorTipo(tipoBidon)
-                        if (transaccionPrevia != null && transaccionPrevia.tipoBidon == tipoBidon) {
-                            val antesBajaron = transaccionPrevia.cantidadBidonesRecarga +
-                                    transaccionPrevia.cantidadBidonesPrestados +
-                                    transaccionPrevia.cantidadBidonesVendidosEnvase
-                            disponibleTipo += antesBajaron
-                        }
-                        if (disponibleTipo < totalBidonesSalen) {
-                            _mensajeSnackbar.value = "Stock insuficiente: solo quedan $disponibleTipo bidones ${tipoBidon.name} en $vehiculoVenta"
-                            return@launch
-                        }
-                    }
+            val finalPrestTrans = if (tieneMultiPrestados) prestadosTransparentes else if (tipoBidon == TipoBidon.TRANSPARENTE) cantidadPrestados else 0
+            val finalPrestAzul = if (tieneMultiPrestados) prestadosAzules else if (tipoBidon == TipoBidon.AZUL) cantidadPrestados else 0
+            val finalPrestMarc = if (tieneMultiPrestados) prestadosMarcados else if (tipoBidon == TipoBidon.MARCADO) cantidadPrestados else 0
+
+            val totalBidonesSalen = cantidadRecarga + cantidadPrestados + cantidadVendidosEnvase
+
+            // Validación de existencia total en el vehículo
+            if (inv != null && totalBidonesSalen > 0) {
+                val antesBajaron = if (transaccionPrevia != null) {
+                    transaccionPrevia.cantidadBidonesRecarga +
+                            transaccionPrevia.cantidadBidonesPrestados +
+                            transaccionPrevia.cantidadBidonesVendidosEnvase
+                } else 0
+                val totalDisponibleVehiculo = inv.totalBidonesLlenos() + antesBajaron
+                if (totalBidonesSalen > totalDisponibleVehiculo && totalDisponibleVehiculo > 0) {
+                    _mensajeSnackbar.value = "Stock insuficiente en $vehiculoVenta: piden $totalBidonesSalen bidones y quedan $totalDisponibleVehiculo"
+                    return@launch
                 }
             }
 
-            // Cálculo del valor de los productos vendidos
-            val subtotalRecarga = cantidadRecarga * precioUnitarioBidon
+            // Cálculo del valor de los productos vendidos (Recargas + Prestados se cobran, restando cortesías ej. "35+1")
+            val bidonesAguaACobrar = maxOf(0, cantidadRecarga + cantidadPrestados - cantidadBidonesGratis)
+            val subtotalAgua = bidonesAguaACobrar * precioUnitarioBidon
             val subtotalVendidosEnvase = cantidadVendidosEnvase * precioUnitarioBidonVendido
             val subtotalGalones = cantidadGalones * 0.75
             val subtotalPacas = cantidadPacas * 3.75
             val subtotalMinis = cantidadMinis * 1.75
-            val totalVentaHoy = subtotalRecarga + subtotalVendidosEnvase + subtotalGalones + subtotalPacas + subtotalMinis
+            val totalCalculado = subtotalAgua + subtotalVendidosEnvase + subtotalGalones + subtotalPacas + subtotalMinis
+            val totalVentaHoy = totalPersonalizado ?: totalCalculado
 
             val usoDesgloseFinanciero = (montoEfectivo + montoTransferencia + montoCredito + montoAbono + montoCanceladoDeuda) > 0.0
 
@@ -341,10 +336,6 @@ class RegistroDiaViewModel(
                 }
             }
 
-            val finalRecTrans = if (tieneMultiBidon) recargaTransparentes else if (tipoBidon == TipoBidon.TRANSPARENTE) cantidadRecarga else 0
-            val finalRecAzul = if (tieneMultiBidon) recargaAzules else if (tipoBidon == TipoBidon.AZUL) cantidadRecarga else 0
-            val finalRecMarc = if (tieneMultiBidon) recargaMarcados else if (tipoBidon == TipoBidon.MARCADO) cantidadRecarga else 0
-
             val nuevaTransaccion = TransaccionVentaEntity(
                 id = transaccionPrevia?.id ?: 0L,
                 vehiculo = vehiculoVenta,
@@ -362,6 +353,10 @@ class RegistroDiaViewModel(
                 recargaTransparentes = finalRecTrans,
                 recargaAzules = finalRecAzul,
                 recargaMarcados = finalRecMarc,
+                prestadosTransparentes = finalPrestTrans,
+                prestadosAzules = finalPrestAzul,
+                prestadosMarcados = finalPrestMarc,
+                cantidadBidonesGratis = cantidadBidonesGratis,
                 envasesVendidosTransparentes = if (tipoBidon == TipoBidon.TRANSPARENTE) cantidadVendidosEnvase else 0,
                 envasesVendidosAzules = if (tipoBidon == TipoBidon.AZUL) cantidadVendidosEnvase else 0,
                 envasesVendidosMarcados = if (tipoBidon == TipoBidon.MARCADO) cantidadVendidosEnvase else 0,
@@ -383,10 +378,10 @@ class RegistroDiaViewModel(
 
             if (transaccionPrevia != null) {
                 repository.editarVenta(transaccionPrevia, nuevaTransaccion)
-                _mensajeSnackbar.value = "Entrega actualizada en $vehiculoVenta"
+                _mensajeSnackbar.value = "Entrega actualizada"
             } else {
                 repository.registrarVenta(nuevaTransaccion)
-                _mensajeSnackbar.value = "Venta guardada en $vehiculoVenta (Total: $${String.format(Locale.US, "%.2f", totalVentaHoy)})"
+                _mensajeSnackbar.value = "Entrega guardada ($${String.format(Locale.US, "%.2f", totalVentaHoy)})"
             }
 
             _mostrarModalNuevaVenta.value = false
@@ -501,11 +496,33 @@ class RegistroDiaViewModel(
         val resumen = resumenCierreDiaState.value
         val estadisticas = estadisticasVentasHoyState.value
         val filtroActual = filtroVehiculoState.value
+        val transacciones = transaccionesHoyState.value
+        val clientes = todosLosClientesState.value
+
         val vehiculoLabel = when (filtroActual) {
-            FiltroVehiculoRegistro.CONSOLIDADO -> "📊 Consolidado General (Ambos)"
-            FiltroVehiculoRegistro.CAMION -> "🚚 Solo Camión"
-            FiltroVehiculoRegistro.CAMIONETA -> "🛻 Solo Camioneta"
+            FiltroVehiculoRegistro.CONSOLIDADO -> "Consolidado General"
+            FiltroVehiculoRegistro.CAMION -> "Camión"
+            FiltroVehiculoRegistro.CAMIONETA -> "Camioneta"
         }
-        return repository.formatearReporteWhatsApp(resumen, estadisticas, fechaHoyDisplay, vehiculoLabel)
+
+        val prestamosDetalle = transacciones
+            .filter { it.cantidadBidonesPrestados > 0 }
+            .map { tx ->
+                val nombre = clientes.find { it.id == tx.clienteId }?.nombre
+                    ?: tx.nombreClientePaso?.takeIf { it.isNotBlank() }
+                    ?: "Cliente"
+                Pair(nombre, tx.cantidadBidonesPrestados)
+            }
+
+        val totalGratisHoy = transacciones.sumOf { it.cantidadBidonesGratis }
+
+        return repository.formatearReporteWhatsApp(
+            resumen = resumen,
+            estadisticas = estadisticas,
+            fechaDisplay = fechaHoyDisplay,
+            vehiculoLabel = vehiculoLabel,
+            prestamosDetalle = prestamosDetalle,
+            totalGratisHoy = totalGratisHoy
+        )
     }
 }

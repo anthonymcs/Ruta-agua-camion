@@ -48,9 +48,13 @@ data class TransaccionVentaEntity(
     val recargaTransparentes: Int = 0,
     val recargaAzules: Int = 0,
     val recargaMarcados: Int = 0,
+    val prestadosTransparentes: Int = 0,
+    val prestadosAzules: Int = 0,
+    val prestadosMarcados: Int = 0,
     val envasesVendidosTransparentes: Int = 0,
     val envasesVendidosAzules: Int = 0,
     val envasesVendidosMarcados: Int = 0,
+    val cantidadBidonesGratis: Int = 0, // Bidón de cortesía (ej. "35+1", baja del camión pero no se cobra)
 
     // Otros productos de venta regular
     val cantidadGalones: Int = 0, // 4L ($0.75 c/u)

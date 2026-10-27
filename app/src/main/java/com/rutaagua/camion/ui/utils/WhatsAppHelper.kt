@@ -186,9 +186,13 @@ object WhatsAppHelper {
                 appendLine("  • Minis (12x500ml): *${transaccion.cantidadMinis} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioMini)}")
             }
 
-            // Movimiento de envases prestados/devueltos
+            // Movimiento de envases prestados/devueltos y cortesías
             if (transaccion.cantidadBidonesPrestados > 0) {
-                appendLine("  • Envases prestados hoy: *+${transaccion.cantidadBidonesPrestados} un.* (queda debiendo)")
+                appendLine("  • Envases prestados hoy: *+${transaccion.cantidadBidonesPrestados} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)} (queda debiendo envase)")
+            }
+            if (transaccion.cantidadBidonesGratis > 0) {
+                val cobrados = maxOf(0, transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesPrestados - transaccion.cantidadBidonesGratis)
+                appendLine("  • Cortesía (${cobrados}+${transaccion.cantidadBidonesGratis}): *${transaccion.cantidadBidonesGratis} bidón gratis*")
             }
             if (transaccion.cantidadBidonesDevueltos > 0) {
                 appendLine("  • Envases devueltos hoy: *-${transaccion.cantidadBidonesDevueltos} un.* (recolectados)")
