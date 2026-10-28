@@ -121,6 +121,7 @@ fun InventarioCamionScreen(
     val estadisticasVentas by viewModel.estadisticasVentasHoyState.collectAsState()
     val mostrarDialogoCapacidad by viewModel.mostrarDialogoAjusteCapacidad.collectAsState()
     val mostrarModalRecarga by viewModel.mostrarModalRecargaPlanta.collectAsState()
+    val mostrarModalEditarCargaActual by viewModel.mostrarModalEditarCargaActual.collectAsState()
     val mensajeSnackbar by viewModel.mensajeSnackbar.collectAsState()
     val recargasHoy by viewModel.recargasHoyState.collectAsState()
     val recargaEnEdicion by viewModel.recargaEnEdicion.collectAsState()
@@ -131,6 +132,8 @@ fun InventarioCamionScreen(
     var recargaParaEditar by remember { mutableStateOf<RecargaPlantaEntity?>(null) }
     var mostrarPinParaEditarRecarga by rememberSaveable { mutableStateOf(false) }
     var mostrarPinParaEliminarRecarga by rememberSaveable { mutableStateOf(false) }
+    var mostrarPinParaEditarCargaActual by rememberSaveable { mutableStateOf(false) }
+    var mostrarPinParaBorrarCargaActual by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -165,13 +168,15 @@ fun InventarioCamionScreen(
                 }
             }
 
-            // 2. Tarjeta de Capacidad y Carga Actual
+            // 2. Tarjeta de Capacidad y Carga Actual (Click para Editar o Borrar Carga Actual con PIN 1234)
             item {
                 inventario?.let { inv ->
                     TarjetaCapacidadCamionClay(
                         inventario = inv,
                         clayTheme = clayTheme,
-                        onAjustarTopeClick = { viewModel.abrirDialogoCapacidad() }
+                        onAjustarTopeClick = { viewModel.abrirDialogoCapacidad() },
+                        onEditarCargaActualClick = { mostrarPinParaEditarCargaActual = true },
+                        onBorrarCargaActualClick = { mostrarPinParaBorrarCargaActual = true }
                     )
                 }
             }
@@ -202,7 +207,7 @@ fun InventarioCamionScreen(
                     FilaTarjetasBidonesClay(
                         inventario = inv,
                         estadisticas = estadisticasVentas,
-                        onCardClick = { viewModel.abrirModalRecarga() }
+                        onCardClick = { mostrarPinParaEditarCargaActual = true }
                     )
                 }
             }
@@ -225,7 +230,7 @@ fun InventarioCamionScreen(
                         inventario = inv,
                         estadisticas = estadisticasVentas,
                         clayTheme = clayTheme,
-                        onCardClick = { viewModel.abrirModalRecarga() }
+                        onCardClick = { mostrarPinParaEditarCargaActual = true }
                     )
                 }
             }
@@ -351,6 +356,53 @@ fun InventarioCamionScreen(
         )
     }
 
+    // PIN de seguridad para EDITAR CARGA ACTUAL en unidad
+    if (mostrarPinParaEditarCargaActual) {
+        com.rutaagua.camion.ui.security.SecurityPinDialog(
+            titulo = "Editar Carga Actual",
+            subtitulo = "Ingresa el PIN 1234 para modificar o reemplazar la carga actual del vehículo",
+            onDismissRequest = { mostrarPinParaEditarCargaActual = false },
+            onPinCorrecto = {
+                mostrarPinParaEditarCargaActual = false
+                viewModel.abrirModalEditarCargaActual()
+            }
+        )
+    }
+
+    // PIN de seguridad para BORRAR / VACIAR CARGA ACTUAL en unidad
+    if (mostrarPinParaBorrarCargaActual) {
+        com.rutaagua.camion.ui.security.SecurityPinDialog(
+            titulo = "Borrar Carga Actual",
+            subtitulo = "Ingresa el PIN 1234 para poner en 0 toda la carga actual del vehículo",
+            onDismissRequest = { mostrarPinParaBorrarCargaActual = false },
+            onPinCorrecto = {
+                mostrarPinParaBorrarCargaActual = false
+                viewModel.borrarCargaActual()
+            }
+        )
+    }
+
+    // Modal para Editar o Borrar directamente la Carga Actual en Unidad
+    if (mostrarModalEditarCargaActual) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.cerrarModalEditarCargaActual() },
+            sheetState = sheetState,
+            containerColor = clayTheme.canvasColor
+        ) {
+            ModalEditarCargaActualContentClay(
+                inventario = inventario,
+                clayTheme = clayTheme,
+                onGuardarCargaActual = { trans, azul, marc, vac, gal, pac, min ->
+                    viewModel.establecerCargaActual(trans, azul, marc, vac, gal, pac, min)
+                },
+                onBorrarTodaLaCarga = {
+                    viewModel.borrarCargaActual()
+                },
+                onCancelar = { viewModel.cerrarModalEditarCargaActual() }
+            )
+        }
+    }
+
     // Diálogo de Ajuste Rápido de Capacidad Diaria
     if (mostrarDialogoCapacidad) {
         DialogoAjustarCapacidadClay(
@@ -406,7 +458,9 @@ private fun BannerAlertaStockClay(alerta: StockAlertas) {
 private fun TarjetaCapacidadCamionClay(
     inventario: InventarioCamionEntity,
     clayTheme: ClayVehicleTheme,
-    onAjustarTopeClick: () -> Unit
+    onAjustarTopeClick: () -> Unit,
+    onEditarCargaActualClick: () -> Unit,
+    onBorrarCargaActualClick: () -> Unit
 ) {
     val totalLlenos = inventario.totalBidonesLlenos()
     val vaciosRecogidos = inventario.bidonesVacios
@@ -419,7 +473,8 @@ private fun TarjetaCapacidadCamionClay(
         containerColor = clayTheme.cardColor,
         cornerRadius = 22.dp,
         elevation = 5.dp,
-        contentPadding = PaddingValues(16.dp)
+        contentPadding = PaddingValues(16.dp),
+        onClick = onEditarCargaActualClick
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -428,7 +483,7 @@ private fun TarjetaCapacidadCamionClay(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "CAPACIDAD EN UNIDAD",
+                    text = "CAPACIDAD EN UNIDAD (TOCA PARA EDITAR)",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextoSecundario,
                     fontWeight = FontWeight.Bold,
@@ -463,19 +518,19 @@ private fun TarjetaCapacidadCamionClay(
                 containerColor = clayTheme.accentBgColor,
                 contentColor = clayTheme.primaryDarkColor,
                 cornerRadius = 12.dp,
-                height = 40.dp,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                height = 38.dp,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Tune,
                     contentDescription = null,
                     tint = clayTheme.primaryDarkColor,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(5.dp))
                 Text(
                     text = "Meta: $tope",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
                     color = clayTheme.primaryDarkColor,
                     maxLines = 1,
@@ -501,7 +556,7 @@ private fun TarjetaCapacidadCamionClay(
             strokeCap = StrokeCap.Round
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         ClayInsetBox(
             modifier = Modifier.fillMaxWidth(),
@@ -533,6 +588,315 @@ private fun TarjetaCapacidadCamionClay(
                     modifier = Modifier.weight(1f)
                 )
             }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Acciones directas sobre la Carga Actual (Editar o Borrar Carga Actual con PIN 1234)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(
+                onClick = onEditarCargaActualClick,
+                color = clayTheme.accentBgColor,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = null,
+                        tint = clayTheme.primaryDarkColor,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Editar Carga Actual",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        color = clayTheme.primaryDarkColor,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Surface(
+                onClick = onBorrarCargaActualClick,
+                color = RojoAlertaFondo,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = null,
+                        tint = RojoAlerta,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Borrar Carga Actual",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        color = RojoAlerta,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModalEditarCargaActualContentClay(
+    inventario: InventarioCamionEntity?,
+    clayTheme: ClayVehicleTheme,
+    onGuardarCargaActual: (
+        trans: Int,
+        azul: Int,
+        marc: Int,
+        vacios: Int,
+        galones: Int,
+        pacas: Int,
+        minis: Int
+    ) -> Unit,
+    onBorrarTodaLaCarga: () -> Unit,
+    onCancelar: () -> Unit
+) {
+    var cantTrans by rememberSaveable { mutableIntStateOf(inventario?.bidonesLlenosTransparentes ?: 0) }
+    var cantAzul by rememberSaveable { mutableIntStateOf(inventario?.bidonesLlenosAzules ?: 0) }
+    var cantMarc by rememberSaveable { mutableIntStateOf(inventario?.bidonesLlenosMarcados ?: 0) }
+    var cantVacios by rememberSaveable { mutableIntStateOf(inventario?.bidonesVacios ?: 0) }
+    var cantGalones by rememberSaveable { mutableIntStateOf(inventario?.galonesLlenos ?: 0) }
+    var cantPacas by rememberSaveable { mutableIntStateOf(inventario?.pacasLlenas ?: 0) }
+    var cantMinis by rememberSaveable { mutableIntStateOf(inventario?.minisLlenas ?: 0) }
+
+    val totalBidones = cantTrans + cantAzul + cantMarc
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "EDITAR O BORRAR CARGA ACTUAL",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = clayTheme.primaryDarkColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Establece con cuántos bidones está saliendo hoy la unidad",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextoSecundario,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onCancelar) {
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Cerrar", tint = TextoOscuro)
+                }
+            }
+        }
+
+        // Botón rápido para Vaciar / Borrar toda la carga actual (poner en 0)
+        item {
+            Surface(
+                onClick = onBorrarTodaLaCarga,
+                color = RojoAlertaFondo,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, RojoAlerta.copy(alpha = 0.35f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = null,
+                        tint = RojoAlerta,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Borrar Toda la Carga Actual (Dejar Unidad en 0)",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp,
+                        color = RojoAlerta,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        item {
+            Text(
+                text = "BIDONES DE 20L EN UNIDAD ($totalBidones)",
+                style = MaterialTheme.typography.labelLarge,
+                color = TextoSecundario,
+                fontWeight = FontWeight.Black,
+                maxLines = 1
+            )
+        }
+
+        item {
+            FilaRecargaManualClay(
+                label = "Transparentes (PET)",
+                subtitulo = "Cantidad exacta actual en unidad",
+                cantidad = cantTrans,
+                accentColor = BidonTransparenteColor,
+                ilustracion = { BidonIllustration(TipoBidon.TRANSPARENTE, size = 34.dp) },
+                onCambio = { cantTrans = it }
+            )
+        }
+
+        item {
+            FilaRecargaManualClay(
+                label = "Azules",
+                subtitulo = "Cantidad exacta actual en unidad",
+                cantidad = cantAzul,
+                accentColor = BidonAzulColor,
+                ilustracion = { BidonIllustration(TipoBidon.AZUL, size = 34.dp) },
+                onCambio = { cantAzul = it }
+            )
+        }
+
+        item {
+            FilaRecargaManualClay(
+                label = "Marcadas",
+                subtitulo = "Cantidad exacta actual en unidad",
+                cantidad = cantMarc,
+                accentColor = BidonMarcadoColor,
+                ilustracion = { BidonIllustration(TipoBidon.MARCADO, size = 34.dp) },
+                onCambio = { cantMarc = it }
+            )
+        }
+
+        item {
+            Text(
+                text = "OTROS PRODUCTOS Y VACÍOS EN UNIDAD",
+                style = MaterialTheme.typography.labelLarge,
+                color = TextoSecundario,
+                fontWeight = FontWeight.Black,
+                maxLines = 1
+            )
+        }
+
+        item {
+            FilaRecargaManualClay(
+                label = "Galones (4L)",
+                subtitulo = "Stock actual en unidad",
+                cantidad = cantGalones,
+                accentColor = clayTheme.primaryColor,
+                ilustracion = { GalonIllustration(size = 34.dp) },
+                onCambio = { cantGalones = it }
+            )
+        }
+
+        item {
+            FilaRecargaManualClay(
+                label = "Pacas (24x500ml)",
+                subtitulo = "Stock actual en unidad",
+                cantidad = cantPacas,
+                accentColor = clayTheme.primaryColor,
+                ilustracion = { PacaIllustration(size = 34.dp) },
+                onCambio = { cantPacas = it }
+            )
+        }
+
+        item {
+            FilaRecargaManualClay(
+                label = "Minis (12x500ml)",
+                subtitulo = "Stock actual en unidad",
+                cantidad = cantMinis,
+                accentColor = clayTheme.primaryColor,
+                ilustracion = { MiniIllustration(size = 34.dp) },
+                onCambio = { cantMinis = it }
+            )
+        }
+
+        item {
+            FilaRecargaManualClay(
+                label = "Envases Vacíos en Unidad",
+                subtitulo = "Vacíos actuales arriba del vehículo",
+                cantidad = cantVacios,
+                accentColor = Color(0xFF476278),
+                ilustracion = {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .background(Color(0xFF476278), CircleShape)
+                    )
+                },
+                onCambio = { cantVacios = it }
+            )
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(6.dp))
+            ClayButton(
+                onClick = {
+                    onGuardarCargaActual(
+                        cantTrans,
+                        cantAzul,
+                        cantMarc,
+                        cantVacios,
+                        cantGalones,
+                        cantPacas,
+                        cantMinis
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                containerColor = VerdeEfectivo,
+                contentColor = Color.White,
+                cornerRadius = 16.dp
+            ) {
+                Icon(imageVector = Icons.Default.Check, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Guardar Carga Actual ($totalBidones bidones)",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.height(26.dp))
         }
     }
 }
@@ -600,7 +964,7 @@ private fun BotonRecargarEnPlantaClay(
         )
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-            text = "Ingresar / Modificar Carga$subtexto",
+            text = "Sumar Carga de Planta$subtexto",
             fontSize = 14.sp,
             fontWeight = FontWeight.Black,
             color = Color.White,

@@ -95,6 +95,9 @@ class InventarioCamionViewModel(
     private val _mostrarModalRecargaPlanta = MutableStateFlow(false)
     val mostrarModalRecargaPlanta: StateFlow<Boolean> = _mostrarModalRecargaPlanta.asStateFlow()
 
+    private val _mostrarModalEditarCargaActual = MutableStateFlow(false)
+    val mostrarModalEditarCargaActual: StateFlow<Boolean> = _mostrarModalEditarCargaActual.asStateFlow()
+
     private val _mensajeSnackbar = MutableStateFlow<String?>(null)
     val mensajeSnackbar: StateFlow<String?> = _mensajeSnackbar.asStateFlow()
 
@@ -104,6 +107,56 @@ class InventarioCamionViewModel(
 
     fun cerrarDialogoCapacidad() {
         _mostrarDialogoAjusteCapacidad.value = false
+    }
+
+    fun abrirModalEditarCargaActual() {
+        _mostrarModalEditarCargaActual.value = true
+    }
+
+    fun cerrarModalEditarCargaActual() {
+        _mostrarModalEditarCargaActual.value = false
+    }
+
+    /**
+     * Edita/reemplaza directamente la carga actual en el vehículo (sobrescribiendo cualquier carga de días anteriores).
+     */
+    fun establecerCargaActual(
+        transparentes: Int,
+        azules: Int,
+        marcados: Int,
+        vacios: Int,
+        galones: Int,
+        pacas: Int,
+        minis: Int
+    ) {
+        viewModelScope.launch {
+            val vehiculo = appPreferences.obtenerVehiculoActivo().name
+            repository.establecerCargaActualVehiculo(
+                vehiculo = vehiculo,
+                transparentes = transparentes,
+                azules = azules,
+                marcados = marcados,
+                vacios = vacios,
+                galones = galones,
+                pacas = pacas,
+                minis = minis
+            )
+            _mostrarModalEditarCargaActual.value = false
+            val total = transparentes + azules + marcados
+            _mensajeSnackbar.value = "Carga actual de $vehiculo actualizada: $total bidones en unidad"
+        }
+    }
+
+    /**
+     * Borra por completo la carga actual del vehículo poniéndola en 0.
+     */
+    fun borrarCargaActual() {
+        viewModelScope.launch {
+            val vehiculo = appPreferences.obtenerVehiculoActivo().name
+            repository.vaciarCargaActualVehiculo(vehiculo)
+            _mostrarModalEditarCargaActual.value = false
+            _mensajeSnackbar.value = "Carga actual de $vehiculo borrada (0 bidones en unidad)"
+        }
     }
 
     // Control de edición y eliminación de recargas

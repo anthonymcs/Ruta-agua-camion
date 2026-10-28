@@ -116,6 +116,61 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     }
 
     /**
+     * Reemplaza directamente la carga actual en el vehículo (sobrescribiendo cualquier carga antigua)
+     * y sincroniza de inmediato con Firebase Firestore.
+     */
+    suspend fun establecerCargaActualVehiculo(
+        vehiculo: String,
+        transparentes: Int,
+        azules: Int,
+        marcados: Int,
+        vacios: Int,
+        galones: Int,
+        pacas: Int,
+        minis: Int
+    ) = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            val actual = inventarioDao.obtenerInventarioPorVehiculoDirecto(vehiculo)
+                ?: InventarioCamionEntity(
+                    id = if (vehiculo == "CAMIONETA") 2 else 1,
+                    vehiculo = vehiculo,
+                    capacidadTopeBidones = if (vehiculo == "CAMIONETA") 80 else 218
+                )
+
+            val actualizado = actual.copy(
+                bidonesLlenosTransparentes = maxOf(0, transparentes),
+                bidonesLlenosAzules = maxOf(0, azules),
+                bidonesLlenosMarcados = maxOf(0, marcados),
+                bidonesVacios = maxOf(0, vacios),
+                galonesLlenos = maxOf(0, galones),
+                pacasLlenas = maxOf(0, pacas),
+                minisLlenas = maxOf(0, minis),
+                fechaUltimaActualizacion = System.currentTimeMillis()
+            )
+
+            inventarioDao.insertarOActualizar(actualizado)
+            syncManager?.subirInventario(actualizado)
+        }
+    }
+
+    /**
+     * Borra / vacía por completo la carga actual del vehículo (pone todos los productos en 0)
+     * para eliminar cualquier carga antigua acumulada de días anteriores.
+     */
+    suspend fun vaciarCargaActualVehiculo(vehiculo: String) = withContext(Dispatchers.IO) {
+        establecerCargaActualVehiculo(
+            vehiculo = vehiculo,
+            transparentes = 0,
+            azules = 0,
+            marcados = 0,
+            vacios = 0,
+            galones = 0,
+            pacas = 0,
+            minis = 0
+        )
+    }
+
+    /**
      * Cálculo reactivo de cuántos bidones y productos faltan para recargar a tope en la planta.
      */
     fun obtenerCalculoRecargaPlanta(vehiculo: String = "CAMION"): Flow<RecargaCalculada?> {
