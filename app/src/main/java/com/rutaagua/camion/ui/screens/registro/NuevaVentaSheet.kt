@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rutaagua.camion.data.local.entity.ClienteEntity
@@ -66,6 +67,7 @@ import com.rutaagua.camion.ui.components.ClayInsetBox
 import com.rutaagua.camion.ui.components.GalonIllustration
 import com.rutaagua.camion.ui.components.MiniIllustration
 import com.rutaagua.camion.ui.components.PacaIllustration
+import com.rutaagua.camion.ui.components.marineOutlinedTextFieldColors
 import com.rutaagua.camion.ui.theme.AguaPrimary
 import com.rutaagua.camion.ui.theme.AguaPrimaryDark
 import com.rutaagua.camion.ui.theme.AmbarAdvertencia
@@ -307,12 +309,7 @@ fun NuevaVentaSheet(
                     },
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AguaPrimary,
-                        unfocusedBorderColor = ClayRimShadow,
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = ClayInsetBackground
-                    ),
+                    colors = marineOutlinedTextFieldColors(accentColor = AguaPrimary),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -785,7 +782,7 @@ fun NuevaVentaSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (cantGratis > 0) {
                                 "TOTAL A COBRAR (${bidonesAguaACobrar}+${cantGratis} bidones)"
@@ -796,15 +793,20 @@ fun NuevaVentaSheet(
                             },
                             fontWeight = FontWeight.Black,
                             fontSize = 12.sp,
-                            color = VerdeEfectivo
+                            color = VerdeEfectivo,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "$${String.format(Locale.US, "%.2f", totalGeneral)}",
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Black,
-                            color = VerdeEfectivo
+                            color = VerdeEfectivo,
+                            maxLines = 1
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Surface(
                         onClick = {
@@ -832,7 +834,9 @@ fun NuevaVentaSheet(
                                 text = if (usarTotalManual) "Automático" else "Editar Monto",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = VerdeEfectivo
+                                color = VerdeEfectivo,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -847,10 +851,7 @@ fun NuevaVentaSheet(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = Color.White,
-                                unfocusedContainerColor = Color.White
-                            ),
+                            colors = marineOutlinedTextFieldColors(accentColor = VerdeEfectivo),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -963,6 +964,7 @@ fun NuevaVentaSheet(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
+                            colors = marineOutlinedTextFieldColors(accentColor = AguaPrimary),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -991,6 +993,7 @@ fun NuevaVentaSheet(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     singleLine = true,
                                     shape = RoundedCornerShape(12.dp),
+                                    colors = marineOutlinedTextFieldColors(accentColor = AguaPrimary),
                                     modifier = Modifier.weight(1f)
                                 )
                                 OutlinedTextField(
@@ -1000,6 +1003,7 @@ fun NuevaVentaSheet(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     singleLine = true,
                                     shape = RoundedCornerShape(12.dp),
+                                    colors = marineOutlinedTextFieldColors(accentColor = AguaPrimary),
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -1015,6 +1019,7 @@ fun NuevaVentaSheet(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     singleLine = true,
                                     shape = RoundedCornerShape(12.dp),
+                                    colors = marineOutlinedTextFieldColors(accentColor = AguaPrimary),
                                     modifier = Modifier.weight(1f)
                                 )
                                 OutlinedTextField(
@@ -1024,6 +1029,7 @@ fun NuevaVentaSheet(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     singleLine = true,
                                     shape = RoundedCornerShape(12.dp),
+                                    colors = marineOutlinedTextFieldColors(accentColor = AguaPrimary),
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -1247,7 +1253,10 @@ private fun BotonFormaPagoClay(
                 text = titulo,
                 color = if (seleccionado) Color.White else TextoOscuro,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

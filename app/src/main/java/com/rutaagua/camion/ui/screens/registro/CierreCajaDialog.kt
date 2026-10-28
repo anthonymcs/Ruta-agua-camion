@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rutaagua.camion.data.local.entity.CierreCajaEntity
+import com.rutaagua.camion.ui.components.marineOutlinedTextFieldColors
 import com.rutaagua.camion.ui.theme.AguaPrimary
 import com.rutaagua.camion.ui.theme.BordeSutil
 import com.rutaagua.camion.ui.theme.FondoGrisClaro
@@ -147,6 +148,7 @@ fun CierreCajaDialog(
                         placeholder = { Text("0.00") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
+                        colors = marineOutlinedTextFieldColors(accentColor = VerdeEfectivo),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
@@ -160,6 +162,7 @@ fun CierreCajaDialog(
                         placeholder = { Text("0.00") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
+                        colors = marineOutlinedTextFieldColors(accentColor = AguaPrimary),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )
@@ -172,6 +175,7 @@ fun CierreCajaDialog(
                         label = { Text("📝 Observaciones del día (Opcional)") },
                         placeholder = { Text("Ej. Faltó cambio en la última parada...") },
                         maxLines = 3,
+                        colors = marineOutlinedTextFieldColors(accentColor = AguaPrimary),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     )

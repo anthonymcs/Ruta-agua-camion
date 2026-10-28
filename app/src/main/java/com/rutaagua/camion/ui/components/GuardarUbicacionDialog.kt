@@ -190,10 +190,12 @@ fun GuardarUbicacionDialog(
                         Icon(imageVector = Icons.Default.GpsFixed, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (latitud != null) "🛰️ Actualizar Coordenadas GPS" else "🛰️ Capturar GPS (Frente a la Casa)",
+                            text = if (latitud != null) "Actualizar Coordenadas GPS" else "Capturar GPS (En la Casa)",
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
-                            fontSize = 13.sp
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -277,6 +279,7 @@ fun GuardarUbicacionDialog(
                     },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
+                    colors = marineOutlinedTextFieldColors(),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
