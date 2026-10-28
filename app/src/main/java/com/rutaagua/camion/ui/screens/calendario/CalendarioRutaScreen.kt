@@ -191,10 +191,7 @@ fun CalendarioRutaScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = clayTheme.canvasColor,
-        topBar = {
-            HeaderCalendario(clayTheme.canvasColor, clayTheme.primaryColor)
-        }
+        containerColor = clayTheme.canvasColor
     ) { innerPadding ->
         Column(
             modifier = Modifier

@@ -100,6 +100,48 @@ class AppPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_SESION_INICIADA, iniciada).apply()
     }
 
+    fun obtenerRecordarSesion(): Boolean {
+        return prefs.getBoolean(KEY_RECORDAR_SESION, true)
+    }
+
+    fun guardarRecordarSesion(recordar: Boolean) {
+        prefs.edit().putBoolean(KEY_RECORDAR_SESION, recordar).apply()
+    }
+
+    fun tieneCuentaGuardadaEnDispositivo(): Boolean {
+        return prefs.getBoolean(KEY_CUENTA_GUARDADA_DISPOSITIVO, false)
+    }
+
+    fun obtenerUltimoUsuarioGuardado(): String {
+        return prefs.getString(KEY_ULTIMO_USUARIO, "") ?: ""
+    }
+
+    fun registrarAccesoExitoso(
+        usuario: String,
+        vehiculo: TipoVehiculo,
+        rol: RolUsuario,
+        recordar: Boolean
+    ) {
+        prefs.edit()
+            .putString(KEY_VEHICULO_ACTIVO, vehiculo.name)
+            .putString(KEY_ROL_ACTIVO, rol.name)
+            .putBoolean(KEY_RECORDAR_SESION, recordar)
+            .putBoolean(KEY_SESION_INICIADA, recordar)
+            .putBoolean(KEY_CUENTA_GUARDADA_DISPOSITIVO, true)
+            .putString(KEY_ULTIMO_USUARIO, usuario.trim())
+            .apply()
+        _vehiculoActivo.value = vehiculo
+        _rolActivo.value = rol
+    }
+
+    fun olvidarCuentaGuardada() {
+        prefs.edit()
+            .putBoolean(KEY_CUENTA_GUARDADA_DISPOSITIVO, false)
+            .putBoolean(KEY_SESION_INICIADA, false)
+            .remove(KEY_ULTIMO_USUARIO)
+            .apply()
+    }
+
     fun obtenerClaveCamion(): String = prefs.getString(KEY_CLAVE_CAMION, "1111") ?: "1111"
     fun guardarClaveCamion(clave: String) = prefs.edit().putString(KEY_CLAVE_CAMION, clave.trim()).apply()
 
@@ -142,6 +184,9 @@ class AppPreferences(context: Context) {
     companion object {
         private const val PREFS_NAME = "ruta_agua_prefs"
         private const val KEY_SESION_INICIADA = "key_sesion_iniciada_v3_banca"
+        private const val KEY_RECORDAR_SESION = "key_recordar_sesion"
+        private const val KEY_CUENTA_GUARDADA_DISPOSITIVO = "key_cuenta_guardada_dispositivo"
+        private const val KEY_ULTIMO_USUARIO = "key_ultimo_usuario"
         private const val KEY_VEHICULO_ACTIVO = "key_vehiculo_activo"
         private const val KEY_ROL_ACTIVO = "key_rol_activo"
         private const val KEY_PIN_SEGURIDAD = "key_pin_seguridad"

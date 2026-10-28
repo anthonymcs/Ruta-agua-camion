@@ -1,38 +1,44 @@
 package com.rutaagua.camion.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,8 +50,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -54,36 +63,49 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rutaagua.camion.R
 import com.rutaagua.camion.data.local.model.TipoVehiculo
 import com.rutaagua.camion.data.local.prefs.AppPreferences
 import com.rutaagua.camion.data.local.prefs.RolUsuario
 import com.rutaagua.camion.data.repository.RutaAguaRepository
 import com.rutaagua.camion.ui.components.ClayButton
 import com.rutaagua.camion.ui.components.ClayCard
+import com.rutaagua.camion.ui.components.VehiculoThumbnail
+import com.rutaagua.camion.ui.components.bounceClick
+import com.rutaagua.camion.ui.components.marineOutlinedTextFieldColors
+import com.rutaagua.camion.ui.theme.BordeSuave
+import com.rutaagua.camion.ui.theme.MarineOcean
+import com.rutaagua.camion.ui.theme.MarineOceanDark
+import com.rutaagua.camion.ui.theme.MarineOceanLight
 import com.rutaagua.camion.ui.theme.PichinchaCanvas
 import com.rutaagua.camion.ui.theme.PichinchaNavy
-import com.rutaagua.camion.ui.theme.PichinchaNavyDark
-import com.rutaagua.camion.ui.theme.PichinchaYellow
 import com.rutaagua.camion.ui.theme.RojoAlerta
 import com.rutaagua.camion.ui.theme.RojoAlertaFondo
+import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 
 /**
- * Pantalla de Inicio de Sesión estilo Banca Móvil (limpia, minimalista y directa).
+ * Pantalla de Inicio de Sesión con paleta Marina equilibrada, contraste nítido en campos de texto,
+ * opción de recordar sesión e Ingreso Rápido en 1 toque cuando ya se ha iniciado sesión antes.
  */
 @Composable
 fun SeleccionVehiculoScreen(
     repository: RutaAguaRepository,
     onSeleccionarPerfil: (TipoVehiculo, RolUsuario) -> Unit,
-    onAbrirAjustes: () -> Unit,
+    onAbrirAjustes: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val appPreferences = remember { AppPreferences.getInstance(context) }
 
-    var usuario by rememberSaveable { mutableStateOf("") }
+    var cuentaGuardada by remember { mutableStateOf(appPreferences.tieneCuentaGuardadaEnDispositivo()) }
+    val vehiculoGuardado = remember(cuentaGuardada) { appPreferences.obtenerVehiculoActivo() }
+    val rolGuardado = remember(cuentaGuardada) { appPreferences.obtenerRolActivo() }
+
+    var usuario by rememberSaveable { mutableStateOf(appPreferences.obtenerUltimoUsuarioGuardado()) }
     var clave by rememberSaveable { mutableStateOf("") }
+    var recordarSesion by rememberSaveable { mutableStateOf(appPreferences.obtenerRecordarSesion()) }
     var mostrarClave by rememberSaveable { mutableStateOf(false) }
     var mensajeError by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -92,6 +114,12 @@ fun SeleccionVehiculoScreen(
         val resultado = appPreferences.autenticarCredenciales(usuario, clave)
         if (resultado != null) {
             mensajeError = null
+            appPreferences.registrarAccesoExitoso(
+                usuario = usuario,
+                vehiculo = resultado.first,
+                rol = resultado.second,
+                recordar = recordarSesion
+            )
             onSeleccionarPerfil(resultado.first, resultado.second)
         } else {
             mensajeError = "Usuario o contraseña incorrectos"
@@ -103,113 +131,248 @@ fun SeleccionVehiculoScreen(
             .fillMaxSize()
             .background(PichinchaCanvas)
     ) {
-        // Cabecera Azul Marino estilo Banca Móvil
+        // Cabecera Marina Suave (Sin tuerca de ajustes innecesaria)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(290.dp)
-                .clip(RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp))
+                .height(270.dp)
+                .clip(RoundedCornerShape(bottomStart = 34.dp, bottomEnd = 34.dp))
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(PichinchaNavyDark, PichinchaNavy)
+                        colors = listOf(MarineOceanDark, MarineOcean, MarineOceanLight)
                     )
                 )
         ) {
-            // Botón discreto de ajustes en la esquina superior derecha
-            IconButton(
-                onClick = onAbrirAjustes,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 38.dp, end = 16.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Ajustes",
-                    tint = Color.White.copy(alpha = 0.8f)
-                )
-            }
-
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 64.dp, start = 28.dp, end = 28.dp),
+                    .statusBarsPadding()
+                    .padding(top = 24.dp, start = 24.dp, end = 24.dp),
                 horizontalAlignment = Alignment.Start
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
-                        color = PichinchaYellow,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.size(46.dp)
+                        color = Color.White.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                        modifier = Modifier.size(56.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.WaterDrop,
-                                contentDescription = null,
-                                tint = PichinchaNavy,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_logo_aqua_apolo),
+                            contentDescription = "Logo Aqua Apolo",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(16.dp))
+                        )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(14.dp))
                     Column {
                         Text(
                             text = "Aqua Apolo",
                             color = Color.White,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Black
+                            fontSize = 23.sp,
+                            fontWeight = FontWeight.Black,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Control de Ruta",
-                            color = Color.White.copy(alpha = 0.75f),
+                            text = "Gestión de Ruta y Unidades",
+                            color = Color.White.copy(alpha = 0.85f),
                             fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(22.dp))
 
                 Text(
-                    text = "Hola, bienvenido",
+                    text = "Bienvenido de nuevo",
                     color = Color.White,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Black
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Ingresa con tu usuario asignado",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 14.sp
+                    text = "Accede a tu unidad asignada",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
-        // Tarjeta Flotante de Login
+        // Contenido desplazable (Adaptable en vertical y horizontal)
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 22.dp),
+                .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(215.dp))
+            Spacer(modifier = Modifier.height(175.dp))
 
+            // 1. Tarjeta de INGRESO RÁPIDO (Si ya inició sesión antes en este celular)
+            AnimatedVisibility(visible = cuentaGuardada) {
+                val nombrePerfilGuardado = when {
+                    rolGuardado == RolUsuario.ADMIN_ROLANDO -> "Rolando (Administrador)"
+                    vehiculoGuardado == TipoVehiculo.CAMIONETA -> "Camioneta de Ruta"
+                    else -> "Camión Principal"
+                }
+
+                ClayCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp),
+                    containerColor = Color.White,
+                    accentBorderColor = MarineOceanLight,
+                    cornerRadius = 22.dp,
+                    elevation = 8.dp,
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = MarineOceanLight,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Ingreso rápido guardado",
+                                color = MarineOcean,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        TextButton(
+                            onClick = {
+                                appPreferences.olvidarCuentaGuardada()
+                                cuentaGuardada = false
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text(
+                                text = "Olvidar",
+                                color = TextoSecundario,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Surface(
+                        onClick = {
+                            appPreferences.guardarSesionIniciada(true)
+                            onSeleccionarPerfil(vehiculoGuardado, rolGuardado)
+                        },
+                        color = Color(0xFFEBF6FC),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFFB8DFF2)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .bounceClick(0.97f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                VehiculoThumbnail(
+                                    tipo = vehiculoGuardado,
+                                    size = 42.dp
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = nombrePerfilGuardado,
+                                        color = TextoOscuro,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 15.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "Toca para entrar sin escribir clave",
+                                        color = MarineOceanLight,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                color = MarineOcean,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Entrar",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 12.sp,
+                                        maxLines = 1
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Login,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Tarjeta Principal de Inicio de Sesión con Credenciales
             ClayCard(
                 modifier = Modifier.fillMaxWidth(),
                 containerColor = Color.White,
                 cornerRadius = 24.dp,
-                elevation = 10.dp
+                elevation = 8.dp,
+                contentPadding = PaddingValues(20.dp)
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Text(
-                        text = "Iniciar sesión",
-                        color = PichinchaNavy,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black
+                        text = if (cuentaGuardada) "O ingresa con otra cuenta" else "Iniciar sesión",
+                        color = TextoOscuro,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
                     OutlinedTextField(
@@ -218,27 +381,39 @@ fun SeleccionVehiculoScreen(
                             usuario = it
                             mensajeError = null
                         },
-                        label = { Text("Usuario") },
+                        label = {
+                            Text(
+                                text = "Usuario",
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        },
+                        placeholder = {
+                            Text(
+                                text = "Ej: camion o camioneta",
+                                color = TextoSecundario.copy(alpha = 0.6f),
+                                maxLines = 1
+                            )
+                        },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = null,
-                                tint = PichinchaNavy
+                                tint = MarineOcean
                             )
                         },
+                        textStyle = TextStyle(
+                            color = TextoOscuro,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Text,
                             imeAction = ImeAction.Next
                         ),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PichinchaNavy,
-                            unfocusedBorderColor = Color(0xFFCBD5E1),
-                            focusedLabelColor = PichinchaNavy,
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color(0xFFF8FAFC)
-                        ),
+                        colors = marineOutlinedTextFieldColors(accentColor = MarineOcean),
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -248,12 +423,25 @@ fun SeleccionVehiculoScreen(
                             clave = it
                             mensajeError = null
                         },
-                        label = { Text("Contraseña") },
+                        label = {
+                            Text(
+                                text = "Contraseña",
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        },
+                        placeholder = {
+                            Text(
+                                text = "Ingresa tu clave",
+                                color = TextoSecundario.copy(alpha = 0.6f),
+                                maxLines = 1
+                            )
+                        },
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = PichinchaNavy
+                                tint = MarineOcean
                             )
                         },
                         trailingIcon = {
@@ -265,6 +453,11 @@ fun SeleccionVehiculoScreen(
                                 )
                             }
                         },
+                        textStyle = TextStyle(
+                            color = TextoOscuro,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
                         visualTransformation = if (mostrarClave) VisualTransformation.None else PasswordVisualTransformation(),
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
@@ -275,15 +468,38 @@ fun SeleccionVehiculoScreen(
                         keyboardActions = KeyboardActions(
                             onDone = { intentarLogin() }
                         ),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PichinchaNavy,
-                            unfocusedBorderColor = Color(0xFFCBD5E1),
-                            focusedLabelColor = PichinchaNavy,
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color(0xFFF8FAFC)
-                        ),
+                        colors = marineOutlinedTextFieldColors(accentColor = MarineOcean),
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    // Opción de Recordar sesión en este dispositivo
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { recordarSesion = !recordarSesion }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = recordarSesion,
+                            onCheckedChange = { recordarSesion = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MarineOcean,
+                                uncheckedColor = TextoSecundario,
+                                checkmarkColor = Color.White
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Recordar mi sesión en este celular",
+                            color = TextoOscuro,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
 
                     AnimatedVisibility(visible = mensajeError != null) {
                         Surface(
@@ -301,22 +517,20 @@ fun SeleccionVehiculoScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // Botón Principal Amarillo Banca Móvil con Texto Azul Marino
+                    // Botón Principal Azul Marino Oceánico con Texto Blanco Nítido
                     ClayButton(
                         onClick = intentarLogin,
                         modifier = Modifier.fillMaxWidth(),
-                        containerColor = PichinchaYellow,
-                        contentColor = PichinchaNavy,
+                        containerColor = MarineOcean,
+                        contentColor = Color.White,
                         cornerRadius = 14.dp,
-                        height = 54.dp
+                        height = 52.dp
                     ) {
                         Text(
                             text = "Ingresar",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Black,
-                            color = PichinchaNavy,
+                            color = Color.White,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )

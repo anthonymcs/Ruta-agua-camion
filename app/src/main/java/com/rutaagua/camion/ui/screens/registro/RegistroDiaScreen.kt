@@ -86,6 +86,7 @@ import com.rutaagua.camion.ui.components.ClayCard
 import com.rutaagua.camion.ui.components.ClayInsetBox
 import com.rutaagua.camion.ui.components.VehicleClayTheme
 import com.rutaagua.camion.ui.components.bounceClick
+import com.rutaagua.camion.ui.components.marineOutlinedTextFieldColors
 import com.rutaagua.camion.ui.components.obtenerClayThemePorVehiculo
 import com.rutaagua.camion.ui.security.SecurityPinDialog
 import com.rutaagua.camion.ui.theme.AmbarAdvertencia
@@ -1068,6 +1069,7 @@ private fun DialogoRegistrarGastoBanca(
                     onValueChange = { descripcion = it },
                     label = { Text("Concepto") },
                     singleLine = true,
+                    colors = marineOutlinedTextFieldColors(accentColor = clayTheme.primary),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1077,6 +1079,7 @@ private fun DialogoRegistrarGastoBanca(
                     label = { Text("Monto ($)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
+                    colors = marineOutlinedTextFieldColors(accentColor = clayTheme.primary),
                     modifier = Modifier.fillMaxWidth()
                 )
             }

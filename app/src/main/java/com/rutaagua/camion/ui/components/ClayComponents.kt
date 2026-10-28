@@ -34,8 +34,10 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,7 +51,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
@@ -77,13 +78,40 @@ import com.rutaagua.camion.ui.theme.CamionetaClaySoft
 import com.rutaagua.camion.ui.theme.ClayInsetBackground
 import com.rutaagua.camion.ui.theme.ClayRimShadow
 import com.rutaagua.camion.ui.theme.PichinchaNavy
+import com.rutaagua.camion.ui.theme.PichinchaNavyDark
 import com.rutaagua.camion.ui.theme.PichinchaYellow
 import com.rutaagua.camion.ui.theme.SuperficieTarjeta
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 
 /**
- * Tema operativo dinámico estilo Banca Móvil según el vehículo activo (Camión vs Camioneta).
+ * Colores de alto contraste garantizado para cualquier OutlinedTextField de la app.
+ * Evita que el texto escrito se camufle con el fondo blanco de la caja de texto.
+ */
+@Composable
+fun marineOutlinedTextFieldColors(
+    accentColor: Color = PichinchaNavy
+): TextFieldColors = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = TextoOscuro,
+    unfocusedTextColor = TextoOscuro,
+    disabledTextColor = TextoSecundario,
+    cursorColor = accentColor,
+    focusedBorderColor = accentColor,
+    unfocusedBorderColor = Color(0xFFB8CFE0),
+    focusedLabelColor = accentColor,
+    unfocusedLabelColor = TextoSecundario,
+    focusedPlaceholderColor = TextoSecundario.copy(alpha = 0.7f),
+    unfocusedPlaceholderColor = TextoSecundario.copy(alpha = 0.7f),
+    focusedLeadingIconColor = accentColor,
+    unfocusedLeadingIconColor = accentColor,
+    focusedTrailingIconColor = TextoSecundario,
+    unfocusedTrailingIconColor = TextoSecundario,
+    focusedContainerColor = Color.White,
+    unfocusedContainerColor = Color(0xFFF7FBFE)
+)
+
+/**
+ * Tema operativo dinámico estilo Banca Marina según el vehículo activo (Camión vs Camioneta).
  */
 data class VehicleClayTheme(
     val tipo: TipoVehiculo,
@@ -108,7 +136,7 @@ data class VehicleClayTheme(
     val insetColor: Color get() = ClayInsetBackground
     val badgeLabel: String get() = if (tipo == TipoVehiculo.CAMIONETA) "CAMIONETA" else "CAMIÓN"
     val vehicleTitle: String get() = nombreCompleto
-    val capacityLabel: String get() = "${topeBidonesDefault} bidones máx."
+    val capacityLabel: String get() = "$topeBidonesDefault bidones máx."
     val capacidadDefault: Int get() = topeBidonesDefault
 }
 
@@ -125,7 +153,7 @@ fun obtenerClayThemePorVehiculo(vehiculo: TipoVehiculo): VehicleClayTheme {
             primaryDark = CamionetaClayPrimaryDark,
             softContainer = CamionetaClaySoft,
             ctaBackground = PichinchaYellow,
-            ctaContent = PichinchaNavy,
+            ctaContent = PichinchaNavyDark,
             metasBidonesPreset = listOf(80, 65, 50, 40),
             topeBidonesDefault = 80,
             topeGalonesDefault = 30,
@@ -142,7 +170,7 @@ fun obtenerClayThemePorVehiculo(vehiculo: TipoVehiculo): VehicleClayTheme {
             primaryDark = CamionClayPrimaryDark,
             softContainer = CamionClaySoft,
             ctaBackground = PichinchaYellow,
-            ctaContent = PichinchaNavy,
+            ctaContent = PichinchaNavyDark,
             metasBidonesPreset = listOf(218, 189, 164, 163),
             topeBidonesDefault = 218,
             topeGalonesDefault = 90,
@@ -180,7 +208,7 @@ fun Modifier.bounceClick(scaleDown: Float = 0.96f): Modifier = composed {
 }
 
 /**
- * Tarjeta blanca estilo Banca Móvil con bordes limpios, sombra suave y respuesta táctil.
+ * Tarjeta blanca estilo Banca Marina con bordes limpios, sombra suave y respuesta táctil.
  */
 @Composable
 fun ClayCard(
@@ -241,7 +269,7 @@ fun ClayInsetBox(
 }
 
 /**
- * Botón estilo Banca Móvil con contraste automático garantizado (nunca se pierde el texto)
+ * Botón estilo Banca Marina con contraste automático garantizado (nunca se pierde el texto)
  * y animación reactiva al presionar.
  */
 @Composable
@@ -257,16 +285,15 @@ fun ClayButton(
     content: @Composable RowScope.() -> Unit
 ) {
     val resolvedContentColor = if (contentColor != Color.Unspecified) {
-        // Si el fondo es claro (ej. Amarillo Pichincha o Gris claro) y pasaron Blanco por error, forzamos Azul Marino
         if (containerColor.luminance() > 0.45f && contentColor.luminance() > 0.7f) {
-            PichinchaNavy
+            TextoOscuro
         } else if (containerColor.luminance() <= 0.45f && contentColor.luminance() < 0.3f) {
             Color.White
         } else {
             contentColor
         }
     } else {
-        if (containerColor.luminance() > 0.45f) PichinchaNavy else Color.White
+        if (containerColor.luminance() > 0.45f) TextoOscuro else Color.White
     }
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -302,7 +329,7 @@ fun ClayButton(
 }
 
 /**
- * Botón rápido estilo Banca Móvil Pichincha (Ícono en recuadro + etiqueta de 1 línea).
+ * Botón rápido estilo Banca Marina (Ícono en recuadro + etiqueta de 1 línea sin desborde).
  */
 @Composable
 fun BankingQuickAction(
@@ -315,20 +342,20 @@ fun BankingQuickAction(
     containerColor: Color = Color.White
 ) {
     val bg = if (isPrimaryGold) PichinchaYellow else containerColor
-    val fg = if (isPrimaryGold) PichinchaNavy else iconTint
+    val fg = if (isPrimaryGold) TextoOscuro else iconTint
 
     Surface(
         onClick = onClick,
         color = bg,
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, if (isPrimaryGold) Color(0xFFE5C100) else BordeSuave),
+        border = BorderStroke(1.dp, if (isPrimaryGold) Color(0xFF38BDF8) else BordeSuave),
         shadowElevation = 2.dp,
         modifier = modifier.bounceClick(0.95f)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 10.dp, horizontal = 6.dp),
+                .padding(vertical = 10.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -336,7 +363,7 @@ fun BankingQuickAction(
                 modifier = Modifier
                     .size(36.dp)
                     .background(
-                        if (isPrimaryGold) PichinchaNavy.copy(alpha = 0.1f) else fg.copy(alpha = 0.1f),
+                        if (isPrimaryGold) TextoOscuro.copy(alpha = 0.1f) else fg.copy(alpha = 0.1f),
                         RoundedCornerShape(11.dp)
                     ),
                 contentAlignment = Alignment.Center
@@ -351,10 +378,11 @@ fun BankingQuickAction(
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = label,
-                color = PichinchaNavy,
+                color = TextoOscuro,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
             )
@@ -363,7 +391,7 @@ fun BankingQuickAction(
 }
 
 /**
- * Selector de pestañas segmentadas estilo Banca Móvil (ej. Día | Semanal | Mensual).
+ * Selector de pestañas segmentadas estilo Banca Marina (ej. Día | Semanal | Mensual).
  */
 @Composable
 fun <T> BankingSegmentedTabs(
@@ -375,7 +403,7 @@ fun <T> BankingSegmentedTabs(
     activeColor: Color = PichinchaNavy
 ) {
     Surface(
-        color = Color(0xFFE6ECF5),
+        color = Color(0xFFE1EFF7),
         shape = RoundedCornerShape(14.dp),
         modifier = modifier.fillMaxWidth()
     ) {
@@ -413,6 +441,7 @@ fun <T> BankingSegmentedTabs(
                             fontSize = 12.sp,
                             fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
                             maxLines = 1,
+                            softWrap = false,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
@@ -463,14 +492,14 @@ fun ClayEditableCounter(
                 actualOnChange(nuevo)
             },
             shape = RoundedCornerShape(10.dp),
-            color = Color(0xFFE6ECF5),
+            color = Color(0xFFE1EFF7),
             modifier = Modifier.size(btnSize)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.Default.Remove,
                     contentDescription = "Restar",
-                    tint = PichinchaNavy,
+                    tint = TextoOscuro,
                     modifier = Modifier.size(if (compact) 16.dp else 18.dp)
                 )
             }
@@ -515,7 +544,7 @@ fun ClayEditableCounter(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 cursorBrush = SolidColor(accentColor),
                 textStyle = TextStyle(
-                    color = if (actualValue > 0) accentColor else PichinchaNavy,
+                    color = if (actualValue > 0) accentColor else TextoOscuro,
                     fontSize = fontSize,
                     fontWeight = FontWeight.Black,
                     textAlign = TextAlign.Center
@@ -562,8 +591,8 @@ fun ClayEditableCounter(
 @Composable
 fun ClayBadge(
     text: String,
-    containerColor: Color = Color(0xFFE6ECF5),
-    contentColor: Color = PichinchaNavy,
+    containerColor: Color = Color(0xFFE1EFF7),
+    contentColor: Color = TextoOscuro,
     backgroundColor: Color = containerColor,
     textColor: Color = contentColor,
     modifier: Modifier = Modifier
@@ -579,6 +608,7 @@ fun ClayBadge(
             fontWeight = FontWeight.Bold,
             fontSize = 11.sp,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )
