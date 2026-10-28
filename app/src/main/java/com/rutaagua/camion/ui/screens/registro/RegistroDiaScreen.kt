@@ -162,33 +162,7 @@ fun RegistroDiaScreen(
     Scaffold(
         modifier = modifier,
         containerColor = clayTheme.canvasColor,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            ClayButton(
-                onClick = { viewModel.abrirModalNuevaVenta() },
-                containerColor = PichinchaYellow,
-                contentColor = PichinchaNavy,
-                cornerRadius = 18.dp,
-                height = 54.dp,
-                modifier = Modifier.padding(bottom = 6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Vender",
-                    tint = PichinchaNavy,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Vender",
-                    fontWeight = FontWeight.Black,
-                    fontSize = 15.sp,
-                    color = PichinchaNavy,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -357,7 +331,7 @@ fun RegistroDiaScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(80.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
