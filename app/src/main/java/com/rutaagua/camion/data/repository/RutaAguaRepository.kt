@@ -530,6 +530,9 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     fun obtenerTransaccionesDeCliente(clienteId: Long): Flow<List<TransaccionVentaEntity>> =
         transaccionDao.obtenerPorClienteFlow(clienteId)
 
+    fun obtenerTransaccionesPorMes(prefijoMes: String): Flow<List<TransaccionVentaEntity>> =
+        transaccionDao.obtenerPorMesFlow(prefijoMes)
+
     // ==========================================
     // ESTADÍSTICAS Y PORCENTAJES DE VENTAS HOY
     // ==========================================
@@ -731,6 +734,15 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
 
     fun obtenerVisitasFallidasPorFecha(fechaIso: String): Flow<List<VisitaFallidaEntity>> =
         visitaFallidaDao.obtenerVisitasPorFechaFlow(fechaIso)
+
+    fun obtenerTodasVisitasFallidas(): Flow<List<VisitaFallidaEntity>> =
+        visitaFallidaDao.obtenerTodasVisitasFlow()
+
+    fun obtenerVisitasFallidasPorCliente(clienteId: Long): Flow<List<VisitaFallidaEntity>> =
+        visitaFallidaDao.obtenerVisitasPorClienteFlow(clienteId)
+
+    fun obtenerVisitasFallidasPorMes(prefijoMes: String): Flow<List<VisitaFallidaEntity>> =
+        visitaFallidaDao.obtenerVisitasPorMesFlow(prefijoMes)
 
     fun obtenerVisitaFallidaClienteHoy(clienteId: Long, fechaIso: String): Flow<VisitaFallidaEntity?> =
         visitaFallidaDao.obtenerVisitaPorClienteYFechaFlow(clienteId, fechaIso)

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -55,7 +56,18 @@ class ClientesViewModel(
 ) : ViewModel() {
 
     private val formatoFechaIso = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    private val formatoMesIso = SimpleDateFormat("yyyy-MM", Locale.getDefault())
     val fechaHoyIso: String = formatoFechaIso.format(Date())
+    val mesActualIso: String = formatoMesIso.format(Date())
+
+    // Lista completa de clientes para mapear nombres e información en el historial
+    val todosLosClientesState: StateFlow<List<ClienteEntity>> = repository
+        .obtenerTodosLosClientes()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     // -------------------------------------------------------------
     // DIRECTORIO DE CLIENTES
@@ -64,7 +76,7 @@ class ClientesViewModel(
     val filtroSeleccionado = MutableStateFlow(FiltroCliente.TODOS)
 
     val clientesFiltradosState: StateFlow<List<ClienteEntity>> = combine(
-        repository.obtenerTodosLosClientes(),
+        todosLosClientesState,
         busquedaQuery,
         filtroSeleccionado
     ) { lista, query, filtro ->
@@ -122,6 +134,108 @@ class ClientesViewModel(
     val clienteAEliminar = MutableStateFlow<ClienteEntity?>(null)
 
     val mensajeSnackbar = MutableStateFlow<String?>(null)
+
+    // -------------------------------------------------------------
+    // HISTORIAL COMPLETO DE UN CLIENTE ESPECÍFICO (TODOS LOS MESES/AÑOS)
+    // -------------------------------------------------------------
+    private val _clienteHistorialSeleccionado = MutableStateFlow<ClienteEntity?>(null)
+    val clienteHistorialSeleccionado: StateFlow<ClienteEntity?> = _clienteHistorialSeleccionado.asStateFlow()
+
+    val historialTransaccionesClienteState: StateFlow<List<TransaccionVentaEntity>> = _clienteHistorialSeleccionado
+        .flatMapLatest { cliente ->
+            if (cliente == null) {
+                flowOf(emptyList())
+            } else {
+                repository.obtenerTransaccionesDeCliente(cliente.id)
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val historialVisitasClienteState: StateFlow<List<VisitaFallidaEntity>> = _clienteHistorialSeleccionado
+        .flatMapLatest { cliente ->
+            if (cliente == null) {
+                flowOf(emptyList())
+            } else {
+                repository.obtenerVisitasFallidasPorCliente(cliente.id)
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    fun abrirHistorialCliente(cliente: ClienteEntity) {
+        _clienteHistorialSeleccionado.value = cliente
+    }
+
+    fun cerrarHistorialCliente() {
+        _clienteHistorialSeleccionado.value = null
+    }
+
+    // -------------------------------------------------------------
+    // EXPLORADOR HISTÓRICO POR MES, DÍA ESPECÍFICO Y CLIENTE
+    // -------------------------------------------------------------
+    val mesHistoricoSeleccionado = MutableStateFlow(mesActualIso)
+    // Si fechaHistoricaSeleccionada es null, muestra todos los registros del mes; si tiene valor ("yyyy-MM-dd"), filtra ese día exacto
+    val fechaHistoricaSeleccionada = MutableStateFlow<String?>(fechaHoyIso)
+    val busquedaHistoricaCliente = MutableStateFlow("")
+
+    val transaccionesMesHistoricoState: StateFlow<List<TransaccionVentaEntity>> = mesHistoricoSeleccionado
+        .flatMapLatest { prefijoMes ->
+            repository.obtenerTransaccionesPorMes(prefijoMes)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val visitasMesHistoricoState: StateFlow<List<VisitaFallidaEntity>> = mesHistoricoSeleccionado
+        .flatMapLatest { prefijoMes ->
+            repository.obtenerVisitasFallidasPorMes(prefijoMes)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    fun cambiarMesHistorico(deltaMeses: Int) {
+        try {
+            val partes = mesHistoricoSeleccionado.value.split("-")
+            val anio = partes[0].toInt()
+            val mes = partes[1].toInt() - 1
+            val cal = Calendar.getInstance().apply {
+                set(Calendar.YEAR, anio)
+                set(Calendar.MONTH, mes)
+                set(Calendar.DAY_OF_MONTH, 1)
+                add(Calendar.MONTH, deltaMeses)
+            }
+            val nuevoMesIso = formatoMesIso.format(cal.time)
+            mesHistoricoSeleccionado.value = nuevoMesIso
+            // Si cambiamos al mes actual seleccionamos hoy; si es un mes pasado mostramos todo el mes por defecto
+            fechaHistoricaSeleccionada.value = if (nuevoMesIso == mesActualIso) fechaHoyIso else null
+        } catch (_: Exception) {
+        }
+    }
+
+    fun seleccionarMesActualHistorico() {
+        mesHistoricoSeleccionado.value = mesActualIso
+        fechaHistoricaSeleccionada.value = fechaHoyIso
+    }
+
+    fun seleccionarFechaHistorica(fechaIso: String?) {
+        fechaHistoricaSeleccionada.value = fechaIso
+    }
+
+    fun onBusquedaHistoricaChange(query: String) {
+        busquedaHistoricaCliente.value = query
+    }
 
     // -------------------------------------------------------------
     // CALENDARIO DE RUTA SEMANAL (LUNES A SÁBADO)
@@ -191,8 +305,7 @@ class ClientesViewModel(
         )
 
     // Conteo de clientes asignados a cada día de la semana
-    val conteoPorDiaSemanaState: StateFlow<Map<DiaSemana, Int>> = repository
-        .obtenerTodosLosClientes()
+    val conteoPorDiaSemanaState: StateFlow<Map<DiaSemana, Int>> = todosLosClientesState
         .map { clientes ->
             DiaSemana.entries.associateWith { dia ->
                 clientes.count { c ->

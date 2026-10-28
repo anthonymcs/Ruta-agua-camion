@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MeetingRoom
 import androidx.compose.material.icons.filled.Navigation
@@ -80,6 +81,7 @@ import com.rutaagua.camion.data.local.prefs.AppPreferences
 import com.rutaagua.camion.ui.components.ClayButton
 import com.rutaagua.camion.ui.components.ClayCard
 import com.rutaagua.camion.ui.components.ClayInsetBox
+import com.rutaagua.camion.ui.components.marineOutlinedTextFieldColors
 import com.rutaagua.camion.ui.components.obtenerClayThemePorVehiculo
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,6 +90,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
@@ -156,6 +159,9 @@ fun ClientesScreen(
     val clienteEnEdicion by viewModel.clienteEnEdicion.collectAsState()
     val clienteAEliminar by viewModel.clienteAEliminar.collectAsState()
     val mensajeSnackbar by viewModel.mensajeSnackbar.collectAsState()
+    val clienteHistorial by viewModel.clienteHistorialSeleccionado.collectAsState()
+    val historialTransacciones by viewModel.historialTransaccionesClienteState.collectAsState()
+    val historialVisitas by viewModel.historialVisitasClienteState.collectAsState()
 
     var clienteParaEliminar by remember { mutableStateOf<ClienteEntity?>(null) }
     var mostrarPinParaEliminarCliente by remember { mutableStateOf(false) }
@@ -265,6 +271,7 @@ fun ClientesScreen(
                             cliente = cliente,
                             transaccionHoy = transaccionesHoyClientes[cliente.id],
                             visitaFallidaHoy = visitasFallidasHoy[cliente.id],
+                            onHistorialClick = { viewModel.abrirHistorialCliente(cliente) },
                             onEditarClick = { viewModel.abrirEditarCliente(cliente) },
                             onEliminarClick = {
                                 clienteParaEliminar = cliente
@@ -438,6 +445,16 @@ fun ClientesScreen(
             }
         )
     }
+
+    // Modal de Historial Completo del Cliente (por meses, fechas y entregas pasadas)
+    clienteHistorial?.let { cliente ->
+        HistorialClienteModalSheet(
+            cliente = cliente,
+            transacciones = historialTransacciones,
+            visitasFallidas = historialVisitas,
+            onDismiss = { viewModel.cerrarHistorialCliente() }
+        )
+    }
 }
 
 /**
@@ -472,10 +489,7 @@ private fun BarraBusquedaClientes(
             },
             shape = RoundedCornerShape(14.dp),
             singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = AguaPrimary,
-                unfocusedBorderColor = Color(0xFFCBD5E1)
-            ),
+            colors = marineOutlinedTextFieldColors(),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 10.dp)
@@ -528,6 +542,7 @@ private fun TarjetaClienteItem(
     cliente: ClienteEntity,
     transaccionHoy: com.rutaagua.camion.data.local.entity.TransaccionVentaEntity? = null,
     visitaFallidaHoy: VisitaFallidaEntity? = null,
+    onHistorialClick: () -> Unit,
     onEditarClick: () -> Unit,
     onEliminarClick: () -> Unit,
     onAbrirMapa: () -> Unit,
@@ -546,9 +561,10 @@ private fun TarjetaClienteItem(
             else -> Color.White
         },
         elevation = 4.dp,
+        contentPadding = PaddingValues(14.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column {
             // Cabecera Minimalista (Nombre, Sector corto, Pastillas de deuda/estado)
             Row(
                 modifier = Modifier
@@ -563,7 +579,10 @@ private fun TarjetaClienteItem(
                             text = cliente.nombre,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Black,
-                            color = TextoOscuro
+                            color = TextoOscuro,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
@@ -576,6 +595,8 @@ private fun TarjetaClienteItem(
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 10.sp,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                             )
                         }
@@ -586,12 +607,15 @@ private fun TarjetaClienteItem(
                             text = cliente.ubicacion,
                             style = MaterialTheme.typography.bodySmall,
                             color = TextoSecundario,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                // Pastillas de estado y deuda en fila compacta
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Pastillas de estado y deuda en fila compacta de 1 línea
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -602,10 +626,12 @@ private fun TarjetaClienteItem(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = "💲 $${String.format(Locale.US, "%.2f", cliente.deudaMonetaria)}",
+                                text = "$${String.format(Locale.US, "%.2f", cliente.deudaMonetaria)}",
                                 color = RojoAlerta,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }
@@ -615,10 +641,12 @@ private fun TarjetaClienteItem(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                text = "💲 $0.00",
+                                text = "$0.00",
                                 color = VerdeEfectivo,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }
@@ -634,6 +662,8 @@ private fun TarjetaClienteItem(
                                 color = AmbarAdvertencia,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }
@@ -646,10 +676,12 @@ private fun TarjetaClienteItem(
                             border = BorderStroke(1.dp, Color(0xFF86EFAC))
                         ) {
                             Text(
-                                text = "✅ Atendido",
+                                text = "✓ Hoy",
                                 color = Color(0xFF15803D),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }
@@ -660,10 +692,12 @@ private fun TarjetaClienteItem(
                             border = BorderStroke(1.dp, Color(0xFFFDE68A))
                         ) {
                             Text(
-                                text = "🚪 No estaba",
+                                text = "🚪 Ausente",
                                 color = AmbarAdvertencia,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }
@@ -783,72 +817,111 @@ private fun TarjetaClienteItem(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Botones de Acción Grandes y Táctiles (Estilo Duolingo)
+            // Botones de Acción Compactos de 1 sola línea garantizada
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Fila 1: [🚪 No estaba] y [🧭 Mapa GPS]
+                // Fila 1: [🚪 No estaba], [🧭 Mapa GPS] y [📅 Historial]
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    // 1. [🚪 No estaba] (Ámbar vibrante)
+                    // 1. [No estaba]
                     Button(
                         onClick = onNoEstabaClick,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (visitaFallidaHoy != null) Color(0xFFD97706) else Color(0xFFF59E0B)
                         ),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .height(44.dp)
+                            .height(42.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.CameraAlt,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (visitaFallidaHoy != null) "No Estaba ✓" else "No estaba",
+                            text = if (visitaFallidaHoy != null) "Ausente ✓" else "No estaba",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = Color.White
+                            fontSize = 11.sp,
+                            color = Color.White,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
-                    // 2. [🧭 Mapa GPS] (Azul técnico)
+                    // 2. [Mapa GPS]
                     Button(
                         onClick = onAbrirMapa,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF0284C7)
                         ),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .height(44.dp)
+                            .height(42.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Navigation,
                             contentDescription = "Mapa",
                             tint = Color.White,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (cliente.latitud != null || cliente.enlaceMapa.isNotBlank()) "Mapa GPS" else "Fijar GPS",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = Color.White
+                            fontSize = 11.sp,
+                            color = Color.White,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // 3. [Historial de Entregas por Mes/Día]
+                    Button(
+                        onClick = onHistorialClick,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AguaPrimaryDark
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = "Historial",
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Historial",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = Color.White,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                // Fila 2: [💬 WhatsApp] (Verde WhatsApp oficial #25D366)
+                // Fila 2: [💬 WhatsApp]
                 Button(
                     onClick = {
                         val mensaje = WhatsAppHelper.generarMensajeEstadoCuenta(cliente)
@@ -857,24 +930,28 @@ private fun TarjetaClienteItem(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF25D366)
                     ),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp)
+                        .height(42.dp)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Chat,
                         contentDescription = "WhatsApp",
                         tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "💬 Enviar Estado por WhatsApp",
+                        text = "Enviar Estado por WhatsApp",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = Color.White
+                        fontSize = 12.sp,
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -963,6 +1040,7 @@ private fun ModalFormularioCliente(
                 onValueChange = { nombre = it },
                 label = { Text("Nombre del cliente o negocio *") },
                 singleLine = true,
+                colors = marineOutlinedTextFieldColors(),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -972,6 +1050,7 @@ private fun ModalFormularioCliente(
                 value = ubicacion,
                 onValueChange = { ubicacion = it },
                 label = { Text("Ubicación / Dirección / Referencia") },
+                colors = marineOutlinedTextFieldColors(),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -983,6 +1062,7 @@ private fun ModalFormularioCliente(
                 label = { Text("📱 Teléfono / WhatsApp (Opcional)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 singleLine = true,
+                colors = marineOutlinedTextFieldColors(),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -1118,6 +1198,7 @@ private fun ModalFormularioCliente(
                 label = { Text("Precio por bidón ($)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
+                colors = marineOutlinedTextFieldColors(),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -1139,6 +1220,7 @@ private fun ModalFormularioCliente(
                     label = { Text("Deuda dinero ($)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
+                    colors = marineOutlinedTextFieldColors(),
                     modifier = Modifier.weight(1f)
                 )
                 OutlinedTextField(
@@ -1147,6 +1229,7 @@ private fun ModalFormularioCliente(
                     label = { Text("Envases prestados") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
+                    colors = marineOutlinedTextFieldColors(),
                     modifier = Modifier.weight(1f)
                 )
             }

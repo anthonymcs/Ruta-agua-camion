@@ -31,6 +31,9 @@ interface TransaccionDao {
     @Query("SELECT * FROM transacciones_ventas WHERE clienteId = :clienteId ORDER BY fecha DESC")
     fun obtenerPorClienteFlow(clienteId: Long): Flow<List<TransaccionVentaEntity>>
 
+    @Query("SELECT * FROM transacciones_ventas WHERE fechaTexto LIKE :prefijoMes || '%' ORDER BY fecha DESC")
+    fun obtenerPorMesFlow(prefijoMes: String): Flow<List<TransaccionVentaEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(transaccion: TransaccionVentaEntity): Long
 

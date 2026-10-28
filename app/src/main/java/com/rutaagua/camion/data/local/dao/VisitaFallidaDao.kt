@@ -16,6 +16,15 @@ interface VisitaFallidaDao {
     @Query("SELECT * FROM visitas_fallidas WHERE fechaIso = :fechaIso ORDER BY timestamp DESC")
     fun obtenerVisitasPorFechaFlow(fechaIso: String): Flow<List<VisitaFallidaEntity>>
 
+    @Query("SELECT * FROM visitas_fallidas ORDER BY timestamp DESC")
+    fun obtenerTodasVisitasFlow(): Flow<List<VisitaFallidaEntity>>
+
+    @Query("SELECT * FROM visitas_fallidas WHERE clienteId = :clienteId ORDER BY timestamp DESC")
+    fun obtenerVisitasPorClienteFlow(clienteId: Long): Flow<List<VisitaFallidaEntity>>
+
+    @Query("SELECT * FROM visitas_fallidas WHERE fechaIso LIKE :prefijoMes || '%' ORDER BY timestamp DESC")
+    fun obtenerVisitasPorMesFlow(prefijoMes: String): Flow<List<VisitaFallidaEntity>>
+
     @Query("SELECT * FROM visitas_fallidas WHERE fechaIso = :fechaIso AND clienteId = :clienteId ORDER BY timestamp DESC LIMIT 1")
     fun obtenerVisitaPorClienteYFechaFlow(clienteId: Long, fechaIso: String): Flow<VisitaFallidaEntity?>
 
