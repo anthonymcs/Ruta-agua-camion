@@ -148,6 +148,27 @@ class AppPreferences(context: Context) {
     fun obtenerClaveCamioneta(): String = prefs.getString(KEY_CLAVE_CAMIONETA, "2222") ?: "2222"
     fun guardarClaveCamioneta(clave: String) = prefs.edit().putString(KEY_CLAVE_CAMIONETA, clave.trim()).apply()
 
+    // Control de Respaldo Mensual Automático y Autoprueba de Integridad
+    fun obtenerMesUltimoRespaldoAuto(): String = prefs.getString(KEY_MES_RESPALDO_AUTO, "") ?: ""
+    fun obtenerFechaUltimoRespaldoAuto(): Long = prefs.getLong(KEY_FECHA_RESPALDO_AUTO, 0L)
+    fun obtenerDetalleUltimoRespaldoAuto(): String =
+        prefs.getString(KEY_DETALLE_RESPALDO_AUTO, "Pendiente de primera verificación") ?: "Pendiente de primera verificación"
+    fun obtenerConteoUltimoRespaldoAuto(): Int = prefs.getInt(KEY_CONTEO_RESPALDO_AUTO, 0)
+
+    fun guardarResultadoRespaldoAuto(
+        mesIso: String,
+        timestamp: Long,
+        detalle: String,
+        conteoRegistros: Int
+    ) {
+        prefs.edit()
+            .putString(KEY_MES_RESPALDO_AUTO, mesIso)
+            .putLong(KEY_FECHA_RESPALDO_AUTO, timestamp)
+            .putString(KEY_DETALLE_RESPALDO_AUTO, detalle)
+            .putInt(KEY_CONTEO_RESPALDO_AUTO, conteoRegistros)
+            .apply()
+    }
+
     /**
      * Valida credenciales únicas de inicio de sesión y devuelve el par (TipoVehiculo, RolUsuario)
      * o null si las credenciales no coinciden.
@@ -193,6 +214,10 @@ class AppPreferences(context: Context) {
         private const val KEY_CLAVE_CAMION = "key_clave_camion"
         private const val KEY_CLAVE_CAMIONETA = "key_clave_camioneta"
         private const val KEY_URL_OTA = "key_url_ota"
+        private const val KEY_MES_RESPALDO_AUTO = "key_mes_respaldo_auto"
+        private const val KEY_FECHA_RESPALDO_AUTO = "key_fecha_respaldo_auto"
+        private const val KEY_DETALLE_RESPALDO_AUTO = "key_detalle_respaldo_auto"
+        private const val KEY_CONTEO_RESPALDO_AUTO = "key_conteo_respaldo_auto"
 
         private const val KEY_COSTO_BIDON = "key_costo_bidon"
         private const val KEY_COSTO_GALON = "key_costo_galon"

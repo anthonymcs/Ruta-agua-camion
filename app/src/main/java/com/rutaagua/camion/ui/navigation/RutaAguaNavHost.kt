@@ -45,6 +45,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -148,6 +149,15 @@ fun RutaAguaNavHost(
     val registroDiaViewModel: RegistroDiaViewModel = viewModel(factory = factory)
     val inventarioViewModel: InventarioCamionViewModel = viewModel(factory = factory)
     val clientesViewModel: ClientesViewModel = viewModel(factory = factory)
+
+    // Autogeneración y autoprueba automática del respaldo mensual al iniciar la aplicación
+    LaunchedEffect(Unit) {
+        com.rutaagua.camion.data.backup.BackupManager.verificarYEjecutarRespaldoMensualAutomatico(
+            context = context,
+            database = database,
+            forzarAhora = false
+        )
+    }
 
     // Si aún no ha iniciado sesión, mostramos la pantalla de Login (sin tuerca de ajustes)
     if (vehiculoSeleccionado == null) {
