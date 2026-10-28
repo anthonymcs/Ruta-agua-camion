@@ -94,6 +94,8 @@ import com.rutaagua.camion.ui.screens.reportes.ReportesCamionetaScreen
 import com.rutaagua.camion.ui.screens.rolando.PanelRolandoScreen
 import com.rutaagua.camion.ui.theme.AzulCorporativo
 import com.rutaagua.camion.ui.theme.BordeSutil
+import com.rutaagua.camion.ui.theme.RojoAlerta
+import com.rutaagua.camion.ui.theme.RojoAlertaFondo
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 import kotlinx.coroutines.launch
@@ -245,38 +247,6 @@ fun RutaAguaNavHost(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                ClayButton(
-                                    onClick = {
-                                        coroutineScope.launch { drawerState.close() }
-                                        appPreferences.guardarSesionIniciada(false)
-                                        vehiculoSeleccionado = null
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(42.dp),
-                                    containerColor = clayTheme.primaryColor,
-                                    contentColor = Color.White,
-                                    cornerRadius = 14.dp,
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Logout,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Cambiar Unidad / Salir",
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 12.sp,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
                             }
                         }
                     }
@@ -344,7 +314,7 @@ fun RutaAguaNavHost(
 
                     NavigationDrawerItem(
                         icon = { Icon(Icons.Default.CalendarMonth, contentDescription = null) },
-                        label = { Text("Ruta por Día", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        label = { Text("Ruta y Calendario", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = currentRoute == AppDestinations.CALENDARIO.ruta,
                         onClick = {
                             coroutineScope.launch { drawerState.close() }
@@ -406,11 +376,21 @@ fun RutaAguaNavHost(
                         )
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = BordeSutil)
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), color = BordeSutil)
 
+                    // Opción de Configuraciones en Barra Lateral
                     NavigationDrawerItem(
-                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                        label = { Text("Precios y Respaldo", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        icon = { Icon(Icons.Default.Settings, contentDescription = "Configuraciones", tint = clayTheme.primaryDarkColor) },
+                        label = {
+                            Text(
+                                text = "Configuraciones",
+                                fontWeight = FontWeight.Black,
+                                color = TextoOscuro,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
                         selected = false,
                         onClick = {
                             coroutineScope.launch { drawerState.close() }
@@ -418,15 +398,58 @@ fun RutaAguaNavHost(
                         },
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
                     )
+
+                    // Opción de Salir / Cerrar Sesión en Barra Lateral
+                    NavigationDrawerItem(
+                        icon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = "Salir",
+                                tint = RojoAlerta
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = "Cerrar Sesión / Salir",
+                                fontWeight = FontWeight.Black,
+                                color = RojoAlerta,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        selected = false,
+                        onClick = {
+                            coroutineScope.launch { drawerState.close() }
+                            appPreferences.guardarSesionIniciada(false)
+                            vehiculoSeleccionado = null
+                        },
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                            .navigationBarsPadding(),
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = RojoAlertaFondo.copy(alpha = 0.55f)
+                        )
+                    )
                 }
             }
         }
     ) {
+        val tituloPantallaActual = when (currentRoute) {
+            AppDestinations.REGISTRO.ruta -> "Ventas y Caja"
+            AppDestinations.CAMION.ruta -> "Carga e Inventario"
+            AppDestinations.CLIENTES.ruta -> "Clientes"
+            AppDestinations.CALENDARIO.ruta -> "Ruta y Calendario"
+            "reportes_camioneta" -> "Reportes"
+            AppDestinations.PANEL_ROLANDO.ruta -> "Panel Rolando"
+            else -> "Ventas y Caja"
+        }
+
         Scaffold(
             modifier = modifier.fillMaxSize(),
             containerColor = clayTheme.canvasColor,
             topBar = {
-                // Top Bar con statusBarsPadding() para que jamás se corte en la parte superior del celular
+                // Top Bar limpia: solo el botón de menú lateral e identificación de unidad y pantalla actual
                 Surface(
                     color = clayTheme.canvasColor,
                     shadowElevation = 0.dp,
@@ -444,7 +467,7 @@ fun RutaAguaNavHost(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f)
                         ) {
-                            // Botón de Menú bien proporcionado (contentPadding = 0.dp para no aplastar el ícono)
+                            // Botón para abrir la barra lateral izquierda
                             ClayCard(
                                 modifier = Modifier.size(44.dp),
                                 containerColor = clayTheme.cardColor,
@@ -496,196 +519,11 @@ fun RutaAguaNavHost(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // Botón Salir compacto de 1 línea sin doble padding
-                            ClayCard(
-                                containerColor = clayTheme.cardColor,
-                                cornerRadius = 14.dp,
-                                elevation = 3.dp,
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                                onClick = {
-                                    appPreferences.guardarSesionIniciada(false)
-                                    vehiculoSeleccionado = null
-                                }
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Logout,
-                                        contentDescription = "Salir",
-                                        tint = clayTheme.primaryColor,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(5.dp))
-                                    Text(
-                                        text = "Salir",
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 12.sp,
-                                        color = clayTheme.primaryColor,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
-                            }
-
-                            // Botón Tuerca de Configuración grande y proporcionado (44.dp con ícono de 23.dp)
-                            ClayCard(
-                                modifier = Modifier.size(44.dp),
-                                containerColor = clayTheme.cardColor,
-                                cornerRadius = 14.dp,
-                                elevation = 3.dp,
-                                contentPadding = PaddingValues(0.dp),
-                                onClick = { mostrarModalAjustes = true }
-                            ) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "Ajustes",
-                                        tint = clayTheme.primaryColor,
-                                        modifier = Modifier.size(23.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            bottomBar = {
-                Surface(
-                    color = clayTheme.cardColor,
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                    shadowElevation = 10.dp
-                ) {
-                    NavigationBar(
-                        containerColor = Color.Transparent,
-                        tonalElevation = 0.dp,
-                        modifier = Modifier.navigationBarsPadding()
-                    ) {
-                        val items = listOf(
-                            Triple(AppDestinations.REGISTRO, "Ventas", Icons.Default.PointOfSale),
-                            Triple(AppDestinations.CAMION, "Vehículo", Icons.Default.LocalShipping),
-                            Triple(AppDestinations.CLIENTES, "Clientes", Icons.Default.People),
-                            Triple(AppDestinations.CALENDARIO, "Ruta", Icons.Default.CalendarMonth)
+                        ClayBadge(
+                            text = tituloPantallaActual,
+                            backgroundColor = clayTheme.accentBgColor,
+                            textColor = clayTheme.primaryDarkColor
                         )
-
-                        items.forEach { (dest, label, icon) ->
-                            val selected = currentRoute == dest.ruta
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = {
-                                    navController.navigate(dest.ruta) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = label
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = label,
-                                        fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = clayTheme.primaryDarkColor,
-                                    selectedTextColor = clayTheme.primaryDarkColor,
-                                    indicatorColor = clayTheme.accentBgColor,
-                                    unselectedIconColor = TextoSecundario,
-                                    unselectedTextColor = TextoSecundario
-                                )
-                            )
-                        }
-
-                        if (vehiculoActivo == TipoVehiculo.CAMIONETA) {
-                            val selected = currentRoute == "reportes_camioneta"
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = {
-                                    navController.navigate("reportes_camioneta") {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.BarChart,
-                                        contentDescription = "Reportes"
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = "Reportes",
-                                        fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = clayTheme.primaryDarkColor,
-                                    selectedTextColor = clayTheme.primaryDarkColor,
-                                    indicatorColor = clayTheme.accentBgColor,
-                                    unselectedIconColor = TextoSecundario,
-                                    unselectedTextColor = TextoSecundario
-                                )
-                            )
-                        }
-
-                        if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
-                            val selected = currentRoute == AppDestinations.PANEL_ROLANDO.ruta
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = {
-                                    navController.navigate(AppDestinations.PANEL_ROLANDO.ruta) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Analytics,
-                                        contentDescription = "Rolando"
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = "Rolando",
-                                        fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        softWrap = false,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = AzulCorporativo,
-                                    selectedTextColor = AzulCorporativo,
-                                    indicatorColor = AzulCorporativo.copy(alpha = 0.16f),
-                                    unselectedIconColor = TextoSecundario,
-                                    unselectedTextColor = TextoSecundario
-                                )
-                            )
-                        }
                     }
                 }
             }
