@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Menu
@@ -83,6 +84,7 @@ import com.rutaagua.camion.ui.screens.inventario.InventarioCamionScreen
 import com.rutaagua.camion.ui.screens.inventario.InventarioCamionViewModel
 import com.rutaagua.camion.ui.screens.registro.RegistroDiaScreen
 import com.rutaagua.camion.ui.screens.registro.RegistroDiaViewModel
+import com.rutaagua.camion.ui.screens.reportes.ReportesCamionetaScreen
 import com.rutaagua.camion.ui.screens.rolando.PanelRolandoScreen
 import com.rutaagua.camion.ui.theme.AzulCorporativo
 import com.rutaagua.camion.ui.theme.BordeSutil
@@ -342,6 +344,29 @@ fun RutaAguaNavHost(
                     )
                 )
 
+                // Apartado exclusivo de Reportes (Día, Semanal, Mensual) para la cuenta de la Camioneta
+                if (vehiculoActivo == TipoVehiculo.CAMIONETA) {
+                    NavigationDrawerItem(
+                        icon = { Icon(Icons.Default.BarChart, contentDescription = null) },
+                        label = { Text("Reportes (Día / Semanal / Mensual)", fontWeight = FontWeight.Black) },
+                        selected = currentRoute == "reportes_camioneta",
+                        onClick = {
+                            coroutineScope.launch { drawerState.close() }
+                            navController.navigate("reportes_camioneta") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = clayTheme.accentBgColor,
+                            selectedIconColor = clayTheme.primaryDarkColor,
+                            selectedTextColor = clayTheme.primaryDarkColor
+                        )
+                    )
+                }
+
                 if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
                     NavigationDrawerItem(
                         icon = { Icon(Icons.Default.Analytics, contentDescription = null, tint = AzulCorporativo) },
@@ -543,6 +568,42 @@ fun RutaAguaNavHost(
                             )
                         }
 
+                        if (vehiculoActivo == TipoVehiculo.CAMIONETA) {
+                            val selected = currentRoute == "reportes_camioneta"
+                            NavigationBarItem(
+                                selected = selected,
+                                onClick = {
+                                    navController.navigate("reportes_camioneta") {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.BarChart,
+                                        contentDescription = "Reportes"
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = "Reportes",
+                                        fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
+                                        fontSize = 11.sp
+                                    )
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = clayTheme.primaryDarkColor,
+                                    selectedTextColor = clayTheme.primaryDarkColor,
+                                    indicatorColor = clayTheme.accentBgColor,
+                                    unselectedIconColor = TextoSecundario,
+                                    unselectedTextColor = TextoSecundario
+                                )
+                            )
+                        }
+
                         if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
                             val selected = currentRoute == AppDestinations.PANEL_ROLANDO.ruta
                             NavigationBarItem(
@@ -619,6 +680,10 @@ fun RutaAguaNavHost(
                             }
                         }
                     )
+                }
+
+                composable("reportes_camioneta") {
+                    ReportesCamionetaScreen(viewModel = registroDiaViewModel)
                 }
 
                 composable(AppDestinations.PANEL_ROLANDO.ruta) {

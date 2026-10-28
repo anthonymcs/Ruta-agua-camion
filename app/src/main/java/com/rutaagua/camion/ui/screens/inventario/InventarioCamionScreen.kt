@@ -99,6 +99,8 @@ import com.rutaagua.camion.ui.theme.BidonMarcadoColor
 import com.rutaagua.camion.ui.theme.BidonMarcadoFondo
 import com.rutaagua.camion.ui.theme.BidonTransparenteColor
 import com.rutaagua.camion.ui.theme.BidonTransparenteFondo
+import com.rutaagua.camion.ui.theme.PichinchaNavy
+import com.rutaagua.camion.ui.theme.PichinchaYellow
 import com.rutaagua.camion.ui.theme.RojoAlerta
 import com.rutaagua.camion.ui.theme.RojoAlertaFondo
 import com.rutaagua.camion.ui.theme.TextoOscuro
@@ -217,7 +219,11 @@ fun InventarioCamionScreen(
 
             item {
                 inventario?.let { inv ->
-                    FilaTarjetasBidonesClay(inv, estadisticasVentas)
+                    FilaTarjetasBidonesClay(
+                        inventario = inv,
+                        estadisticas = estadisticasVentas,
+                        onCardClick = { viewModel.abrirModalRecarga() }
+                    )
                 }
             }
 
@@ -656,10 +662,10 @@ private fun BotonRecargarEnPlantaClay(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .height(66.dp),
-        containerColor = VerdeEfectivo,
-        contentColor = Color.White,
-        cornerRadius = 20.dp
+            .height(60.dp),
+        containerColor = PichinchaYellow,
+        contentColor = PichinchaNavy,
+        cornerRadius = 18.dp
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -668,22 +674,23 @@ private fun BotonRecargarEnPlantaClay(
             Icon(
                 imageVector = Icons.Default.LocalShipping,
                 contentDescription = null,
-                modifier = Modifier.size(28.dp)
+                tint = PichinchaNavy,
+                modifier = Modifier.size(24.dp)
             )
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             Column {
                 Text(
-                    text = "INGRESAR / MODIFICAR CARGA",
+                    text = "Ingresar / Modificar Carga",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Black,
-                    color = Color.White
+                    color = PichinchaNavy
                 )
                 calculoRecarga?.let {
                     Text(
-                        text = "Faltan ${it.bidonesFaltantesParaTope} bidones para el tope (${it.capacidadTopeBidones})",
+                        text = "Faltan ${it.bidonesFaltantesParaTope} para ${it.capacidadTopeBidones}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.92f),
-                        fontWeight = FontWeight.SemiBold
+                        color = PichinchaNavy.copy(alpha = 0.8f),
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -694,7 +701,8 @@ private fun BotonRecargarEnPlantaClay(
 @Composable
 private fun FilaTarjetasBidonesClay(
     inventario: InventarioCamionEntity,
-    estadisticas: EstadisticasVentasTipo? = null
+    estadisticas: EstadisticasVentasTipo? = null,
+    onCardClick: (() -> Unit)? = null
 ) {
     val totalTrans = inventario.bidonesLlenosTransparentes + (estadisticas?.transparentesVendidos ?: 0)
     val totalAzul = inventario.bidonesLlenosAzules + (estadisticas?.azulesVendidos ?: 0)
@@ -706,13 +714,14 @@ private fun FilaTarjetasBidonesClay(
     ) {
         TarjetaBidonIndividualClay(
             tipo = TipoBidon.TRANSPARENTE,
-            nombre = "Transparente",
+            nombre = "PET",
             cantidad = inventario.bidonesLlenosTransparentes,
             totalCargado = totalTrans,
             vendidosHoy = estadisticas?.transparentesVendidos ?: 0,
             colorFondo = BidonTransparenteFondo,
             colorAcento = BidonTransparenteColor,
             destacado = false,
+            onClick = onCardClick,
             modifier = Modifier.weight(1f)
         )
 
@@ -725,6 +734,7 @@ private fun FilaTarjetasBidonesClay(
             colorFondo = BidonAzulFondo,
             colorAcento = BidonAzulColor,
             destacado = false,
+            onClick = onCardClick,
             modifier = Modifier.weight(1f)
         )
 
@@ -737,6 +747,7 @@ private fun FilaTarjetasBidonesClay(
             colorFondo = BidonMarcadoFondo,
             colorAcento = BidonMarcadoColor,
             destacado = true,
+            onClick = onCardClick,
             modifier = Modifier.weight(1f)
         )
     }
@@ -752,21 +763,19 @@ private fun TarjetaBidonIndividualClay(
     colorFondo: Color,
     colorAcento: Color,
     destacado: Boolean,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val stockBajo = cantidad <= 10
 
     ClayCard(
-        modifier = modifier.then(
-            if (destacado) {
-                Modifier.border(2.dp, colorAcento, RoundedCornerShape(20.dp))
-            } else {
-                Modifier
-            }
-        ),
+        modifier = modifier,
         containerColor = colorFondo,
+        accentBorderColor = if (destacado) colorAcento else null,
         cornerRadius = 20.dp,
-        elevation = if (destacado) 8.dp else 5.dp
+        elevation = if (destacado) 6.dp else 3.dp,
+        contentPadding = PaddingValues(vertical = 12.dp, horizontal = 8.dp),
+        onClick = onClick
     ) {
         Column(
             modifier = Modifier

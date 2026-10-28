@@ -2,9 +2,10 @@ package com.rutaagua.camion.ui.screens.registro
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -33,13 +33,11 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,47 +56,51 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rutaagua.camion.data.local.entity.ClienteEntity
 import com.rutaagua.camion.data.local.entity.GastoExtraEntity
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
-import com.rutaagua.camion.data.local.model.FormaPago
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.model.TipoVehiculo
 import com.rutaagua.camion.data.local.prefs.RolUsuario
-import com.rutaagua.camion.ui.components.BidonIllustration
+import com.rutaagua.camion.ui.components.BankingQuickAction
+import com.rutaagua.camion.ui.components.BankingSegmentedTabs
 import com.rutaagua.camion.ui.components.ClayBadge
 import com.rutaagua.camion.ui.components.ClayButton
 import com.rutaagua.camion.ui.components.ClayCard
 import com.rutaagua.camion.ui.components.ClayInsetBox
-import com.rutaagua.camion.ui.components.GalonIllustration
-import com.rutaagua.camion.ui.components.MiniIllustration
-import com.rutaagua.camion.ui.components.PacaIllustration
 import com.rutaagua.camion.ui.components.VehicleClayTheme
+import com.rutaagua.camion.ui.components.bounceClick
 import com.rutaagua.camion.ui.components.obtenerClayThemePorVehiculo
 import com.rutaagua.camion.ui.security.SecurityPinDialog
-import com.rutaagua.camion.ui.theme.AguaPrimary
-import com.rutaagua.camion.ui.theme.AguaPrimaryDark
 import com.rutaagua.camion.ui.theme.AmbarAdvertencia
 import com.rutaagua.camion.ui.theme.AmbarFondo
 import com.rutaagua.camion.ui.theme.BidonAzulColor
+import com.rutaagua.camion.ui.theme.BidonAzulFondo
 import com.rutaagua.camion.ui.theme.BidonMarcadoColor
+import com.rutaagua.camion.ui.theme.BidonMarcadoFondo
 import com.rutaagua.camion.ui.theme.BidonTransparenteColor
-import com.rutaagua.camion.ui.theme.ClayInsetBackground
+import com.rutaagua.camion.ui.theme.BidonTransparenteFondo
+import com.rutaagua.camion.ui.theme.BordeSuave
+import com.rutaagua.camion.ui.theme.PichinchaNavy
+import com.rutaagua.camion.ui.theme.PichinchaYellow
 import com.rutaagua.camion.ui.theme.RojoAlerta
 import com.rutaagua.camion.ui.theme.RojoAlertaFondo
-import com.rutaagua.camion.ui.theme.SuperficieTarjeta
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 import com.rutaagua.camion.ui.theme.VerdeEfectivo
@@ -134,8 +136,8 @@ fun RegistroDiaScreen(
 
     var ventaParaEditar by remember { mutableStateOf<Pair<TransaccionVentaEntity, ClienteEntity?>?>(null) }
     var ventaParaEliminar by remember { mutableStateOf<TransaccionVentaEntity?>(null) }
-    var mostrarPinParaEditar by remember { mutableStateOf(false) }
-    var mostrarPinParaEliminar by remember { mutableStateOf(false) }
+    var mostrarPinParaEditar by rememberSaveable { mutableStateOf(false) }
+    var mostrarPinParaEliminar by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -160,28 +162,30 @@ fun RegistroDiaScreen(
         modifier = modifier,
         containerColor = clayTheme.canvasColor,
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            HeaderStockClay(
-                inventario = inventario,
-                clayTheme = clayTheme
-            )
-        },
         floatingActionButton = {
-            FloatingActionButton(
+            ClayButton(
                 onClick = { viewModel.abrirModalNuevaVenta() },
-                containerColor = clayTheme.primary,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.padding(bottom = 12.dp)
+                containerColor = PichinchaYellow,
+                contentColor = PichinchaNavy,
+                cornerRadius = 18.dp,
+                height = 54.dp,
+                modifier = Modifier.padding(bottom = 6.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(text = "Nueva Entrega", fontWeight = FontWeight.Black, fontSize = 15.sp)
-                }
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Vender",
+                    tint = PichinchaNavy,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Vender",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp,
+                    color = PichinchaNavy,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     ) { innerPadding ->
@@ -189,223 +193,175 @@ fun RegistroDiaScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = PaddingValues(bottom = 96.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 1. Métricas del día en tarjetas Clay
+            // 1. Selector de Vehículo solo en modo Administrador
+            if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
+                item {
+                    BankingSegmentedTabs(
+                        options = FiltroVehiculoRegistro.entries,
+                        selectedOption = filtroVehiculo,
+                        labelProvider = { it.titulo },
+                        onOptionSelected = { viewModel.cambiarFiltroVehiculo(it) },
+                        activeColor = clayTheme.primary
+                    )
+                }
+            }
+
+            // 2. Tarjeta Hero estilo Banca Móvil (Saldo en Caja + Stock interactivo)
             item {
-                FilaTarjetasCuadreClay(
+                TarjetaHeroBanca(
                     resumen = resumen,
-                    esModoAdmin = (rolActivo == RolUsuario.ADMIN_ROLANDO),
+                    inventario = inventario,
                     clayTheme = clayTheme
                 )
             }
 
-            // 1.1 Si es el Perfil de Rolando, mostrar tarjeta de Arqueo
-            if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
-                item {
-                    AuditoriaCierreRP3Card(
-                        cierre = cierreHoy,
-                        resumen = resumen,
-                        costoPlantaBidon = viewModel.costoPlantaBidon,
-                        costoPlantaGalon = viewModel.costoPlantaGalon,
-                        costoPlantaPaca = viewModel.costoPlantaPaca,
-                        costoPlantaMini = viewModel.costoPlantaMini
+            // 3. Acciones Rápidas estilo Banca Móvil Pichincha
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    BankingQuickAction(
+                        icon = Icons.Default.Add,
+                        label = "Vender",
+                        onClick = { viewModel.abrirModalNuevaVenta() },
+                        isPrimaryGold = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    BankingQuickAction(
+                        icon = Icons.Default.Fastfood,
+                        label = "Gasto",
+                        onClick = { viewModel.abrirDialogoGasto() },
+                        iconTint = AmbarAdvertencia,
+                        modifier = Modifier.weight(1f)
+                    )
+                    BankingQuickAction(
+                        icon = Icons.Default.Share,
+                        label = "WhatsApp",
+                        onClick = {
+                            compartirPorWhatsApp(context, viewModel.generarTextoReporteWhatsApp())
+                        },
+                        iconTint = VerdeEfectivo,
+                        modifier = Modifier.weight(1f)
+                    )
+                    BankingQuickAction(
+                        icon = Icons.Default.Lock,
+                        label = if (cierreHoy != null) "Cerrado ✓" else "Arqueo",
+                        onClick = { viewModel.abrirDialogoCierre() },
+                        iconTint = clayTheme.primary,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
 
-            // 2. Acciones operativas (Cierre de Caja, Gasto Extra, Reporte WhatsApp)
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        ClayButton(
-                            onClick = { viewModel.abrirDialogoCierre() },
-                            containerColor = if (cierreHoy != null) VerdeEfectivo else Color(0xFF0F172A),
-                            height = 46.dp,
-                            modifier = Modifier.weight(1.2f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (cierreHoy != null) "Cierre: $${String.format(Locale.US, "%.2f", cierreHoy?.totalDeclarado)}"
-                                else "Cierre de Caja",
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 13.sp
-                            )
-                        }
-
-                        ClayButton(
-                            onClick = { viewModel.abrirDialogoGasto() },
-                            containerColor = SuperficieTarjeta,
-                            contentColor = TextoOscuro,
-                            height = 46.dp,
-                            modifier = Modifier.weight(0.9f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Fastfood,
-                                contentDescription = null,
-                                tint = AmbarAdvertencia,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "+ Gasto",
-                                color = TextoOscuro,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                        }
-
-                        ClayButton(
-                            onClick = { compartirReporteWhatsApp(context, viewModel.generarTextoReporteWhatsApp()) },
-                            containerColor = Color(0xFF16A34A),
-                            height = 46.dp,
-                            modifier = Modifier.weight(0.9f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Reporte",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Selector de filtro de vehículo (Admin)
-            if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
+            // 4. Lista de Gastos (si existen hoy)
+            if (gastos.isNotEmpty()) {
                 item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FiltroVehiculoRegistro.entries.forEach { filtro ->
-                            val seleccionado = filtroVehiculo == filtro
-                            FilterChip(
-                                selected = seleccionado,
-                                onClick = { viewModel.cambiarFiltroVehiculo(filtro) },
-                                label = {
-                                    Text(
-                                        text = filtro.titulo,
-                                        fontWeight = if (seleccionado) FontWeight.Bold else FontWeight.Normal,
-                                        fontSize = 12.sp
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = clayTheme.primary,
-                                    selectedLabelColor = Color.White
-                                )
-                            )
-                        }
-                    }
+                    SeccionGastosBanca(
+                        gastos = gastos,
+                        onEliminarGasto = { viewModel.eliminarGasto(it) }
+                    )
                 }
             }
 
-            // 3. Cabecera de entregas del día
+            // 5. Cabecera de Movimientos de Hoy
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                        .padding(top = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Entregas de hoy",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 17.sp,
-                        color = TextoOscuro
+                        text = "Movimientos de hoy",
+                        color = PichinchaNavy,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Black
                     )
                     ClayBadge(
-                        text = "${transacciones.size} registros",
+                        text = "${transacciones.size} entregas",
                         containerColor = clayTheme.softContainer,
                         contentColor = clayTheme.primaryDark
                     )
                 }
             }
 
-            // 4. Lista de entregas
             if (transacciones.isEmpty()) {
                 item {
-                    EstadoVacioRegistroClay()
+                    ClayCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        cornerRadius = 18.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 22.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
+                                contentDescription = null,
+                                tint = TextoSecundario.copy(alpha = 0.5f),
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Sin ventas hoy",
+                                color = PichinchaNavy,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
                 }
             } else {
+                val mapaClientes = todosLosClientes.associateBy { it.id }
+
                 items(transacciones, key = { it.id }) { transaccion ->
-                    val cliente = todosLosClientes.find { it.id == transaccion.clienteId }
-                    TarjetaRegistroItemClay(
+                    val cliente = transaccion.clienteId?.let { mapaClientes[it] }
+                    val nombreCliente = cliente?.nombre
+                        ?: transaccion.nombreClientePaso?.takeIf { it.isNotBlank() }
+                        ?: "Venta #${transaccion.id}"
+
+                    TarjetaTransaccionBanca(
                         transaccion = transaccion,
-                        nombreCliente = cliente?.nombre?.takeIf { it.isNotBlank() }
-                            ?: transaccion.nombreClientePaso?.takeIf { it.isNotBlank() }
-                            ?: "Cliente",
-                        ubicacion = cliente?.ubicacion ?: "",
+                        nombreCliente = nombreCliente,
                         clayTheme = clayTheme,
-                        onEditar = {
+                        onEditarClick = {
                             ventaParaEditar = Pair(transaccion, cliente)
                             mostrarPinParaEditar = true
                         },
-                        onEliminar = {
+                        onEliminarClick = {
                             ventaParaEliminar = transaccion
                             mostrarPinParaEliminar = true
                         },
-                        onEnviarRecibo = {
-                            val mensajeRecibo = WhatsAppHelper.generarMensajeReciboEntrega(
+                        onEnviarReciboWhatsApp = {
+                            val recibo = WhatsAppHelper.generarMensajeReciboEntrega(
                                 transaccion = transaccion,
                                 cliente = cliente,
                                 fechaDisplay = viewModel.fechaHoyDisplay
                             )
-                            WhatsAppHelper.abrirChatWhatsApp(context, cliente?.telefono, mensajeRecibo)
+                            WhatsAppHelper.abrirChatWhatsApp(
+                                context = context,
+                                telefonoRaw = cliente?.telefono,
+                                mensaje = recibo
+                            )
                         }
                     )
                 }
             }
 
-            // 5. Gastos en Ruta
-            if (gastos.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "Gastos en Ruta (${gastos.size})",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 15.sp,
-                        color = TextoOscuro,
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp)
-                    )
-                }
-                items(gastos, key = { it.id }) { gasto ->
-                    TarjetaGastoItemClay(
-                        gasto = gasto,
-                        onEliminar = { viewModel.eliminarGasto(gasto) }
-                    )
-                }
+            item {
+                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
 
-    // Modal de Nueva / Editar Entrega
+    // Modal de Nueva / Editar Venta
     if (mostrarModalVenta) {
         ModalBottomSheet(
             onDismissRequest = { viewModel.cerrarModalNuevaVenta() },
@@ -417,30 +373,30 @@ fun RegistroDiaScreen(
                 clientePreseleccionado = clientePreseleccionado,
                 transaccionAEditar = transaccionEnEdicion,
                 inventario = inventario,
-                onConfirmarVenta = { cId, nomPaso, tipoB, cRec, pBidon, cPrest, cDev, cVendEnv, pEnv, cGal, cPac, cMin, fPago, mPag, nota, rTrans, rAzul, rMarc, mEf, mTr, mCr, mAb, mCanc, pTrans, pAzul, pMarc, cGratis, totalPers ->
+                onConfirmarVenta = { cId, nomPaso, tBidon, cRec, pBidon, cPrest, cDev, cVend, pVend, cGal, cPac, cMin, fPago, mPagado, nota, rTrans, rAzul, rMarc, mEfec, mTransf, mCred, mAbono, mCanc, pTrans, pAzul, pMarc, cGratis, totalPers ->
                     viewModel.registrarOEditarVenta(
                         clienteId = cId,
                         nombreClientePaso = nomPaso,
-                        tipoBidon = tipoB,
+                        tipoBidon = tBidon,
                         cantidadRecarga = cRec,
                         precioUnitarioBidon = pBidon,
                         cantidadPrestados = cPrest,
                         cantidadDevueltos = cDev,
-                        cantidadVendidosEnvase = cVendEnv,
-                        precioUnitarioBidonVendido = pEnv,
+                        cantidadVendidosEnvase = cVend,
+                        precioUnitarioBidonVendido = pVend,
                         cantidadGalones = cGal,
                         cantidadPacas = cPac,
                         cantidadMinis = cMin,
                         formaPago = fPago,
-                        montoPagado = mPag,
+                        montoPagado = mPagado,
                         nota = nota,
                         recargaTransparentes = rTrans,
                         recargaAzules = rAzul,
                         recargaMarcados = rMarc,
-                        montoEfectivo = mEf,
-                        montoTransferencia = mTr,
-                        montoCredito = mCr,
-                        montoAbono = mAb,
+                        montoEfectivo = mEfec,
+                        montoTransferencia = mTransf,
+                        montoCredito = mCred,
+                        montoAbono = mAbono,
                         montoCanceladoDeuda = mCanc,
                         prestadosTransparentes = pTrans,
                         prestadosAzules = pAzul,
@@ -454,26 +410,43 @@ fun RegistroDiaScreen(
         }
     }
 
-    // Confirmación de eliminación
-    if (transaccionAEliminar != null) {
-        val cliente = todosLosClientes.find { it.id == transaccionAEliminar?.clienteId }
-        val nombre = cliente?.nombre ?: transaccionAEliminar?.nombreClientePaso ?: "Cliente"
-        AlertDialog(
-            onDismissRequest = { viewModel.cancelarEliminarVenta() },
-            title = { Text("¿Eliminar entrega?", fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    text = "Se eliminará el registro de \"$nombre\" ($${String.format(Locale.US, "%.2f", transaccionAEliminar?.totalImporte ?: 0.0)}) y se restaurará el stock en el vehículo.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextoOscuro
+    if (mostrarDialogoGasto) {
+        DialogoRegistrarGastoBanca(
+            clayTheme = clayTheme,
+            onConfirmar = { desc, monto -> viewModel.registrarGastoExtra(desc, monto) },
+            onDismiss = { viewModel.cerrarDialogoGasto() }
+        )
+    }
+
+    if (mostrarDialogoCierre) {
+        CierreCajaDialog(
+            cierreExistente = cierreHoy,
+            onConfirmarCierre = { efec, transf, obs ->
+                viewModel.registrarCierreCaja(
+                    efectivoDeclarado = efec,
+                    transferenciasDeclaradas = transf,
+                    observaciones = obs
                 )
             },
+            onDismissRequest = { viewModel.cerrarDialogoCierre() }
+        )
+    }
+
+    transaccionAEliminar?.let { transaccion ->
+        AlertDialog(
+            onDismissRequest = { viewModel.cancelarEliminarVenta() },
+            title = { Text("Eliminar Venta", fontWeight = FontWeight.Black) },
+            text = {
+                Text("¿Revertir esta venta de $${String.format(Locale.US, "%.2f", transaccion.totalImporte)}?")
+            },
             confirmButton = {
-                Button(
+                ClayButton(
                     onClick = { viewModel.confirmarEliminarVenta() },
-                    colors = ButtonDefaults.buttonColors(containerColor = RojoAlerta)
+                    containerColor = RojoAlerta,
+                    contentColor = Color.White,
+                    height = 42.dp
                 ) {
-                    Text("Eliminar", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Eliminar", fontWeight = FontWeight.Black)
                 }
             },
             dismissButton = {
@@ -484,542 +457,568 @@ fun RegistroDiaScreen(
         )
     }
 
-    if (mostrarDialogoCierre) {
-        CierreCajaDialog(
-            cierreExistente = cierreHoy,
-            onConfirmarCierre = { ef, tr, obs ->
-                viewModel.registrarCierreCaja(ef, tr, obs)
-            },
-            onDismissRequest = { viewModel.cerrarDialogoCierre() }
-        )
-    }
-
-    if (mostrarDialogoGasto) {
-        DialogoAgregarGasto(
-            onConfirmar = { concepto, monto -> viewModel.registrarGastoExtra(concepto, monto) },
-            onDismiss = { viewModel.cerrarDialogoGasto() }
-        )
-    }
-
     if (mostrarPinParaEditar && ventaParaEditar != null) {
         SecurityPinDialog(
-            titulo = "Editar Entrega",
-            subtitulo = "Ingresa el PIN de autorización (1234)",
+            titulo = "Editar Venta",
+            subtitulo = "Ingresa el PIN 1234",
             onDismissRequest = {
                 mostrarPinParaEditar = false
                 ventaParaEditar = null
             },
             onPinCorrecto = {
-                val (t, c) = ventaParaEditar!!
+                val (transaccion, cliente) = ventaParaEditar!!
                 mostrarPinParaEditar = false
                 ventaParaEditar = null
-                viewModel.abrirEditarVenta(t, c)
+                viewModel.abrirEditarVenta(transaccion, cliente)
             }
         )
     }
 
     if (mostrarPinParaEliminar && ventaParaEliminar != null) {
         SecurityPinDialog(
-            titulo = "Eliminar Entrega",
-            subtitulo = "Ingresa el PIN de autorización (1234)",
+            titulo = "Eliminar Venta",
+            subtitulo = "Ingresa el PIN 1234",
             onDismissRequest = {
                 mostrarPinParaEliminar = false
                 ventaParaEliminar = null
             },
             onPinCorrecto = {
-                val t = ventaParaEliminar!!
+                val transaccion = ventaParaEliminar!!
                 mostrarPinParaEliminar = false
                 ventaParaEliminar = null
-                viewModel.solicitarEliminarVenta(t)
+                viewModel.solicitarEliminarVenta(transaccion)
             }
         )
     }
 }
 
+/**
+ * Tarjeta Principal estilo Banca Móvil Pichincha:
+ * Muestra el Efectivo Neto con botón de ocultar/mostrar monto, stock interactivo de la unidad y desglose rápido.
+ */
 @Composable
-private fun HeaderStockClay(
+private fun TarjetaHeroBanca(
+    resumen: ResumenCierreDia,
     inventario: InventarioCamionEntity?,
     clayTheme: VehicleClayTheme
 ) {
-    if (inventario == null) return
-    Surface(
-        color = clayTheme.canvasColor,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            MiniChipStockClay(
-                label = "PET",
-                cantidad = inventario.bidonesLlenosTransparentes,
-                color = BidonTransparenteColor,
-                modifier = Modifier.weight(1f)
-            )
-            MiniChipStockClay(
-                label = "Azul",
-                cantidad = inventario.bidonesLlenosAzules,
-                color = BidonAzulColor,
-                modifier = Modifier.weight(1f)
-            )
-            MiniChipStockClay(
-                label = "Marcado",
-                cantidad = inventario.bidonesLlenosMarcados,
-                color = BidonMarcadoColor,
-                modifier = Modifier.weight(1f)
-            )
-            MiniChipStockClay(
-                label = "Vacíos",
-                cantidad = inventario.bidonesVacios,
-                color = Color(0xFF475569),
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
+    var ocultarMontos by rememberSaveable { mutableStateOf(false) }
+    var verDetalleStock by rememberSaveable { mutableStateOf(false) }
 
-@Composable
-private fun MiniChipStockClay(
-    label: String,
-    cantidad: Int,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        color = SuperficieTarjeta,
-        shape = RoundedCornerShape(12.dp),
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, color.copy(alpha = 0.25f)),
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(color, CircleShape)
-            )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-                text = "$label: $cantidad",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Black,
-                color = TextoOscuro
-            )
-        }
-    }
-}
+    val llenos = inventario?.totalBidonesLlenos() ?: 0
+    val tope = inventario?.capacidadTopeBidones ?: clayTheme.topeBidonesDefault
 
-@Composable
-private fun FilaTarjetasCuadreClay(
-    resumen: ResumenCierreDia,
-    esModoAdmin: Boolean,
-    clayTheme: VehicleClayTheme
-) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        TarjetaMetricaClay(
-            titulo = "Bidones Entregados",
-            valor = "${resumen.totalBidonesVendidos}",
-            subtitulo = "${resumen.totalBidonesPrestados} prest. • ${resumen.totalBidonesDevueltos} dev.",
-            colorValor = clayTheme.primary
-        )
-
-        if (esModoAdmin) {
-            TarjetaMetricaClay(
-                titulo = "Efectivo Neto",
-                valor = "$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}",
-                subtitulo = "En caja hoy",
-                colorValor = VerdeEfectivo
-            )
-        }
-
-        TarjetaMetricaClay(
-            titulo = "Transferencias",
-            valor = "$${String.format(Locale.US, "%.2f", resumen.totalIngresoTransferencia)}",
-            subtitulo = "Banca móvil",
-            colorValor = Color(0xFF0284C7)
-        )
-
-        TarjetaMetricaClay(
-            titulo = "Créditos Hoy",
-            valor = "$${String.format(Locale.US, "%.2f", resumen.totalCreditosOtorgados)}",
-            subtitulo = "Fiado otorgado",
-            colorValor = RojoAlerta
-        )
-
-        TarjetaMetricaClay(
-            titulo = "Abonos Cobrados",
-            valor = "$${String.format(Locale.US, "%.2f", resumen.totalAbonosRecibidos + resumen.totalDeudasCanceladas)}",
-            subtitulo = "Deudas previas",
-            colorValor = Color(0xFF7C3AED)
-        )
-
-        TarjetaMetricaClay(
-            titulo = "Gastos Ruta",
-            valor = "$${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}",
-            subtitulo = "Salidas de caja",
-            colorValor = AmbarAdvertencia
-        )
-    }
-}
-
-@Composable
-private fun TarjetaMetricaClay(
-    titulo: String,
-    valor: String,
-    subtitulo: String,
-    colorValor: Color
-) {
-    ClayCard(
-        modifier = Modifier.width(156.dp),
-        cornerRadius = 20.dp,
-        elevation = 4.dp,
-        contentPadding = PaddingValues(14.dp)
-    ) {
-        Text(
-            text = titulo,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextoSecundario
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = valor,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Black,
-            color = colorValor
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = subtitulo,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            color = TextoSecundario
-        )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun TarjetaRegistroItemClay(
-    transaccion: TransaccionVentaEntity,
-    nombreCliente: String,
-    ubicacion: String,
-    clayTheme: VehicleClayTheme,
-    onEditar: () -> Unit,
-    onEliminar: () -> Unit,
-    onEnviarRecibo: () -> Unit
-) {
-    val formatoHora = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-    val horaTexto = formatoHora.format(Date(transaccion.fecha))
-
-    ClayCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp),
-        cornerRadius = 20.dp,
-        elevation = 4.dp,
-        contentPadding = PaddingValues(14.dp)
-    ) {
-        // Cabecera: Nombre completo del cliente (sin truncar) + acciones
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = nombreCliente,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Black,
-                    color = TextoOscuro
+            .clip(RoundedCornerShape(22.dp))
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(clayTheme.primaryDark, clayTheme.primary)
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(top = 2.dp)
-                ) {
-                    Text(
-                        text = horaTexto,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextoSecundario
-                    )
-                    if (ubicacion.isNotBlank()) {
-                        Text(
-                            text = "• $ubicacion",
-                            fontSize = 11.sp,
-                            color = TextoSecundario
-                        )
-                    }
-                }
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val esPagoMixto = listOf(
-                    transaccion.montoEfectivo > 0,
-                    transaccion.montoTransferencia > 0,
-                    transaccion.montoCredito > 0,
-                    transaccion.montoAbono > 0
-                ).count { it } > 1
-
-                if (esPagoMixto) {
-                    ClayBadge(
-                        text = "Combinado",
-                        containerColor = Color(0xFFDBEAFE),
-                        contentColor = Color(0xFF1D4ED8)
-                    )
-                } else {
-                    BadgeFormaPago(formaPago = transaccion.formaPagoPrincipal)
-                }
-
-                IconButton(onClick = onEditar, modifier = Modifier.size(30.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Editar",
-                        tint = clayTheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-                IconButton(onClick = onEliminar, modifier = Modifier.size(30.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Eliminar",
-                        tint = RojoAlerta,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Desglose de productos e importe en contenedor Clay Inset
-        ClayInsetBox(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 14.dp,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
-        ) {
+            )
+            .padding(18.dp)
+    ) {
+        Column {
+            // Fila Superior: Etiqueta + Stock Interactivo de la Unidad
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                FlowRow(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val totalTrans = transaccion.recargaTransparentes + transaccion.prestadosTransparentes + transaccion.envasesVendidosTransparentes
-                    val totalAzul = transaccion.recargaAzules + transaccion.prestadosAzules + transaccion.envasesVendidosAzules
-                    val totalMarc = transaccion.recargaMarcados + transaccion.prestadosMarcados + transaccion.envasesVendidosMarcados
-                    val tieneMulti = (totalTrans + totalAzul + totalMarc) > 0
-
-                    if (tieneMulti) {
-                        if (totalTrans > 0) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                BidonIllustration(tipo = TipoBidon.TRANSPARENTE, size = 22.dp)
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "$totalTrans PET", fontWeight = FontWeight.Black, fontSize = 12.sp, color = BidonTransparenteColor)
-                            }
-                        }
-                        if (totalAzul > 0) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                BidonIllustration(tipo = TipoBidon.AZUL, size = 22.dp)
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "$totalAzul Azul", fontWeight = FontWeight.Black, fontSize = 12.sp, color = BidonAzulColor)
-                            }
-                        }
-                        if (totalMarc > 0) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                BidonIllustration(tipo = TipoBidon.MARCADO, size = 22.dp)
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "$totalMarc Marc.", fontWeight = FontWeight.Black, fontSize = 12.sp, color = BidonMarcadoColor)
-                            }
-                        }
-                    } else {
-                        val totalBidones = transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesPrestados + transaccion.cantidadBidonesVendidosEnvase
-                        if (totalBidones > 0) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                BidonIllustration(tipo = transaccion.tipoBidon, size = 22.dp)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "$totalBidones bid.", fontWeight = FontWeight.Black, fontSize = 12.sp)
-                            }
-                        }
-                    }
-
-                    // Notación "35+1" si hay bidón gratis
-                    if (transaccion.cantidadBidonesGratis > 0) {
-                        val totalEntregados = transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesPrestados
-                        val cobrados = maxOf(0, totalEntregados - transaccion.cantidadBidonesGratis)
-                        ClayBadge(
-                            text = "${cobrados}+${transaccion.cantidadBidonesGratis}",
-                            containerColor = Color(0xFFDBEAFE),
-                            contentColor = AguaPrimaryDark
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Efectivo en caja",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    IconButton(
+                        onClick = { ocultarMontos = !ocultarMontos },
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (ocultarMontos) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = "Ocultar saldo",
+                            tint = Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(16.dp)
                         )
-                    }
-
-                    if (transaccion.cantidadBidonesPrestados > 0) {
-                        ClayBadge(
-                            text = "+${transaccion.cantidadBidonesPrestados} prestados",
-                            containerColor = AmbarFondo,
-                            contentColor = AmbarAdvertencia
-                        )
-                    }
-
-                    if (transaccion.cantidadBidonesDevueltos > 0) {
-                        ClayBadge(
-                            text = "-${transaccion.cantidadBidonesDevueltos} devueltos",
-                            containerColor = VerdeEfectivoFondo,
-                            contentColor = VerdeEfectivo
-                        )
-                    }
-
-                    if (transaccion.cantidadGalones > 0) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            GalonIllustration(size = 20.dp)
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(text = "${transaccion.cantidadGalones} gal", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-
-                    if (transaccion.cantidadPacas > 0) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            PacaIllustration(size = 20.dp)
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(text = "${transaccion.cantidadPacas} pac", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-
-                    if (transaccion.cantidadMinis > 0) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            MiniIllustration(size = 20.dp)
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(text = "${transaccion.cantidadMinis} min", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                // Pastilla interactiva de Stock del Vehículo (toca para expandir/colapsar desglose)
+                Surface(
+                    onClick = { verDetalleStock = !verDetalleStock },
+                    color = Color.White.copy(alpha = 0.16f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.bounceClick(0.95f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .background(PichinchaYellow, CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "${clayTheme.nombreCorto}: $llenos/$tope",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
+            // Saldo Principal Grande
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Text(
+                    text = if (ocultarMontos) "$ ••••••" else "$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}",
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black
+                )
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "$${String.format(Locale.US, "%.2f", transaccion.totalImporte)}",
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Black,
-                        color = VerdeEfectivo
+                        text = "${resumen.totalBidonesVendidos} bidones hoy",
+                        color = PichinchaYellow,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black
                     )
-                    val partesPago = mutableListOf<String>()
-                    if (transaccion.montoEfectivo > 0) partesPago.add("Ef: $${String.format(Locale.US, "%.2f", transaccion.montoEfectivo)}")
-                    if (transaccion.montoTransferencia > 0) partesPago.add("Tr: $${String.format(Locale.US, "%.2f", transaccion.montoTransferencia)}")
-                    if (transaccion.montoCredito > 0) partesPago.add("Fiado: $${String.format(Locale.US, "%.2f", transaccion.montoCredito)}")
-                    if (transaccion.montoAbono > 0) partesPago.add("Ab: $${String.format(Locale.US, "%.2f", transaccion.montoAbono)}")
-
-                    if (partesPago.size > 1) {
+                    if (resumen.totalBidonesPrestados > 0) {
                         Text(
-                            text = partesPago.joinToString(" • "),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextoSecundario
+                            text = "${resumen.totalBidonesPrestados} prestados",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            // Desglose interactivo de stock si el usuario toca la pastilla del vehículo
+            AnimatedVisibility(visible = verDetalleStock && inventario != null) {
+                inventario?.let { inv ->
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.22f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "PET: ${inv.bidonesLlenosTransparentes}",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Azul: ${inv.bidonesLlenosAzules}",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Marcadas: ${inv.bidonesLlenosMarcados}",
+                                color = PichinchaYellow,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                            Text(
+                                text = "Vacíos: ${inv.bidonesVacios}",
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Fila de 4 Métricas Rápidas
+            Surface(
+                color = Color.White.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp, horizontal = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    MetricaHeroItem(
+                        label = "Venta Bruta",
+                        valor = if (ocultarMontos) "••••" else "$${String.format(Locale.US, "%.2f", resumen.granTotalVenta)}"
+                    )
+                    MetricaHeroItem(
+                        label = "Transf.",
+                        valor = if (ocultarMontos) "••••" else "$${String.format(Locale.US, "%.2f", resumen.totalIngresoTransferencia)}"
+                    )
+                    MetricaHeroItem(
+                        label = "Créditos",
+                        valor = if (ocultarMontos) "••••" else "$${String.format(Locale.US, "%.2f", resumen.totalCreditosOtorgados)}"
+                    )
+                    MetricaHeroItem(
+                        label = "Abonos",
+                        valor = if (ocultarMontos) "••••" else "$${String.format(Locale.US, "%.2f", resumen.totalAbonosRecibidos)}"
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricaHeroItem(label: String, valor: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            color = Color.White.copy(alpha = 0.72f),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = valor,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun SeccionGastosBanca(
+    gastos: List<GastoExtraEntity>,
+    onEliminarGasto: (GastoExtraEntity) -> Unit
+) {
+    ClayCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = AmbarFondo,
+        cornerRadius = 16.dp,
+        contentPadding = PaddingValues(12.dp)
+    ) {
+        Text(
+            text = "Gastos de hoy (${gastos.size})",
+            color = AmbarAdvertencia,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        gastos.forEach { gasto ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = gasto.concepto,
+                    color = TextoOscuro,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "-$${String.format(Locale.US, "%.2f", gasto.monto)}",
+                        color = RojoAlerta,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 13.sp
+                    )
+                    IconButton(
+                        onClick = { onEliminarGasto(gasto) },
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Eliminar",
+                            tint = TextoSecundario,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Botón compacto para enviar recibo por WhatsApp
-        Surface(
-            onClick = onEnviarRecibo,
-            color = Color(0xFFECFDF3),
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, Color(0xFF16A34A).copy(alpha = 0.3f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(vertical = 7.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = null,
-                    tint = Color(0xFF15803D),
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Enviar recibo por WhatsApp",
-                    color = Color(0xFF15803D),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
-                )
-            }
-        }
     }
 }
 
+/**
+ * Tarjeta de Transacción estilo Banca Móvil: limpia, compacta y con botones de 1 línea.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BadgeFormaPago(formaPago: FormaPago) {
-    val (fondo, textoColor, label) = when (formaPago) {
-        FormaPago.EFECTIVO -> Triple(VerdeEfectivoFondo, VerdeEfectivo, "Efectivo")
-        FormaPago.TRANSFERENCIA -> Triple(Color(0xFFE0F2FE), AguaPrimaryDark, "Transf.")
-        FormaPago.CREDITO -> Triple(RojoAlertaFondo, RojoAlerta, "Crédito")
-        FormaPago.ABONO -> Triple(Color(0xFFF3E8FF), Color(0xFF7E22CE), "Abono")
-        FormaPago.CANCELADO -> Triple(Color(0xFFDCFCE7), Color(0xFF15803D), "Cancelado")
-    }
-    ClayBadge(
-        text = label,
-        containerColor = fondo,
-        contentColor = textoColor
-    )
-}
-
-@Composable
-private fun TarjetaGastoItemClay(
-    gasto: GastoExtraEntity,
-    onEliminar: () -> Unit
+private fun TarjetaTransaccionBanca(
+    transaccion: TransaccionVentaEntity,
+    nombreCliente: String,
+    clayTheme: VehicleClayTheme,
+    onEditarClick: () -> Unit,
+    onEliminarClick: () -> Unit,
+    onEnviarReciboWhatsApp: () -> Unit
 ) {
+    val formatoHora = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val horaTexto = formatoHora.format(Date(transaccion.fecha))
+
     ClayCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        containerColor = AmbarFondo,
-        accentBorderColor = AmbarAdvertencia,
-        cornerRadius = 16.dp,
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 18.dp,
         elevation = 2.dp,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+        contentPadding = PaddingValues(14.dp)
     ) {
+        // Cabecera: Nombre del Cliente + Hora | Total Cobrado
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.Default.Fastfood, contentDescription = null, tint = AmbarAdvertencia, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = gasto.concepto, fontWeight = FontWeight.Bold, color = TextoOscuro)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "-$${String.format(Locale.US, "%.2f", gasto.monto)}",
+                    text = nombreCliente,
+                    color = PichinchaNavy,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Black,
-                    color = RojoAlerta
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                IconButton(onClick = onEliminar, modifier = Modifier.size(28.dp)) {
-                    Icon(imageVector = Icons.Default.Delete, contentDescription = "Eliminar", tint = TextoSecundario, modifier = Modifier.size(16.dp))
+                Text(
+                    text = horaTexto,
+                    color = TextoSecundario,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(
+                text = "$${String.format(Locale.US, "%.2f", transaccion.totalImporte)}",
+                color = VerdeEfectivo,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Pastillas de Productos y Pagos
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            val tieneMulti = (transaccion.recargaTransparentes + transaccion.recargaAzules + transaccion.recargaMarcados) > 0
+            if (tieneMulti) {
+                if (transaccion.recargaTransparentes > 0) {
+                    ClayBadge(
+                        text = "${transaccion.recargaTransparentes} PET",
+                        containerColor = BidonTransparenteFondo,
+                        contentColor = BidonTransparenteColor
+                    )
+                }
+                if (transaccion.recargaAzules > 0) {
+                    ClayBadge(
+                        text = "${transaccion.recargaAzules} Azul",
+                        containerColor = BidonAzulFondo,
+                        contentColor = BidonAzulColor
+                    )
+                }
+                if (transaccion.recargaMarcados > 0) {
+                    ClayBadge(
+                        text = "${transaccion.recargaMarcados} Marc",
+                        containerColor = BidonMarcadoFondo,
+                        contentColor = BidonMarcadoColor
+                    )
+                }
+            } else if (transaccion.cantidadBidonesRecarga > 0) {
+                val (bg, fg, lbl) = when (transaccion.tipoBidon) {
+                    TipoBidon.TRANSPARENTE -> Triple(BidonTransparenteFondo, BidonTransparenteColor, "PET")
+                    TipoBidon.AZUL -> Triple(BidonAzulFondo, BidonAzulColor, "Azul")
+                    TipoBidon.MARCADO -> Triple(BidonMarcadoFondo, BidonMarcadoColor, "Marc")
+                }
+                ClayBadge(
+                    text = "${transaccion.cantidadBidonesRecarga} $lbl",
+                    containerColor = bg,
+                    contentColor = fg
+                )
+            }
+
+            if (transaccion.cantidadBidonesPrestados > 0) {
+                ClayBadge(
+                    text = "+${transaccion.cantidadBidonesPrestados} Prest.",
+                    containerColor = AmbarFondo,
+                    contentColor = AmbarAdvertencia
+                )
+            }
+
+            if (transaccion.cantidadBidonesGratis > 0) {
+                val cobrados = maxOf(0, transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesPrestados - transaccion.cantidadBidonesGratis)
+                ClayBadge(
+                    text = "${cobrados}+${transaccion.cantidadBidonesGratis} Gratis",
+                    containerColor = VerdeEfectivoFondo,
+                    contentColor = VerdeEfectivo
+                )
+            }
+
+            if (transaccion.cantidadBidonesVendidosEnvase > 0) {
+                ClayBadge(
+                    text = "${transaccion.cantidadBidonesVendidosEnvase} Env. Nuevo",
+                    containerColor = clayTheme.softContainer,
+                    contentColor = clayTheme.primaryDark
+                )
+            }
+
+            if (transaccion.cantidadGalones > 0) {
+                ClayBadge(text = "${transaccion.cantidadGalones} Gal")
+            }
+            if (transaccion.cantidadPacas > 0) {
+                ClayBadge(text = "${transaccion.cantidadPacas} Pac")
+            }
+            if (transaccion.cantidadMinis > 0) {
+                ClayBadge(text = "${transaccion.cantidadMinis} Min")
+            }
+
+            // Desglose de pago
+            if (transaccion.montoEfectivo > 0) {
+                ClayBadge(
+                    text = "Efec $${String.format(Locale.US, "%.2f", transaccion.montoEfectivo)}",
+                    containerColor = VerdeEfectivoFondo,
+                    contentColor = VerdeEfectivo
+                )
+            }
+            if (transaccion.montoTransferencia > 0) {
+                ClayBadge(
+                    text = "Transf $${String.format(Locale.US, "%.2f", transaccion.montoTransferencia)}",
+                    containerColor = clayTheme.softContainer,
+                    contentColor = clayTheme.primaryDark
+                )
+            }
+            if (transaccion.montoCredito > 0) {
+                ClayBadge(
+                    text = "Fiado $${String.format(Locale.US, "%.2f", transaccion.montoCredito)}",
+                    containerColor = RojoAlertaFondo,
+                    contentColor = RojoAlerta
+                )
+            }
+            if (transaccion.montoAbono > 0) {
+                ClayBadge(
+                    text = "Abono $${String.format(Locale.US, "%.2f", transaccion.montoAbono)}",
+                    containerColor = VerdeEfectivoFondo,
+                    contentColor = VerdeEfectivo
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        HorizontalDivider(color = BordeSuave)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Acciones inferiores: textos cortos que siempre caben en 1 línea
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                onClick = onEnviarReciboWhatsApp,
+                color = VerdeEfectivoFondo,
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Recibo",
+                        tint = VerdeEfectivo,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = "Recibo",
+                        color = VerdeEfectivo,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Surface(
+                    onClick = onEditarClick,
+                    color = Color(0xFFE6ECF5),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Editar",
+                            tint = PichinchaNavy,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Editar",
+                            color = PichinchaNavy,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                Surface(
+                    onClick = onEliminarClick,
+                    color = RojoAlertaFondo,
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Borrar",
+                            tint = RojoAlerta,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Borrar",
+                            color = RojoAlerta,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
@@ -1027,61 +1026,72 @@ private fun TarjetaGastoItemClay(
 }
 
 @Composable
-private fun DialogoAgregarGasto(
-    onConfirmar: (concepto: String, monto: Double) -> Unit,
+private fun DialogoRegistrarGastoBanca(
+    clayTheme: VehicleClayTheme,
+    onConfirmar: (String, Double) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var concepto by remember { mutableStateOf("Almuerzo") }
-    var montoTexto by remember { mutableStateOf("") }
+    var descripcion by rememberSaveable { mutableStateOf("") }
+    var montoTexto by rememberSaveable { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Registrar Gasto", fontWeight = FontWeight.Black) },
+        title = { Text("Registrar Gasto", fontWeight = FontWeight.Black, color = PichinchaNavy) },
         text = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    listOf("Almuerzo", "Bebidas", "Comida", "Taller", "Combustible").forEach { chip ->
-                        FilterChip(
-                            selected = concepto == chip,
-                            onClick = { concepto = chip },
-                            label = { Text(chip, fontSize = 12.sp) }
-                        )
+                    listOf("Almuerzo", "Diésel", "Peaje").forEach { sug ->
+                        Surface(
+                            onClick = { descripcion = sug },
+                            color = if (descripcion == sug) clayTheme.primary else Color(0xFFE6ECF5),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = sug,
+                                color = if (descripcion == sug) Color.White else PichinchaNavy,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+
                 OutlinedTextField(
-                    value = concepto,
-                    onValueChange = { concepto = it },
+                    value = descripcion,
+                    onValueChange = { descripcion = it },
                     label = { Text("Concepto") },
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+
                 OutlinedTextField(
                     value = montoTexto,
                     onValueChange = { montoTexto = it },
                     label = { Text("Monto ($)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
-            Button(
+            ClayButton(
                 onClick = {
-                    val monto = montoTexto.replace(',', '.').toDoubleOrNull() ?: 0.0
-                    onConfirmar(concepto, monto)
-                }
+                    val m = montoTexto.toDoubleOrNull() ?: 0.0
+                    onConfirmar(descripcion, m)
+                },
+                containerColor = PichinchaYellow,
+                contentColor = PichinchaNavy,
+                height = 42.dp
             ) {
-                Text("Guardar")
+                Text("Guardar", fontWeight = FontWeight.Black)
             }
         },
         dismissButton = {
@@ -1092,59 +1102,18 @@ private fun DialogoAgregarGasto(
     )
 }
 
-@Composable
-private fun EstadoVacioRegistroClay() {
-    ClayCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        cornerRadius = 22.dp,
-        contentPadding = PaddingValues(28.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
-                contentDescription = null,
-                tint = TextoSecundario,
-                modifier = Modifier.size(44.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Sin entregas registradas hoy",
-                fontWeight = FontWeight.Black,
-                fontSize = 16.sp,
-                color = TextoOscuro
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Pulsa \"Nueva Entrega\" para anotar la primera venta.",
-                fontSize = 13.sp,
-                color = TextoSecundario,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-private fun compartirReporteWhatsApp(context: Context, textoReporte: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
+private fun compartirPorWhatsApp(context: Context, textoReporte: String) {
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, textoReporte)
-        setPackage("com.whatsapp")
     }
     try {
-        context.startActivity(intent)
+        val whatsappIntent = Intent(sendIntent).apply {
+            setPackage("com.whatsapp")
+        }
+        context.startActivity(whatsappIntent)
     } catch (_: Exception) {
-        val chooser = Intent.createChooser(
-            Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, textoReporte)
-            },
-            "Compartir reporte"
-        )
+        val chooser = Intent.createChooser(sendIntent, "Compartir reporte")
         context.startActivity(chooser)
     }
 }

@@ -141,7 +141,7 @@ class AppPreferences(context: Context) {
 
     companion object {
         private const val PREFS_NAME = "ruta_agua_prefs"
-        private const val KEY_SESION_INICIADA = "key_sesion_iniciada"
+        private const val KEY_SESION_INICIADA = "key_sesion_iniciada_v3_banca"
         private const val KEY_VEHICULO_ACTIVO = "key_vehiculo_activo"
         private const val KEY_ROL_ACTIVO = "key_rol_activo"
         private const val KEY_PIN_SEGURIDAD = "key_pin_seguridad"

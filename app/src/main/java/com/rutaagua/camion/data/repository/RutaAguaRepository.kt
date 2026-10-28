@@ -586,6 +586,9 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     fun obtenerGastosPorFecha(fechaTexto: String, vehiculo: String? = null): Flow<List<GastoExtraEntity>> =
         gastoDao.obtenerPorFechaYVehiculoFlow(fechaTexto, vehiculo)
 
+    fun obtenerTodosLosGastos(): Flow<List<GastoExtraEntity>> =
+        gastoDao.obtenerTodosFlow()
+
     // ==========================================
     // CIERRE DIARIO Y REPORTE WHATSAPP
     // ==========================================

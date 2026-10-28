@@ -79,6 +79,26 @@ class RegistroDiaViewModel(
             initialValue = emptyList()
         )
 
+    // Histórico completo de transacciones del vehículo activo para Reportes (Día / Semanal / Mensual)
+    val todasLasTransaccionesVehiculoState: StateFlow<List<TransaccionVentaEntity>> = appPreferences.vehiculoActivo
+        .flatMapLatest { vehiculo ->
+            repository.obtenerTodasLasTransacciones(vehiculo.name)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    // Histórico completo de gastos para Reportes (Día / Semanal / Mensual)
+    val todosLosGastosState: StateFlow<List<GastoExtraEntity>> = repository
+        .obtenerTodosLosGastos()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     // Inventario del vehículo activo para validar stock restante al registrar venta
     val inventarioVehiculoActivoState: StateFlow<InventarioCamionEntity?> = appPreferences.vehiculoActivo
         .flatMapLatest { vehiculo ->
