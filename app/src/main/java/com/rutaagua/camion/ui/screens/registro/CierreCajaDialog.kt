@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
@@ -40,13 +42,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rutaagua.camion.data.local.entity.CierreCajaEntity
+import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.ui.components.marineOutlinedTextFieldColors
 import com.rutaagua.camion.ui.theme.AguaPrimary
+import com.rutaagua.camion.ui.theme.AguaPrimaryDark
+import com.rutaagua.camion.ui.theme.AmbarAdvertencia
 import com.rutaagua.camion.ui.theme.BordeSutil
 import com.rutaagua.camion.ui.theme.FondoGrisClaro
+import com.rutaagua.camion.ui.theme.RojoAlerta
 import com.rutaagua.camion.ui.theme.SuperficieBlanca
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
@@ -55,13 +62,14 @@ import com.rutaagua.camion.ui.utils.WhatsAppHelper
 import java.util.Locale
 
 /**
- * Diálogo de Cierre de Caja Ciego (Estilo RP3 Gasolinera).
- * El operador ingresa únicamente los billetes, monedas y comprobantes contados.
- * El sistema NO le revela si sobra o falta dinero para garantizar honestidad y transparencia.
+ * Diálogo de Cierre de Caja y Reporte Diario para Rolando.
+ * Al confirmar el cierre, muestra el reporte completo con la suma de Créditos, Abonos,
+ * Efectivo, Transferencias y el desglose de cuántos clientes de cada precio compraron agua.
  */
 @Composable
 fun CierreCajaDialog(
     cierreExistente: CierreCajaEntity?,
+    resumenDia: ResumenCierreDia? = null,
     onConfirmarCierre: (efectivo: Double, transferencias: Double, observaciones: String) -> Unit,
     onDismissRequest: () -> Unit
 ) {
@@ -181,17 +189,18 @@ fun CierreCajaDialog(
                     )
                 }
             } else {
-                // Confirmación Final para el Operador (SIN FALTANTE NI SOBRANTE)
+                // Reporte Diario Completo al Cerrar Caja (Efectivo, Transferencias, Créditos, Abonos y Clientes por Precio)
                 val c = cierreConfirmado!!
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp),
+                        .verticalScroll(rememberScrollState())
+                        .padding(top = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(54.dp)
+                            .size(48.dp)
                             .background(VerdeEfectivo.copy(alpha = 0.15f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
@@ -199,17 +208,19 @@ fun CierreCajaDialog(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
                             tint = VerdeEfectivo,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(32.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "¡Cierre Declarado con Éxito!",
+                        text = "¡Cierre y Reporte del Día Listo!",
                         fontWeight = FontWeight.Black,
-                        fontSize = 18.sp,
-                        color = TextoOscuro
+                        fontSize = 17.sp,
+                        color = TextoOscuro,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -221,7 +232,7 @@ fun CierreCajaDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier.padding(14.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
@@ -229,35 +240,138 @@ fun CierreCajaDialog(
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = TextoSecundario,
-                                textAlign = TextAlign.Center
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "$${String.format(Locale.US, "%.2f", c.totalDeclarado)}",
-                                fontSize = 30.sp,
+                                fontSize = 28.sp,
                                 fontWeight = FontWeight.Black,
                                 color = VerdeEfectivo
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Efectivo: $${String.format(Locale.US, "%.2f", c.efectivoDeclarado)}  •  Transferencias: $${String.format(Locale.US, "%.2f", c.transferenciasDeclaradas)}",
+                                text = "Efectivo: $${String.format(Locale.US, "%.2f", c.efectivoDeclarado)} • Transf: $${String.format(Locale.US, "%.2f", c.transferenciasDeclaradas)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = TextoOscuro
+                                color = TextoOscuro,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    if (resumenDia != null) {
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // 1. Suma de Créditos, Abonos, Efectivo y Transferencias del Día
+                        Surface(
+                            color = FondoGrisClaro,
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, BordeSutil),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "SUMA CONTABLE DEL DÍA",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = AguaPrimaryDark,
+                                    maxLines = 1
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                FilaResumenReporteCierre("Efectivo del Día", resumenDia.totalIngresoEfectivo, VerdeEfectivo)
+                                FilaResumenReporteCierre("Transferencias del Día", resumenDia.totalIngresoTransferencia, AguaPrimaryDark)
+                                FilaResumenReporteCierre("Créditos del Día (Fiado)", resumenDia.totalCreditosOtorgados, RojoAlerta)
+                                FilaResumenReporteCierre("Abonos / Deudas Cobradas", resumenDia.totalAbonosYCancelados, AmbarAdvertencia)
+                                FilaResumenReporteCierre("Gastos en Ruta", resumenDia.totalGastosRuta, TextoSecundario)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Efectivo Neto Caja:",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 13.sp,
+                                        color = TextoOscuro
+                                    )
+                                    Text(
+                                        text = "$${String.format(Locale.US, "%.2f", resumenDia.efectivoNetoCaja)}",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 13.sp,
+                                        color = VerdeEfectivo
+                                    )
+                                }
+                            }
+                        }
+
+                        // 2. Desglose de Clientes por Precio de Agua (Ej: "Clientes $0.80: 20 clientes • Total $16.00")
+                        if (resumenDia.desglosePorPrecio.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                color = FondoGrisClaro,
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, BordeSutil),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = "CLIENTES POR PRECIO DE AGUA",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Black,
+                                        color = AguaPrimaryDark,
+                                        maxLines = 1
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    resumenDia.desglosePorPrecio.forEach { item ->
+                                        val cliLabel = if (item.cantidadClientes == 1) "1 cliente" else "${item.cantidadClientes} clientes"
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 3.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Clientes $${String.format(Locale.US, "%.2f", item.precioUnitario)}: $cliLabel (${item.cantidadBidonesCobrados} bid.)",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = TextoOscuro,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Total $${String.format(Locale.US, "%.2f", item.totalImporteAgua)}",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Black,
+                                                color = AguaPrimaryDark,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Button(
                         onClick = {
-                            val mensaje = WhatsAppHelper.generarMensajeCierreCajaOperador(c)
+                            val mensaje = WhatsAppHelper.generarMensajeCierreCajaOperador(c, resumenDia)
                             WhatsAppHelper.abrirChatWhatsApp(context, null, mensaje)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Share,
@@ -269,7 +383,10 @@ fun CierreCajaDialog(
                         Text(
                             text = "Enviar Cierre a Rolando (WhatsApp)",
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -316,4 +433,37 @@ fun CierreCajaDialog(
             }
         }
     )
+}
+
+@Composable
+private fun FilaResumenReporteCierre(
+    etiqueta: String,
+    valor: Double,
+    colorValor: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = etiqueta,
+            fontSize = 12.sp,
+            color = TextoSecundario,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "$${String.format(Locale.US, "%.2f", valor)}",
+            fontSize = 12.sp,
+            color = colorValor,
+            fontWeight = FontWeight.Black,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
 }

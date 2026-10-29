@@ -1,5 +1,19 @@
 package com.rutaagua.camion.data.local.model
 
+import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
+import java.util.Locale
+
+/**
+ * Desglose de ventas agrupado por el precio unitario del bidón registrado en cada cliente/venta.
+ * Ej: "Clientes $0.80: 20 clientes (20 bidones) • Total: $16.00"
+ */
+data class ResumenPrecioCliente(
+    val precioUnitario: Double,
+    val cantidadClientes: Int,
+    val cantidadBidonesCobrados: Int,
+    val totalImporteAgua: Double
+)
+
 /**
  * Modelo de datos para el arqueo y resumen contable diario (hoja física digitalizada).
  */
@@ -18,5 +32,29 @@ data class ResumenCierreDia(
     val totalDeudasCanceladas: Double = 0.0,
     val totalGastosRuta: Double = 0.0,
     val efectivoNetoCaja: Double = 0.0, // (Efectivo ventas + Abonos + Cancelados) - Gastos
-    val granTotalVenta: Double = 0.0
-)
+    val granTotalVenta: Double = 0.0,
+    val desglosePorPrecio: List<ResumenPrecioCliente> = emptyList()
+) {
+    val totalAbonosYCancelados: Double
+        get() = totalAbonosRecibidos + totalDeudasCanceladas
+}
+
+fun calcularDesglosePorPrecio(transacciones: List<TransaccionVentaEntity>): List<ResumenPrecioCliente> {
+    return transacciones
+        .filter { (it.cantidadBidonesRecarga + it.cantidadBidonesPrestados) > 0 }
+        .groupBy { String.format(Locale.US, "%.2f", it.precioUnitarioBidon).toDoubleOrNull() ?: it.precioUnitarioBidon }
+        .map { (precio, lista) ->
+            val clientesUnicos = lista.map { tx -> tx.clienteId ?: -tx.id }.distinct().size
+            val bidonesCobrados = lista.sumOf { tx ->
+                maxOf(0, tx.cantidadBidonesRecarga + tx.cantidadBidonesPrestados - tx.cantidadBidonesGratis)
+            }
+            val totalAgua = bidonesCobrados * precio
+            ResumenPrecioCliente(
+                precioUnitario = precio,
+                cantidadClientes = clientesUnicos,
+                cantidadBidonesCobrados = bidonesCobrados,
+                totalImporteAgua = totalAgua
+            )
+        }
+        .sortedBy { it.precioUnitario }
+}

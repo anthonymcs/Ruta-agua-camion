@@ -306,12 +306,51 @@ fun PanelRolandoScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
-                        FilaFlujoCaja(etiqueta = "💵 Efectivo Neto Cobrado:", valor = "$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}", color = VerdeEfectivo)
+                        FilaFlujoCaja(etiqueta = "💵 Efectivo del Día:", valor = "$${String.format(Locale.US, "%.2f", resumen.totalIngresoEfectivo)}", color = VerdeEfectivo)
                         FilaFlujoCaja(etiqueta = "📲 Transferencias Bancarias:", valor = "$${String.format(Locale.US, "%.2f", resumen.totalIngresoTransferencia)}", color = AzulCorporativo)
-                        FilaFlujoCaja(etiqueta = "🤝 Abonos de Deudas Pasadas:", valor = "+$${String.format(Locale.US, "%.2f", resumen.totalAbonosRecibidos)}", color = Color(0xFF0F766E))
                         FilaFlujoCaja(etiqueta = "📝 Créditos Otorgados (Fiado hoy):", valor = "$${String.format(Locale.US, "%.2f", resumen.totalCreditosOtorgados)}", color = RojoAlerta)
+                        FilaFlujoCaja(etiqueta = "🤝 Abonos / Deudas Cobradas:", valor = "+$${String.format(Locale.US, "%.2f", resumen.totalAbonosYCancelados)}", color = Color(0xFF0F766E))
+                        FilaFlujoCaja(etiqueta = "🧾 Gastos en Ruta:", valor = "-$${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}", color = AmbarAdvertencia)
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = BordeSutil)
+                        FilaFlujoCaja(etiqueta = "💰 Efectivo Neto en Caja:", valor = "$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}", color = VerdeEfectivo, negrita = true)
                         FilaFlujoCaja(etiqueta = "📦 Total Bidones 20L Vendidos:", valor = "${resumen.totalBidonesVendidos} botellones", color = TextoOscuro, negrita = true)
+                    }
+                }
+            }
+        }
+
+        // 6. Desglose de Clientes por Precio Unitario de Agua
+        if (resumen.desglosePorPrecio.isNotEmpty()) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text(
+                        text = "CLIENTES POR PRECIO DE AGUA (HOY)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextoSecundario,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = SuperficieBlanca),
+                        border = BorderStroke(1.dp, BordeSutil),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            resumen.desglosePorPrecio.forEachIndexed { idx, item ->
+                                val cliLabel = if (item.cantidadClientes == 1) "1 cliente" else "${item.cantidadClientes} clientes"
+                                FilaFlujoCaja(
+                                    etiqueta = "Clientes $${String.format(Locale.US, "%.2f", item.precioUnitario)}: $cliLabel (${item.cantidadBidonesCobrados} bid.)",
+                                    valor = "Total $${String.format(Locale.US, "%.2f", item.totalImporteAgua)}",
+                                    color = AzulCorporativo,
+                                    negrita = true
+                                )
+                                if (idx < resumen.desglosePorPrecio.lastIndex) {
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = BordeSutil)
+                                }
+                            }
+                        }
                     }
                 }
             }

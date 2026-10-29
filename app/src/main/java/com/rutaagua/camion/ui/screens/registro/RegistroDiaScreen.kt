@@ -396,6 +396,7 @@ fun RegistroDiaScreen(
     if (mostrarDialogoCierre) {
         CierreCajaDialog(
             cierreExistente = cierreHoy,
+            resumenDia = resumen,
             onConfirmarCierre = { efec, transf, obs ->
                 viewModel.registrarCierreCaja(
                     efectivoDeclarado = efec,

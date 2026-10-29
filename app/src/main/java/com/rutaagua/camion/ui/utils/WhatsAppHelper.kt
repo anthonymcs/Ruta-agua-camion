@@ -8,6 +8,7 @@ import com.rutaagua.camion.data.local.entity.CierreCajaEntity
 import com.rutaagua.camion.data.local.entity.ClienteEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
 import com.rutaagua.camion.data.local.model.FormaPago
+import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.TipoBidon
 import java.io.File
 import java.text.SimpleDateFormat
@@ -315,26 +316,57 @@ object WhatsAppHelper {
     }
 
     /**
-     * Genera el texto del resumen de Cierre Ciego para enviar por WhatsApp a Rolando.
+     * Genera el texto del resumen de Cierre de Caja para enviar por WhatsApp a Rolando,
+     * incluyendo la suma de Créditos, Abonos, Efectivo, Transferencias y el desglose por precio de cliente.
      */
-    fun generarMensajeCierreCajaOperador(cierre: CierreCajaEntity): String {
+    fun generarMensajeCierreCajaOperador(
+        cierre: CierreCajaEntity,
+        resumenDia: ResumenCierreDia? = null
+    ): String {
         val total = cierre.totalDeclarado
         val efectivo = cierre.efectivoDeclarado
         val transferencias = cierre.transferenciasDeclaradas
         val vehiculo = if (cierre.vehiculo == "CAMIONETA") "CAMIONETA" else "CAMIÓN"
+        val fechaMostrar = cierre.fechaIso.ifBlank {
+            SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+        }
 
         return buildString {
-            appendLine("🔒 *CIERRE DE JORNADA - $vehiculo* 🚚💧")
-            appendLine("📅 *Fecha:* ${cierre.fechaIso}")
+            appendLine("🔒 *CIERRE DE CAJA Y REPORTE DIARIO - $vehiculo* 🚚💧")
+            appendLine("📅 *Fecha:* $fechaMostrar")
             appendLine("─────────────────────────")
             appendLine("💵 *Efectivo contado a entregar:* $${String.format(Locale.US, "%.2f", efectivo)}")
             appendLine("📱 *Transferencias verificadas:* $${String.format(Locale.US, "%.2f", transferencias)}")
             appendLine("💰 *TOTAL DECLARADO A ENTREGAR:* *$${String.format(Locale.US, "%.2f", total)}*")
+
+            if (resumenDia != null) {
+                appendLine("─────────────────────────")
+                appendLine("📊 *SUMA DE OPERACIONES DEL DÍA:*")
+                appendLine("• Efectivo del día: *$${String.format(Locale.US, "%.2f", resumenDia.totalIngresoEfectivo)}*")
+                appendLine("• Transferencias del día: *$${String.format(Locale.US, "%.2f", resumenDia.totalIngresoTransferencia)}*")
+                appendLine("• Créditos otorgados (Fiado): *$${String.format(Locale.US, "%.2f", resumenDia.totalCreditosOtorgados)}*")
+                appendLine("• Abonos / Deudas cobradas: *$${String.format(Locale.US, "%.2f", resumenDia.totalAbonosYCancelados)}*")
+                appendLine("• Gastos en ruta: *$${String.format(Locale.US, "%.2f", resumenDia.totalGastosRuta)}*")
+                appendLine("• Efectivo Neto Sistema: *$${String.format(Locale.US, "%.2f", resumenDia.efectivoNetoCaja)}*")
+
+                if (resumenDia.desglosePorPrecio.isNotEmpty()) {
+                    appendLine("─────────────────────────")
+                    appendLine("🏷️ *CLIENTES POR PRECIO DE AGUA:*")
+                    resumenDia.desglosePorPrecio.forEach { item ->
+                        val etiquetaClientes = if (item.cantidadClientes == 1) "1 cliente" else "${item.cantidadClientes} clientes"
+                        appendLine(
+                            "  • Clientes $${String.format(Locale.US, "%.2f", item.precioUnitario)}: *$etiquetaClientes* (${item.cantidadBidonesCobrados} bidones) → *Total: $${String.format(Locale.US, "%.2f", item.totalImporteAgua)}*"
+                        )
+                    }
+                }
+            }
+
             if (cierre.observaciones.isNotBlank()) {
+                appendLine("─────────────────────────")
                 appendLine("📝 *Observaciones:* ${cierre.observaciones}")
             }
             appendLine("─────────────────────────")
-            appendLine("Enviado desde Aqua Apolo • Sistema de Cierre Ciego 💧🚚")
+            appendLine("Enviado desde Aqua Apolo • Cierre de Jornada 💧🚚")
         }
     }
 }

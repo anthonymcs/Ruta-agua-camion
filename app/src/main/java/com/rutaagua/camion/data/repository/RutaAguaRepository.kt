@@ -14,6 +14,7 @@ import com.rutaagua.camion.data.local.model.RecargaCalculada
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.StockAlertas
 import com.rutaagua.camion.data.local.model.TipoBidon
+import com.rutaagua.camion.data.local.model.calcularDesglosePorPrecio
 import com.rutaagua.camion.data.remote.FirestoreSyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -674,6 +675,7 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             val totalGastos = gastos.sumOf { it.monto }
             val totalEfectivoEntrante = totalEfectivo + totalAbono + totalCancelado
             val efectivoNeto = totalEfectivoEntrante - totalGastos
+            val desglosePrecios = calcularDesglosePorPrecio(transacciones)
 
             ResumenCierreDia(
                 fechaTexto = fechaTexto,
@@ -690,13 +692,15 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
                 totalDeudasCanceladas = totalCancelado,
                 totalGastosRuta = totalGastos,
                 efectivoNetoCaja = efectivoNeto,
-                granTotalVenta = granTotalVenta
+                granTotalVenta = granTotalVenta,
+                desglosePorPrecio = desglosePrecios
             )
         }
     }
 
     /**
-     * Formatea el reporte para WhatsApp con desglose por tipo de bidón y listado de clientes con préstamos hoy.
+     * Formatea el reporte para WhatsApp con desglose por tipo de bidón, desglose por precio de cliente
+     * y suma completa de efectivo, transferencias, créditos y abonos.
      */
     fun formatearReporteWhatsApp(
         resumen: ResumenCierreDia,
@@ -734,22 +738,24 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             appendLine("• Pacas (24x500ml): *${resumen.totalPacasVendidas}*")
             appendLine("• Minis (12x500ml): *${resumen.totalMinisVendidas}*")
 
+            if (resumen.desglosePorPrecio.isNotEmpty()) {
+                appendLine("─────────────────────────")
+                appendLine("*CLIENTES POR PRECIO DE AGUA:*")
+                resumen.desglosePorPrecio.forEach { item ->
+                    val etiquetaClientes = if (item.cantidadClientes == 1) "1 cliente" else "${item.cantidadClientes} clientes"
+                    appendLine(
+                        "  • Clientes $${String.format(Locale.US, "%.2f", item.precioUnitario)}: *$etiquetaClientes* (${item.cantidadBidonesCobrados} bidones) → *Total: $${String.format(Locale.US, "%.2f", item.totalImporteAgua)}*"
+                    )
+                }
+            }
+
             appendLine("─────────────────────────")
-            appendLine("*CONTABILIDAD:*")
+            appendLine("*SUMA CONTABLE DEL DÍA:*")
             appendLine("• Venta Total Bruta: *$${String.format(Locale.US, "%.2f", resumen.granTotalVenta)}*")
-            appendLine("• Cobro en Efectivo: *$${String.format(Locale.US, "%.2f", resumen.totalIngresoEfectivo)}*")
-            if (resumen.totalIngresoTransferencia > 0) {
-                appendLine("• Transferencias: *$${String.format(Locale.US, "%.2f", resumen.totalIngresoTransferencia)}*")
-            }
-            if (resumen.totalCreditosOtorgados > 0) {
-                appendLine("• Créditos Otorgados: *$${String.format(Locale.US, "%.2f", resumen.totalCreditosOtorgados)}*")
-            }
-            if (resumen.totalAbonosRecibidos > 0) {
-                appendLine("• Abonos Recibidos: *$${String.format(Locale.US, "%.2f", resumen.totalAbonosRecibidos)}*")
-            }
-            if (resumen.totalDeudasCanceladas > 0) {
-                appendLine("• Deudas Canceladas: *$${String.format(Locale.US, "%.2f", resumen.totalDeudasCanceladas)}*")
-            }
+            appendLine("• Efectivo del Día: *$${String.format(Locale.US, "%.2f", resumen.totalIngresoEfectivo)}*")
+            appendLine("• Transferencias del Día: *$${String.format(Locale.US, "%.2f", resumen.totalIngresoTransferencia)}*")
+            appendLine("• Créditos del Día (Fiado): *$${String.format(Locale.US, "%.2f", resumen.totalCreditosOtorgados)}*")
+            appendLine("• Abonos / Cobros Deuda: *$${String.format(Locale.US, "%.2f", resumen.totalAbonosYCancelados)}*")
 
             appendLine("─────────────────────────")
             appendLine("*GASTOS EN RUTA:* *$${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}*")
