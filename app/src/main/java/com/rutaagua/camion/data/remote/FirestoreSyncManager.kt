@@ -140,6 +140,16 @@ class FirestoreSyncManager(
                             )
                             database.clienteDao().insertar(clienteEntity)
                         }
+
+                        // Si algún cliente fue eliminado en la nube, desactivarlo localmente
+                        for (change in snapshot.documentChanges) {
+                            if (change.type == com.google.firebase.firestore.DocumentChange.Type.REMOVED) {
+                                val remId = change.document.getLong("id") ?: change.document.id.toLongOrNull()
+                                if (remId != null) {
+                                    database.clienteDao().desactivar(remId)
+                                }
+                            }
+                        }
                     } finally {
                         sincronizandoDesdeRemoto = false
                     }
