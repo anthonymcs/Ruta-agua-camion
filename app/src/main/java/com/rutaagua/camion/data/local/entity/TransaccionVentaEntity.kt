@@ -1,7 +1,6 @@
 package com.rutaagua.camion.data.local.entity
 
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.rutaagua.camion.data.local.model.FormaPago
@@ -13,14 +12,6 @@ import com.rutaagua.camion.data.local.model.TipoBidon
  */
 @Entity(
     tableName = "transacciones_ventas",
-    foreignKeys = [
-        ForeignKey(
-            entity = ClienteEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["clienteId"],
-            onDelete = ForeignKey.SET_NULL
-        )
-    ],
     indices = [
         Index("clienteId"),
         Index("fechaTexto")

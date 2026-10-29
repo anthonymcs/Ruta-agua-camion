@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
         CierreCajaEntity::class,
         VisitaFallidaEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -69,6 +69,60 @@ abstract class RutaAguaDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Recrear transacciones_ventas sin restricción de FOREIGN KEY para permitir sincronización distribuida segura
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS transacciones_ventas_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        vehiculo TEXT NOT NULL,
+                        clienteId INTEGER,
+                        nombreClientePaso TEXT,
+                        fecha INTEGER NOT NULL,
+                        fechaTexto TEXT NOT NULL,
+                        tipoBidon TEXT NOT NULL,
+                        cantidadBidonesRecarga INTEGER NOT NULL,
+                        precioUnitarioBidon REAL NOT NULL,
+                        cantidadBidonesPrestados INTEGER NOT NULL,
+                        cantidadBidonesDevueltos INTEGER NOT NULL,
+                        cantidadBidonesVendidosEnvase INTEGER NOT NULL,
+                        precioUnitarioBidonVendido REAL NOT NULL,
+                        recargaTransparentes INTEGER NOT NULL,
+                        recargaAzules INTEGER NOT NULL,
+                        recargaMarcados INTEGER NOT NULL,
+                        prestadosTransparentes INTEGER NOT NULL,
+                        prestadosAzules INTEGER NOT NULL,
+                        prestadosMarcados INTEGER NOT NULL,
+                        envasesVendidosTransparentes INTEGER NOT NULL,
+                        envasesVendidosAzules INTEGER NOT NULL,
+                        envasesVendidosMarcados INTEGER NOT NULL,
+                        cantidadBidonesGratis INTEGER NOT NULL,
+                        cantidadGalones INTEGER NOT NULL,
+                        precioUnitarioGalon REAL NOT NULL,
+                        cantidadPacas INTEGER NOT NULL,
+                        precioUnitarioPaca REAL NOT NULL,
+                        cantidadMinis INTEGER NOT NULL,
+                        precioUnitarioMini REAL NOT NULL,
+                        totalImporte REAL NOT NULL,
+                        formaPagoPrincipal TEXT NOT NULL,
+                        montoEfectivo REAL NOT NULL,
+                        montoTransferencia REAL NOT NULL,
+                        montoCredito REAL NOT NULL,
+                        montoAbono REAL NOT NULL,
+                        montoCanceladoDeuda REAL NOT NULL,
+                        nota TEXT NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    INSERT INTO transacciones_ventas_new SELECT * FROM transacciones_ventas
+                """.trimIndent())
+                db.execSQL("DROP TABLE transacciones_ventas")
+                db.execSQL("ALTER TABLE transacciones_ventas_new RENAME TO transacciones_ventas")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transacciones_ventas_clienteId ON transacciones_ventas(clienteId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_transacciones_ventas_fechaTexto ON transacciones_ventas(fechaTexto)")
+            }
+        }
+
         fun getDatabase(context: Context, scope: CoroutineScope = CoroutineScope(Dispatchers.IO)): RutaAguaDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -76,7 +130,7 @@ abstract class RutaAguaDatabase : RoomDatabase() {
                     RutaAguaDatabase::class.java,
                     "ruta_agua_camion.db"
                 )
-                    .addMigrations(MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .addCallback(RutaAguaDatabaseCallback(scope))
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()

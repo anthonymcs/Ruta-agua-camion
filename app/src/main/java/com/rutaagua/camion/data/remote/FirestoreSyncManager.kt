@@ -95,50 +95,54 @@ class FirestoreSyncManager(
                     sincronizandoDesdeRemoto = true
                     try {
                         for (doc in snapshot.documents) {
-                            val id = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
-                            val nombre = doc.getString("nombre") ?: continue
-                            val alias = doc.getString("alias") ?: ""
-                            val telefono = doc.getString("telefono") ?: ""
-                            val ubicacion = doc.getString("ubicacion") ?: ""
-                            val tipoBidon = runCatching { TipoBidon.valueOf(doc.getString("tipoBidonPreferido") ?: "AZUL") }.getOrDefault(TipoBidon.AZUL)
-                            val precioHabitual = doc.getDouble("precioHabitual") ?: 1.0
-                            val tipoCliente = runCatching { TipoCliente.valueOf(doc.getString("tipoCliente") ?: "RUTA") }.getOrDefault(TipoCliente.RUTA)
-                            val diasVisita = doc.getString("diasVisita") ?: ""
-                            val deudaMonetaria = doc.getDouble("deudaMonetaria") ?: 0.0
-                            val bidonesPrestados = doc.getLong("bidonesPrestados")?.toInt() ?: 0
-                            val latitud = doc.getDouble("latitud")
-                            val longitud = doc.getDouble("longitud")
-                            val enlaceMapa = doc.getString("enlaceMapa") ?: ""
-                            val activo = doc.getBoolean("activo") ?: true
-                            val fechaCreacion = doc.getLong("fechaCreacion") ?: System.currentTimeMillis()
+                            try {
+                                val id = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
+                                val nombre = doc.getString("nombre") ?: continue
+                                val alias = doc.getString("alias") ?: ""
+                                val telefono = doc.getString("telefono") ?: ""
+                                val ubicacion = doc.getString("ubicacion") ?: ""
+                                val tipoBidon = runCatching { TipoBidon.valueOf(doc.getString("tipoBidonPreferido") ?: "AZUL") }.getOrDefault(TipoBidon.AZUL)
+                                val precioHabitual = doc.getDouble("precioHabitual") ?: 1.0
+                                val tipoCliente = runCatching { TipoCliente.valueOf(doc.getString("tipoCliente") ?: "RUTA") }.getOrDefault(TipoCliente.RUTA)
+                                val diasVisita = doc.getString("diasVisita") ?: ""
+                                val deudaMonetaria = doc.getDouble("deudaMonetaria") ?: 0.0
+                                val bidonesPrestados = doc.getLong("bidonesPrestados")?.toInt() ?: 0
+                                val latitud = doc.getDouble("latitud")
+                                val longitud = doc.getDouble("longitud")
+                                val enlaceMapa = doc.getString("enlaceMapa") ?: ""
+                                val activo = doc.getBoolean("activo") ?: true
+                                val fechaCreacion = doc.getLong("fechaCreacion") ?: System.currentTimeMillis()
 
-                            // Si viene foto en miniatura Base64, restaurarla en almacenamiento local
-                            val fotoBase64 = doc.getString("fotoBase64")
-                            val localPath = if (!fotoBase64.isNullOrBlank()) {
-                                guardarBase64AArchivoLocal(id, fotoBase64)
-                            } else null
+                                // Si viene foto en miniatura Base64, restaurarla en almacenamiento local
+                                val fotoBase64 = doc.getString("fotoBase64")
+                                val localPath = if (!fotoBase64.isNullOrBlank()) {
+                                    guardarBase64AArchivoLocal(id, fotoBase64)
+                                } else null
 
-                            val clienteActual = database.clienteDao().obtenerPorIdDirecto(id)
-                            val clienteEntity = ClienteEntity(
-                                id = id,
-                                nombre = nombre,
-                                alias = alias,
-                                telefono = telefono,
-                                ubicacion = ubicacion,
-                                tipoBidonPreferido = tipoBidon,
-                                precioHabitual = precioHabitual,
-                                tipoCliente = tipoCliente,
-                                diasVisita = diasVisita,
-                                deudaMonetaria = deudaMonetaria,
-                                bidonesPrestados = bidonesPrestados,
-                                fotoReferenciaPath = localPath ?: clienteActual?.fotoReferenciaPath,
-                                latitud = latitud,
-                                longitud = longitud,
-                                enlaceMapa = enlaceMapa,
-                                activo = activo,
-                                fechaCreacion = fechaCreacion
-                            )
-                            database.clienteDao().insertar(clienteEntity)
+                                val clienteActual = database.clienteDao().obtenerPorIdDirecto(id)
+                                val clienteEntity = ClienteEntity(
+                                    id = id,
+                                    nombre = nombre,
+                                    alias = alias,
+                                    telefono = telefono,
+                                    ubicacion = ubicacion,
+                                    tipoBidonPreferido = tipoBidon,
+                                    precioHabitual = precioHabitual,
+                                    tipoCliente = tipoCliente,
+                                    diasVisita = diasVisita,
+                                    deudaMonetaria = deudaMonetaria,
+                                    bidonesPrestados = bidonesPrestados,
+                                    fotoReferenciaPath = localPath ?: clienteActual?.fotoReferenciaPath,
+                                    latitud = latitud,
+                                    longitud = longitud,
+                                    enlaceMapa = enlaceMapa,
+                                    activo = activo,
+                                    fechaCreacion = fechaCreacion
+                                )
+                                database.clienteDao().insertar(clienteEntity)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Error insertando cliente remoto ${doc.id}: ${e.message}")
+                            }
                         }
 
                         // Si algún cliente fue eliminado en la nube, desactivarlo localmente
@@ -150,6 +154,8 @@ class FirestoreSyncManager(
                                 }
                             }
                         }
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "Error general en listenerClientes: ${e.message}", e)
                     } finally {
                         sincronizandoDesdeRemoto = false
                     }
@@ -194,85 +200,91 @@ class FirestoreSyncManager(
                         }
 
                         for (doc in snapshot.documents) {
-                            val id = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
-                            val vehiculo = doc.getString("vehiculo") ?: "CAMION"
-                            val clienteId = doc.getLong("clienteId")
-                            val nombrePaso = doc.getString("nombreClientePaso")
-                            val fecha = doc.getLong("fecha") ?: System.currentTimeMillis()
-                            val fechaTexto = doc.getString("fechaTexto") ?: ""
-                            val tipoBidon = runCatching { TipoBidon.valueOf(doc.getString("tipoBidon") ?: "AZUL") }.getOrDefault(TipoBidon.AZUL)
-                            val cantRec = doc.getLong("cantidadBidonesRecarga")?.toInt() ?: 0
-                            val pBidon = doc.getDouble("precioUnitarioBidon") ?: 1.0
-                            val cantPrest = doc.getLong("cantidadBidonesPrestados")?.toInt() ?: 0
-                            val cantDev = doc.getLong("cantidadBidonesDevueltos")?.toInt() ?: 0
-                            val cantVendEnv = doc.getLong("cantidadBidonesVendidosEnvase")?.toInt() ?: 0
-                            val pEnv = doc.getDouble("precioUnitarioBidonVendido") ?: 0.0
-                            val recTrans = doc.getLong("recargaTransparentes")?.toInt() ?: 0
-                            val recAzul = doc.getLong("recargaAzules")?.toInt() ?: 0
-                            val recMarc = doc.getLong("recargaMarcados")?.toInt() ?: 0
-                            val prestTrans = doc.getLong("prestadosTransparentes")?.toInt() ?: 0
-                            val prestAzul = doc.getLong("prestadosAzules")?.toInt() ?: 0
-                            val prestMarc = doc.getLong("prestadosMarcados")?.toInt() ?: 0
-                            val cantGratis = doc.getLong("cantidadBidonesGratis")?.toInt() ?: 0
-                            val envVendTrans = doc.getLong("envasesVendidosTransparentes")?.toInt() ?: 0
-                            val envVendAzul = doc.getLong("envasesVendidosAzules")?.toInt() ?: 0
-                            val envVendMarc = doc.getLong("envasesVendidosMarcados")?.toInt() ?: 0
-                            val cantGal = doc.getLong("cantidadGalones")?.toInt() ?: 0
-                            val pGal = doc.getDouble("precioUnitarioGalon") ?: 0.75
-                            val cantPac = doc.getLong("cantidadPacas")?.toInt() ?: 0
-                            val pPac = doc.getDouble("precioUnitarioPaca") ?: 3.75
-                            val cantMin = doc.getLong("cantidadMinis")?.toInt() ?: 0
-                            val pMin = doc.getDouble("precioUnitarioMini") ?: 1.75
-                            val totalImp = doc.getDouble("totalImporte") ?: 0.0
-                            val formaPago = runCatching { FormaPago.valueOf(doc.getString("formaPagoPrincipal") ?: "EFECTIVO") }.getOrDefault(FormaPago.EFECTIVO)
-                            val mEf = doc.getDouble("montoEfectivo") ?: 0.0
-                            val mTr = doc.getDouble("montoTransferencia") ?: 0.0
-                            val mCr = doc.getDouble("montoCredito") ?: 0.0
-                            val mAb = doc.getDouble("montoAbono") ?: 0.0
-                            val mCanc = doc.getDouble("montoCanceladoDeuda") ?: 0.0
-                            val nota = doc.getString("nota") ?: ""
+                            try {
+                                val id = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
+                                val vehiculo = doc.getString("vehiculo") ?: "CAMION"
+                                val clienteId = doc.getLong("clienteId")
+                                val nombrePaso = doc.getString("nombreClientePaso")
+                                val fecha = doc.getLong("fecha") ?: System.currentTimeMillis()
+                                val fechaTexto = doc.getString("fechaTexto") ?: ""
+                                val tipoBidon = runCatching { TipoBidon.valueOf(doc.getString("tipoBidon") ?: "AZUL") }.getOrDefault(TipoBidon.AZUL)
+                                val cantRec = doc.getLong("cantidadBidonesRecarga")?.toInt() ?: 0
+                                val pBidon = doc.getDouble("precioUnitarioBidon") ?: 1.0
+                                val cantPrest = doc.getLong("cantidadBidonesPrestados")?.toInt() ?: 0
+                                val cantDev = doc.getLong("cantidadBidonesDevueltos")?.toInt() ?: 0
+                                val cantVendEnv = doc.getLong("cantidadBidonesVendidosEnvase")?.toInt() ?: 0
+                                val pEnv = doc.getDouble("precioUnitarioBidonVendido") ?: 0.0
+                                val recTrans = doc.getLong("recargaTransparentes")?.toInt() ?: 0
+                                val recAzul = doc.getLong("recargaAzules")?.toInt() ?: 0
+                                val recMarc = doc.getLong("recargaMarcados")?.toInt() ?: 0
+                                val prestTrans = doc.getLong("prestadosTransparentes")?.toInt() ?: 0
+                                val prestAzul = doc.getLong("prestadosAzules")?.toInt() ?: 0
+                                val prestMarc = doc.getLong("prestadosMarcados")?.toInt() ?: 0
+                                val cantGratis = doc.getLong("cantidadBidonesGratis")?.toInt() ?: 0
+                                val envVendTrans = doc.getLong("envasesVendidosTransparentes")?.toInt() ?: 0
+                                val envVendAzul = doc.getLong("envasesVendidosAzules")?.toInt() ?: 0
+                                val envVendMarc = doc.getLong("envasesVendidosMarcados")?.toInt() ?: 0
+                                val cantGal = doc.getLong("cantidadGalones")?.toInt() ?: 0
+                                val pGal = doc.getDouble("precioUnitarioGalon") ?: 0.75
+                                val cantPac = doc.getLong("cantidadPacas")?.toInt() ?: 0
+                                val pPac = doc.getDouble("precioUnitarioPaca") ?: 3.75
+                                val cantMin = doc.getLong("cantidadMinis")?.toInt() ?: 0
+                                val pMin = doc.getDouble("precioUnitarioMini") ?: 1.75
+                                val totalImp = doc.getDouble("totalImporte") ?: 0.0
+                                val formaPago = runCatching { FormaPago.valueOf(doc.getString("formaPagoPrincipal") ?: "EFECTIVO") }.getOrDefault(FormaPago.EFECTIVO)
+                                val mEf = doc.getDouble("montoEfectivo") ?: 0.0
+                                val mTr = doc.getDouble("montoTransferencia") ?: 0.0
+                                val mCr = doc.getDouble("montoCredito") ?: 0.0
+                                val mAb = doc.getDouble("montoAbono") ?: 0.0
+                                val mCanc = doc.getDouble("montoCanceladoDeuda") ?: 0.0
+                                val nota = doc.getString("nota") ?: ""
 
-                            val transaccion = TransaccionVentaEntity(
-                                id = id,
-                                vehiculo = vehiculo,
-                                clienteId = clienteId,
-                                nombreClientePaso = nombrePaso,
-                                fecha = fecha,
-                                fechaTexto = fechaTexto,
-                                tipoBidon = tipoBidon,
-                                cantidadBidonesRecarga = cantRec,
-                                precioUnitarioBidon = pBidon,
-                                cantidadBidonesPrestados = cantPrest,
-                                cantidadBidonesDevueltos = cantDev,
-                                cantidadBidonesVendidosEnvase = cantVendEnv,
-                                precioUnitarioBidonVendido = pEnv,
-                                recargaTransparentes = recTrans,
-                                recargaAzules = recAzul,
-                                recargaMarcados = recMarc,
-                                prestadosTransparentes = prestTrans,
-                                prestadosAzules = prestAzul,
-                                prestadosMarcados = prestMarc,
-                                envasesVendidosTransparentes = envVendTrans,
-                                envasesVendidosAzules = envVendAzul,
-                                envasesVendidosMarcados = envVendMarc,
-                                cantidadBidonesGratis = cantGratis,
-                                cantidadGalones = cantGal,
-                                precioUnitarioGalon = pGal,
-                                cantidadPacas = cantPac,
-                                precioUnitarioPaca = pPac,
-                                cantidadMinis = cantMin,
-                                precioUnitarioMini = pMin,
-                                totalImporte = totalImp,
-                                formaPagoPrincipal = formaPago,
-                                montoEfectivo = mEf,
-                                montoTransferencia = mTr,
-                                montoCredito = mCr,
-                                montoAbono = mAb,
-                                montoCanceladoDeuda = mCanc,
-                                nota = nota
-                            )
-                            database.transaccionDao().insertar(transaccion)
+                                val transaccion = TransaccionVentaEntity(
+                                    id = id,
+                                    vehiculo = vehiculo,
+                                    clienteId = clienteId,
+                                    nombreClientePaso = nombrePaso,
+                                    fecha = fecha,
+                                    fechaTexto = fechaTexto,
+                                    tipoBidon = tipoBidon,
+                                    cantidadBidonesRecarga = cantRec,
+                                    precioUnitarioBidon = pBidon,
+                                    cantidadBidonesPrestados = cantPrest,
+                                    cantidadBidonesDevueltos = cantDev,
+                                    cantidadBidonesVendidosEnvase = cantVendEnv,
+                                    precioUnitarioBidonVendido = pEnv,
+                                    recargaTransparentes = recTrans,
+                                    recargaAzules = recAzul,
+                                    recargaMarcados = recMarc,
+                                    prestadosTransparentes = prestTrans,
+                                    prestadosAzules = prestAzul,
+                                    prestadosMarcados = prestMarc,
+                                    envasesVendidosTransparentes = envVendTrans,
+                                    envasesVendidosAzules = envVendAzul,
+                                    envasesVendidosMarcados = envVendMarc,
+                                    cantidadBidonesGratis = cantGratis,
+                                    cantidadGalones = cantGal,
+                                    precioUnitarioGalon = pGal,
+                                    cantidadPacas = cantPac,
+                                    precioUnitarioPaca = pPac,
+                                    cantidadMinis = cantMin,
+                                    precioUnitarioMini = pMin,
+                                    totalImporte = totalImp,
+                                    formaPagoPrincipal = formaPago,
+                                    montoEfectivo = mEf,
+                                    montoTransferencia = mTr,
+                                    montoCredito = mCr,
+                                    montoAbono = mAb,
+                                    montoCanceladoDeuda = mCanc,
+                                    nota = nota
+                                )
+                                database.transaccionDao().insertar(transaccion)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Error insertando transaccion remota ${doc.id}: ${e.message}")
+                            }
                         }
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "Error general en listenerTransacciones: ${e.message}", e)
                     } finally {
                         sincronizandoDesdeRemoto = false
                     }

@@ -23,6 +23,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Capturar excepciones inesperadas en segundo plano para evitar cierres repentinos de la app
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            android.util.Log.e("AteneaApp", "Error no capturado en ${thread.name}: ${throwable.message}", throwable)
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
+
         // 1. Inicialización de persistencia local Room
         database = RutaAguaDatabase.getDatabase(applicationContext)
 
