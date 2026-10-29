@@ -63,6 +63,7 @@ import com.rutaagua.camion.ui.components.ClayBadge
 import com.rutaagua.camion.ui.components.ClayButton
 import com.rutaagua.camion.ui.components.ClayCard
 import com.rutaagua.camion.ui.components.ClayEditableCounter
+import com.rutaagua.camion.ui.components.CuentasBancariasDialog
 import com.rutaagua.camion.ui.components.ClayInsetBox
 import com.rutaagua.camion.ui.components.GalonIllustration
 import com.rutaagua.camion.ui.components.MiniIllustration
@@ -176,6 +177,7 @@ fun NuevaVentaSheet(
     var cantGratis by remember {
         mutableIntStateOf(transaccionAEditar?.cantidadBidonesGratis ?: 0)
     }
+    var mostrarCuentasBancarias by remember { mutableStateOf(false) }
 
     // 5. DEVUELTOS Y ENVASE NUEVO
     var cantDevueltos by remember {
@@ -1059,6 +1061,45 @@ fun NuevaVentaSheet(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Botón rápido para enviar tarjeta de cuenta bancaria (Pichincha, Pacífico, Bolivariano, Produbanco, Guayaquil) por WhatsApp
+                Surface(
+                    onClick = { mostrarCuentasBancarias = true },
+                    color = if (formaPago == FormaPago.TRANSFERENCIA) Color(0xFFDBEAFE) else Color(0xFFF1F5F9),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(
+                        1.dp,
+                        if (formaPago == FormaPago.TRANSFERENCIA) AguaPrimary else Color(0xFFCBD5E1)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CreditCard,
+                            contentDescription = null,
+                            tint = AguaPrimaryDark,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Enviar Cuenta Bancaria por WhatsApp (Imagen)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            color = AguaPrimaryDark,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
 
@@ -1131,6 +1172,17 @@ fun NuevaVentaSheet(
             }
             Spacer(modifier = Modifier.height(28.dp))
         }
+    }
+
+    if (mostrarCuentasBancarias) {
+        val nombreDest = clienteSeleccionado?.nombre
+            ?: textoBusquedaCliente.takeIf { it.isNotBlank() }
+        CuentasBancariasDialog(
+            telefonoCliente = clienteSeleccionado?.telefono,
+            nombreCliente = nombreDest,
+            montoACobrar = totalGeneral.takeIf { it > 0.0 },
+            onDismiss = { mostrarCuentasBancarias = false }
+        )
     }
 }
 

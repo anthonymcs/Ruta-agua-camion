@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
@@ -81,6 +82,7 @@ import com.rutaagua.camion.data.local.prefs.AppPreferences
 import com.rutaagua.camion.ui.components.ClayButton
 import com.rutaagua.camion.ui.components.ClayCard
 import com.rutaagua.camion.ui.components.ClayInsetBox
+import com.rutaagua.camion.ui.components.CuentasBancariasDialog
 import com.rutaagua.camion.ui.components.marineOutlinedTextFieldColors
 import com.rutaagua.camion.ui.components.obtenerClayThemePorVehiculo
 import androidx.compose.ui.Alignment
@@ -552,6 +554,7 @@ private fun TarjetaClienteItem(
 ) {
     val context = LocalContext.current
     var expandido by rememberSaveable(cliente.id) { mutableStateOf(false) }
+    var mostrarCuentasBancarias by rememberSaveable(cliente.id) { mutableStateOf(false) }
 
     ClayCard(
         cornerRadius = 20.dp,
@@ -921,41 +924,85 @@ private fun TarjetaClienteItem(
                     }
                 }
 
-                // Fila 2: [💬 WhatsApp]
-                Button(
-                    onClick = {
-                        val mensaje = WhatsAppHelper.generarMensajeEstadoCuenta(cliente)
-                        WhatsAppHelper.abrirChatWhatsApp(context, cliente.telefono, mensaje)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF25D366)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(42.dp)
+                // Fila 2: [💬 Estado WhatsApp] y [🏦 Enviar Cuenta]
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Chat,
-                        contentDescription = "WhatsApp",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Enviar Estado por WhatsApp",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        color = Color.White,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Button(
+                        onClick = {
+                            val mensaje = WhatsAppHelper.generarMensajeEstadoCuenta(cliente)
+                            WhatsAppHelper.abrirChatWhatsApp(context, cliente.telefono, mensaje)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF25D366)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Chat,
+                            contentDescription = "WhatsApp",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Estado WhatsApp",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = Color.White,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Button(
+                        onClick = { mostrarCuentasBancarias = true },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1E3A8A)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountBalance,
+                            contentDescription = "Enviar Cuenta",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Enviar Cuenta",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = Color.White,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (mostrarCuentasBancarias) {
+        CuentasBancariasDialog(
+            telefonoCliente = cliente.telefono,
+            nombreCliente = cliente.nombre,
+            montoACobrar = cliente.deudaMonetaria.takeIf { it > 0.0 },
+            onDismiss = { mostrarCuentasBancarias = false }
+        )
     }
 }
 

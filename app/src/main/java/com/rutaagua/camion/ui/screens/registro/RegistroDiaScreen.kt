@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -84,6 +85,7 @@ import com.rutaagua.camion.ui.components.ClayBadge
 import com.rutaagua.camion.ui.components.ClayButton
 import com.rutaagua.camion.ui.components.ClayCard
 import com.rutaagua.camion.ui.components.ClayInsetBox
+import com.rutaagua.camion.ui.components.CuentasBancariasDialog
 import com.rutaagua.camion.ui.components.VehicleClayTheme
 import com.rutaagua.camion.ui.components.bounceClick
 import com.rutaagua.camion.ui.components.marineOutlinedTextFieldColors
@@ -141,6 +143,7 @@ fun RegistroDiaScreen(
     var ventaParaEliminar by remember { mutableStateOf<TransaccionVentaEntity?>(null) }
     var mostrarPinParaEditar by rememberSaveable { mutableStateOf(false) }
     var mostrarPinParaEliminar by rememberSaveable { mutableStateOf(false) }
+    var mostrarDialogoCuentasBancarias by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -225,6 +228,13 @@ fun RegistroDiaScreen(
                         label = "Gasto",
                         onClick = { viewModel.abrirDialogoGasto() },
                         iconTint = AmbarAdvertencia,
+                        modifier = Modifier.weight(1f)
+                    )
+                    BankingQuickAction(
+                        icon = Icons.Default.AccountBalance,
+                        label = "Cuentas",
+                        onClick = { mostrarDialogoCuentasBancarias = true },
+                        iconTint = PichinchaNavy,
                         modifier = Modifier.weight(1f)
                     )
                     BankingQuickAction(
@@ -437,6 +447,12 @@ fun RegistroDiaScreen(
                 )
             },
             onDismissRequest = { viewModel.cerrarDialogoCierre() }
+        )
+    }
+
+    if (mostrarDialogoCuentasBancarias) {
+        CuentasBancariasDialog(
+            onDismiss = { mostrarDialogoCuentasBancarias = false }
         )
     }
 
