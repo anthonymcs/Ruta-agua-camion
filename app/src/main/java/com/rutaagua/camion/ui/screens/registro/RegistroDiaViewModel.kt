@@ -90,6 +90,17 @@ class RegistroDiaViewModel(
             initialValue = emptyList()
         )
 
+    // Histórico global de transacciones (todos los vehículos) para reportes consolidados y alertas
+    val todasLasTransaccionesGlobalState: StateFlow<List<TransaccionVentaEntity>> = repository
+        .obtenerTodasLasTransacciones(null)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val vehiculoActivoState = appPreferences.vehiculoActivo
+
     // Histórico completo de gastos para Reportes (Día / Semanal / Mensual)
     val todosLosGastosState: StateFlow<List<GastoExtraEntity>> = repository
         .obtenerTodosLosGastos()

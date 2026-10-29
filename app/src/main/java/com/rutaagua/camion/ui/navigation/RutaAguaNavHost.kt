@@ -332,27 +332,25 @@ fun RutaAguaNavHost(
                         )
                     )
 
-                    if (vehiculoActivo == TipoVehiculo.CAMIONETA) {
-                        NavigationDrawerItem(
-                            icon = { Icon(Icons.Default.BarChart, contentDescription = null) },
-                            label = { Text("Reportes (Día / Semanal / Mensual)", fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            selected = currentRoute == "reportes_camioneta",
-                            onClick = {
-                                coroutineScope.launch { drawerState.close() }
-                                navController.navigate("reportes_camioneta") {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
-                            colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = clayTheme.accentBgColor,
-                                selectedIconColor = clayTheme.primaryDarkColor,
-                                selectedTextColor = clayTheme.primaryDarkColor
-                            )
+                    NavigationDrawerItem(
+                        icon = { Icon(Icons.Default.BarChart, contentDescription = null) },
+                        label = { Text("Reportes (Día / Semanal / Mensual)", fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        selected = currentRoute == "reportes_camioneta",
+                        onClick = {
+                            coroutineScope.launch { drawerState.close() }
+                            navController.navigate("reportes_camioneta") {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = clayTheme.accentBgColor,
+                            selectedIconColor = clayTheme.primaryDarkColor,
+                            selectedTextColor = clayTheme.primaryDarkColor
                         )
-                    }
+                    )
 
                     if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
                         NavigationDrawerItem(
