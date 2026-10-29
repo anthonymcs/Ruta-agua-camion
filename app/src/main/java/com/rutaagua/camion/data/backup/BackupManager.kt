@@ -336,6 +336,7 @@ object BackupManager {
             clientesArr.put(JSONObject().apply {
                 put("id", c.id)
                 put("nombre", c.nombre)
+                put("alias", c.alias)
                 put("telefono", c.telefono)
                 put("ubicacion", c.ubicacion)
                 put("latitud", c.latitud ?: JSONObject.NULL)
@@ -558,6 +559,7 @@ object BackupManager {
                         val cliente = ClienteEntity(
                             id = obj.getLong("id"),
                             nombre = obj.getString("nombre"),
+                            alias = obj.optString("alias", ""),
                             telefono = obj.optString("telefono", ""),
                             ubicacion = obj.optString("ubicacion", ""),
                             latitud = if (obj.isNull("latitud")) null else obj.optDouble("latitud"),

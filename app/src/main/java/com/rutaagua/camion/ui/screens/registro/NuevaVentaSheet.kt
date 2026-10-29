@@ -131,7 +131,7 @@ fun NuevaVentaSheet(
 
     var clienteSeleccionado by remember { mutableStateOf(clienteInicial) }
     var textoBusquedaCliente by remember {
-        mutableStateOf(clienteInicial?.nombre ?: transaccionAEditar?.nombreClientePaso ?: "")
+        mutableStateOf(clienteInicial?.nombreVisual ?: transaccionAEditar?.nombreClientePaso ?: "")
     }
     var esClienteDePaso by remember { mutableStateOf(clienteInicial == null) }
 
@@ -296,7 +296,7 @@ fun NuevaVentaSheet(
                     value = textoBusquedaCliente,
                     onValueChange = {
                         textoBusquedaCliente = it
-                        if (clienteSeleccionado != null && it != clienteSeleccionado?.nombre) {
+                        if (clienteSeleccionado != null && it != clienteSeleccionado?.nombreVisual && it != clienteSeleccionado?.nombre) {
                             clienteSeleccionado = null
                             esClienteDePaso = true
                         }
@@ -319,6 +319,7 @@ fun NuevaVentaSheet(
                     if (clienteSeleccionado == null && textoBusquedaCliente.isNotBlank()) {
                         clientes.filter {
                             it.nombre.contains(textoBusquedaCliente, ignoreCase = true) ||
+                                    it.alias.contains(textoBusquedaCliente, ignoreCase = true) ||
                                     it.ubicacion.contains(textoBusquedaCliente, ignoreCase = true)
                         }.take(4)
                     } else emptyList()
@@ -333,7 +334,7 @@ fun NuevaVentaSheet(
                                     .fillMaxWidth()
                                     .clickable {
                                         clienteSeleccionado = cliente
-                                        textoBusquedaCliente = cliente.nombre
+                                        textoBusquedaCliente = cliente.nombreVisual
                                         esClienteDePaso = false
                                         tipoBidonSeleccionado = cliente.tipoBidonPreferido
                                         tipoBidonPrestado = cliente.tipoBidonPreferido
@@ -345,12 +346,19 @@ fun NuevaVentaSheet(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     BidonIllustration(tipo = cliente.tipoBidonPreferido, size = 26.dp)
                                     Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(text = cliente.nombre, fontWeight = FontWeight.Bold, color = TextoOscuro)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = cliente.nombreVisual, fontWeight = FontWeight.Bold, color = TextoOscuro)
+                                        val subInfo = if (cliente.alias.isNotBlank()) {
+                                            "${cliente.nombre} • ${cliente.ubicacion} • $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}"
+                                        } else {
+                                            "${cliente.ubicacion} • $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}"
+                                        }
                                         Text(
-                                            text = "${cliente.ubicacion} • $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}",
+                                            text = subInfo,
                                             fontSize = 12.sp,
-                                            color = TextoSecundario
+                                            color = TextoSecundario,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }

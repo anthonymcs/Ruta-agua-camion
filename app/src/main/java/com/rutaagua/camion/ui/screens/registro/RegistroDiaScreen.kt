@@ -340,7 +340,7 @@ fun RegistroDiaScreen(
 
                 items(transacciones, key = { it.id }) { transaccion ->
                     val cliente = transaccion.clienteId?.let { mapaClientes[it] }
-                    val nombreCliente = cliente?.nombre
+                    val nombreCliente = cliente?.nombreVisual
                         ?: transaccion.nombreClientePaso?.takeIf { it.isNotBlank() }
                         ?: "Venta #${transaccion.id}"
 
@@ -1193,7 +1193,7 @@ private fun TarjetaAlertaCreditosSinCobro(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = alerta.cliente.nombre,
+                                text = alerta.cliente.nombreVisual,
                                 color = TextoOscuro,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Black,

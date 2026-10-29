@@ -178,7 +178,7 @@ fun HistorialClienteModalSheet(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = cliente.nombre,
+                            text = cliente.nombreVisual,
                             fontWeight = FontWeight.Black,
                             fontSize = 17.sp,
                             color = TextoOscuro,
@@ -186,8 +186,13 @@ fun HistorialClienteModalSheet(
                             overflow = TextOverflow.Ellipsis
                         )
                         val tipoLabel = if (cliente.tipoCliente == TipoCliente.LLAMADA) "Cliente de Llamada" else "Cliente de Ruta (${cliente.diasVisita})"
+                        val subtitulo = if (cliente.alias.isNotBlank()) {
+                            "Oficial: ${cliente.nombre} • ${cliente.ubicacion.ifBlank { "Sin sector" }}"
+                        } else {
+                            "$tipoLabel • ${cliente.ubicacion.ifBlank { "Sin sector" }}"
+                        }
                         Text(
-                            text = "$tipoLabel • ${cliente.ubicacion.ifBlank { "Sin sector" }}",
+                            text = subtitulo,
                             fontSize = 12.sp,
                             color = TextoSecundario,
                             fontWeight = FontWeight.SemiBold,

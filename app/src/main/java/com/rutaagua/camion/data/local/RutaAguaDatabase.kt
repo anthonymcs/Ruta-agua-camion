@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
         CierreCajaEntity::class,
         VisitaFallidaEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -63,6 +63,12 @@ abstract class RutaAguaDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE clientes ADD COLUMN alias TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getDatabase(context: Context, scope: CoroutineScope = CoroutineScope(Dispatchers.IO)): RutaAguaDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -70,7 +76,7 @@ abstract class RutaAguaDatabase : RoomDatabase() {
                     RutaAguaDatabase::class.java,
                     "ruta_agua_camion.db"
                 )
-                    .addMigrations(MIGRATION_6_7)
+                    .addMigrations(MIGRATION_6_7, MIGRATION_7_8)
                     .addCallback(RutaAguaDatabaseCallback(scope))
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()

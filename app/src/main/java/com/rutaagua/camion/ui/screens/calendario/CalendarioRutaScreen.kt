@@ -210,7 +210,7 @@ fun CalendarioRutaScreen(
                     RutaNotificationHelper.mostrarNotificacionRuta(
                         context = context,
                         titulo = "$emoji Despacho de Cliente Realizado",
-                        mensaje = "$nombreActor realizó el despacho de cliente: ${item.cliente.nombre}"
+                        mensaje = "$nombreActor realizó el despacho de cliente: ${item.cliente.nombreVisual}"
                     )
                 }
             }
@@ -319,7 +319,7 @@ fun CalendarioRutaScreen(
                                 val actor = if (desp.vehiculoEntrega == "CAMIONETA") "La camioneta" else "El camión"
                                 val emoji = if (desp.vehiculoEntrega == "CAMIONETA") "🛻" else "🚚"
                                 Text(
-                                    text = "$emoji $actor realizó el despacho de cliente: ${desp.cliente.nombre} (${desp.horaEntrega ?: ""})",
+                                    text = "$emoji $actor realizó el despacho de cliente: ${desp.cliente.nombreVisual} (${desp.horaEntrega ?: ""})",
                                     color = Color(0xFF15803D),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Black,
@@ -1393,7 +1393,7 @@ private fun TarjetaClienteRutaRedisenada(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = cliente.nombre,
+                            text = cliente.nombreVisual,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Black,
                             color = TextoOscuro,
@@ -1418,7 +1418,15 @@ private fun TarjetaClienteRutaRedisenada(
                             )
                         }
                     }
-                    if (cliente.ubicacion.isNotBlank()) {
+                    if (cliente.alias.isNotBlank()) {
+                        Text(
+                            text = "Oficial: ${cliente.nombre}${if (cliente.ubicacion.isNotBlank()) " • ${cliente.ubicacion}" else ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextoSecundario,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else if (cliente.ubicacion.isNotBlank()) {
                         Text(
                             text = cliente.ubicacion,
                             style = MaterialTheme.typography.bodySmall,
@@ -1911,6 +1919,7 @@ private fun DialogoAsignarClienteARuta(
         if (busqueda.isBlank()) base
         else base.filter {
             it.nombre.contains(busqueda, ignoreCase = true) ||
+                    it.alias.contains(busqueda, ignoreCase = true) ||
                     it.ubicacion.contains(busqueda, ignoreCase = true)
         }
     }
@@ -1974,19 +1983,25 @@ private fun DialogoAsignarClienteARuta(
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = cliente.nombre,
+                                            text = cliente.nombreVisual,
                                             fontWeight = FontWeight.Black,
                                             fontSize = 13.sp,
                                             color = TextoOscuro,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
+                                        val tipoSub = if (cliente.alias.isNotBlank()) {
+                                            "${cliente.nombre} • ${if (cliente.tipoCliente == TipoCliente.LLAMADA) "📞 Llamada" else "🚚 Ruta"} • $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}"
+                                        } else {
+                                            "${if (cliente.tipoCliente == TipoCliente.LLAMADA) "📞 Llamada" else "🚚 Ruta"} • $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}"
+                                        }
                                         Text(
-                                            text = "${if (cliente.tipoCliente == TipoCliente.LLAMADA) "📞 Llamada" else "🚚 Ruta"} • $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}",
+                                            text = tipoSub,
                                             fontSize = 11.sp,
                                             color = AguaPrimaryDark,
                                             fontWeight = FontWeight.Bold,
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
 

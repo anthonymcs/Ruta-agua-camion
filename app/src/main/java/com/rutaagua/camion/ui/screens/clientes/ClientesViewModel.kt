@@ -83,6 +83,7 @@ class ClientesViewModel(
         lista.filter { cliente ->
             val coincideTexto = query.isBlank() ||
                     cliente.nombre.contains(query, ignoreCase = true) ||
+                    cliente.alias.contains(query, ignoreCase = true) ||
                     cliente.ubicacion.contains(query, ignoreCase = true) ||
                     cliente.telefono.contains(query, ignoreCase = true)
 
@@ -376,6 +377,7 @@ class ClientesViewModel(
     fun guardarCliente(
         id: Long,
         nombre: String,
+        alias: String = "",
         telefono: String,
         ubicacion: String,
         tipoCliente: TipoCliente,
@@ -397,6 +399,7 @@ class ClientesViewModel(
             val cliente = ClienteEntity(
                 id = id,
                 nombre = nombre.trim(),
+                alias = alias.trim(),
                 telefono = telefono.trim(),
                 ubicacion = ubicacion.trim(),
                 tipoCliente = tipoCliente,

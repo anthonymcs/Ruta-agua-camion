@@ -43,4 +43,28 @@ class ClientesTest {
         assertTrue(diasSemana.contains(DiaSemana.LUNES))
         assertTrue(diasSemana.contains(DiaSemana.SABADO))
     }
+
+    @Test
+    fun testAliasYNombreVisual() {
+        val clienteConAlias = ClienteEntity(
+            id = 10,
+            nombre = "Luis Alberto Pérez Gómez",
+            alias = "Don Lucho",
+            telefono = "0991234567"
+        )
+        // En la interfaz visual se debe mostrar el alias/apodo
+        assertEquals("Don Lucho", clienteConAlias.nombreVisual)
+        // Pero el nombre oficial se mantiene para WhatsApp y comprobantes
+        assertEquals("Luis Alberto Pérez Gómez", clienteConAlias.nombre)
+
+        val clienteSinAlias = ClienteEntity(
+            id = 11,
+            nombre = "María Fernanda Castro",
+            alias = "",
+            telefono = "0987654321"
+        )
+        // Sin alias, nombreVisual debe retornar el nombre oficial
+        assertEquals("María Fernanda Castro", clienteSinAlias.nombreVisual)
+        assertEquals("María Fernanda Castro", clienteSinAlias.nombre)
+    }
 }

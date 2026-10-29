@@ -14,6 +14,7 @@ data class ClienteEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val nombre: String,
+    val alias: String = "", // Apodo o alias para visualizar en la app
     val telefono: String = "",
     val ubicacion: String = "", // Dirección o referencia geográfica
     val tipoBidonPreferido: TipoBidon = TipoBidon.AZUL,
@@ -28,4 +29,12 @@ data class ClienteEntity(
     val enlaceMapa: String = "", // Enlace de Google Maps / WhatsApp
     val activo: Boolean = true,
     val fechaCreacion: Long = System.currentTimeMillis()
-)
+) {
+    /**
+     * Nombre a mostrar en la interfaz de usuario: si tiene apodo/alias se muestra ese,
+     * de lo contrario se muestra su nombre registrado.
+     * El campo [nombre] se mantiene intacto para comprobantes, recibos y notas oficiales.
+     */
+    val nombreVisual: String
+        get() = if (alias.isNotBlank()) alias else nombre
+}

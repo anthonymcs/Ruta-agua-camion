@@ -335,7 +335,7 @@ fun ClientesScreen(
         ) {
             ModalFormularioCliente(
                 clienteExistente = clienteEnEdicion,
-                onGuardar = { id, nom, tel, ubi, tipo, dias, tBidon, precio, deuda, prestados, foto ->
+                onGuardar = { id, nom, ali, tel, ubi, tipo, dias, tBidon, precio, deuda, prestados, foto ->
                     val requierePinSaldo = clienteEnEdicion != null && (
                         deuda != clienteEnEdicion!!.deudaMonetaria ||
                         prestados != clienteEnEdicion!!.bidonesPrestados
@@ -346,6 +346,7 @@ fun ClientesScreen(
                             viewModel.guardarCliente(
                                 id = id,
                                 nombre = nom,
+                                alias = ali,
                                 telefono = tel,
                                 ubicacion = ubi,
                                 tipoCliente = tipo,
@@ -362,6 +363,7 @@ fun ClientesScreen(
                         viewModel.guardarCliente(
                             id = id,
                             nombre = nom,
+                            alias = ali,
                             telefono = tel,
                             ubicacion = ubi,
                             tipoCliente = tipo,
@@ -474,7 +476,7 @@ private fun BarraBusquedaClientes(
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
-            placeholder = { Text("Buscar cliente por nombre o dirección...") },
+            placeholder = { Text("Buscar por apodo, nombre o sector...") },
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.Search,
@@ -579,7 +581,7 @@ private fun TarjetaClienteItem(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = cliente.nombre,
+                            text = cliente.nombreVisual,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Black,
                             color = TextoOscuro,
@@ -605,7 +607,15 @@ private fun TarjetaClienteItem(
                         }
                     }
 
-                    if (cliente.ubicacion.isNotBlank()) {
+                    if (cliente.alias.isNotBlank()) {
+                        Text(
+                            text = "Oficial: ${cliente.nombre}${if (cliente.ubicacion.isNotBlank()) " • ${cliente.ubicacion}" else ""}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextoSecundario,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else if (cliente.ubicacion.isNotBlank()) {
                         Text(
                             text = cliente.ubicacion,
                             style = MaterialTheme.typography.bodySmall,
@@ -1016,6 +1026,7 @@ private fun ModalFormularioCliente(
     onGuardar: (
         id: Long,
         nombre: String,
+        alias: String,
         telefono: String,
         ubicacion: String,
         tipoCliente: TipoCliente,
@@ -1030,6 +1041,7 @@ private fun ModalFormularioCliente(
 ) {
     val editId = clienteExistente?.id ?: -1L
     var nombre by rememberSaveable(editId) { mutableStateOf(clienteExistente?.nombre ?: "") }
+    var alias by rememberSaveable(editId) { mutableStateOf(clienteExistente?.alias ?: "") }
     var telefono by rememberSaveable(editId) { mutableStateOf(clienteExistente?.telefono ?: "") }
     var ubicacion by rememberSaveable(editId) { mutableStateOf(clienteExistente?.ubicacion ?: "") }
     var tipoCliente by rememberSaveable(editId) { mutableStateOf(clienteExistente?.tipoCliente ?: TipoCliente.RUTA) }
@@ -1081,12 +1093,28 @@ private fun ModalFormularioCliente(
             )
         }
 
-        // Nombre y Teléfono
+        // Apodo o Alias (Visible en la app)
+        item {
+            OutlinedTextField(
+                value = alias,
+                onValueChange = { alias = it },
+                label = { Text("Apodo / Alias (Visible en la app)") },
+                placeholder = { Text("Ej: Don Lucho, La Tiendita, Don Juan...") },
+                supportingText = { Text("Este apodo se mostrará en listas, rutas y ventas de la app.", style = MaterialTheme.typography.bodySmall) },
+                singleLine = true,
+                colors = marineOutlinedTextFieldColors(),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // Nombre oficial o legal (Para comprobantes WhatsApp)
         item {
             OutlinedTextField(
                 value = nombre,
                 onValueChange = { nombre = it },
-                label = { Text("Nombre del cliente o negocio *") },
+                label = { Text("Nombre oficial / legal (Para comprobantes) *") },
+                placeholder = { Text("Ej: Luis Alberto Pérez Gómez") },
+                supportingText = { Text("Se usa en recibos WhatsApp, estados de cuenta y transferencias.", style = MaterialTheme.typography.bodySmall) },
                 singleLine = true,
                 colors = marineOutlinedTextFieldColors(),
                 modifier = Modifier.fillMaxWidth()
@@ -1313,6 +1341,7 @@ private fun ModalFormularioCliente(
                     onGuardar(
                         clienteExistente?.id ?: 0L,
                         nombre,
+                        alias,
                         telefono,
                         ubicacion,
                         tipoCliente,

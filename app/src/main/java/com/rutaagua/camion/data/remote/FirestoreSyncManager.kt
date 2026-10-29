@@ -97,6 +97,7 @@ class FirestoreSyncManager(
                         for (doc in snapshot.documents) {
                             val id = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
                             val nombre = doc.getString("nombre") ?: continue
+                            val alias = doc.getString("alias") ?: ""
                             val telefono = doc.getString("telefono") ?: ""
                             val ubicacion = doc.getString("ubicacion") ?: ""
                             val tipoBidon = runCatching { TipoBidon.valueOf(doc.getString("tipoBidonPreferido") ?: "AZUL") }.getOrDefault(TipoBidon.AZUL)
@@ -121,6 +122,7 @@ class FirestoreSyncManager(
                             val clienteEntity = ClienteEntity(
                                 id = id,
                                 nombre = nombre,
+                                alias = alias,
                                 telefono = telefono,
                                 ubicacion = ubicacion,
                                 tipoBidonPreferido = tipoBidon,
@@ -464,6 +466,7 @@ class FirestoreSyncManager(
             val data = hashMapOf(
                 "id" to cliente.id,
                 "nombre" to cliente.nombre,
+                "alias" to cliente.alias,
                 "telefono" to cliente.telefono,
                 "ubicacion" to cliente.ubicacion,
                 "tipoBidonPreferido" to cliente.tipoBidonPreferido.name,
