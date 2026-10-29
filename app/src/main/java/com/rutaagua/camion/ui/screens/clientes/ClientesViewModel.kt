@@ -242,19 +242,31 @@ class ClientesViewModel(
     // -------------------------------------------------------------
     val diaSeleccionadoCalendario = MutableStateFlow(obtenerDiaSemanaActual())
 
-    // Clientes asignados al día seleccionado con su fecha exacta correspondiente
+    // Clientes asignados al día seleccionado (Ruta + Llamada agendados o despachados en esa fecha)
     val clientesRutaDiaState: StateFlow<List<ClienteRutaItem>> = diaSeleccionadoCalendario
         .flatMapLatest { dia ->
             val fechaDia = obtenerFechaParaDiaSemana(dia)
             val esDiaFuturo = fechaDia > fechaHoyIso
 
             combine(
+                todosLosClientesState,
                 repository.obtenerClientesPorDiaRuta(dia.name),
                 repository.obtenerTransaccionesPorFecha(fechaDia),
                 repository.obtenerVisitasFallidasPorFecha(fechaDia)
-            ) { clientesRuta, transaccionesDelDia, visitasDelDia ->
+            ) { todosLosClientes, clientesRuta, transaccionesDelDia, visitasDelDia ->
                 val horaFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-                clientesRuta.map { cliente ->
+
+                // Incluir tanto los clientes programados para este día (RUTA o LLAMADA)
+                // como cualquier cliente de llamada/ruta despachado o visitado en esta fecha
+                val idsEnRuta = clientesRuta.map { it.id }.toSet()
+                val idsConActividadHoy = (transaccionesDelDia.mapNotNull { it.clienteId } +
+                        visitasDelDia.map { it.clienteId }).toSet()
+                val clientesExtraHoy = todosLosClientes.filter { c ->
+                    c.id !in idsEnRuta && c.id in idsConActividadHoy
+                }
+                val listaUnificada = clientesRuta + clientesExtraHoy
+
+                listaUnificada.map { cliente ->
                     if (esDiaFuturo) {
                         ClienteRutaItem(
                             cliente = cliente,
@@ -304,12 +316,12 @@ class ClientesViewModel(
             initialValue = emptyList()
         )
 
-    // Conteo de clientes asignados a cada día de la semana
+    // Conteo de clientes asignados a cada día de la semana (Ruta y Llamada agendados)
     val conteoPorDiaSemanaState: StateFlow<Map<DiaSemana, Int>> = todosLosClientesState
         .map { clientes ->
             DiaSemana.entries.associateWith { dia ->
                 clientes.count { c ->
-                    c.tipoCliente == TipoCliente.RUTA && c.diasVisita.contains(dia.name)
+                    c.diasVisita.contains(dia.name)
                 }
             }
         }.stateIn(
@@ -380,9 +392,7 @@ class ClientesViewModel(
         }
 
         viewModelScope.launch {
-            val diasTexto = if (tipoCliente == TipoCliente.RUTA) {
-                diasVisita.joinToString(",") { it.name }
-            } else ""
+            val diasTexto = diasVisita.joinToString(",") { it.name }
 
             val cliente = ClienteEntity(
                 id = id,
@@ -403,6 +413,23 @@ class ClientesViewModel(
             mostrarModalCliente.value = false
             clienteEnEdicion.value = null
             mensajeSnackbar.value = if (id == 0L) "Cliente guardado con éxito" else "Cliente actualizado"
+        }
+    }
+
+    /**
+     * Permite agregar un cliente (de Llamada o de Ruta) al día seleccionado del Calendario de Ruta.
+     */
+    fun asignarClienteADiaRuta(cliente: ClienteEntity, dia: DiaSemana) {
+        viewModelScope.launch {
+            val diasActuales = cliente.diasVisita
+                .split(",")
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .toMutableSet()
+            diasActuales.add(dia.name)
+            val actualizado = cliente.copy(diasVisita = diasActuales.joinToString(","))
+            repository.guardarCliente(actualizado)
+            mensajeSnackbar.value = "\"${cliente.nombre}\" agregado a la ruta del ${dia.name}"
         }
     }
 

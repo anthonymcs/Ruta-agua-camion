@@ -673,13 +673,14 @@ private fun TarjetaClienteItem(
                     }
 
                     if (transaccionHoy != null) {
+                        val esCamioneta = transaccionHoy.vehiculo == "CAMIONETA"
                         Surface(
                             color = Color(0xFFF0FDF4),
                             shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(1.dp, Color(0xFF86EFAC))
                         ) {
                             Text(
-                                text = "✓ Hoy",
+                                text = if (esCamioneta) "🛻 Realizado por Camioneta" else "🚚 Realizado por Camión",
                                 color = Color(0xFF15803D),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
@@ -792,8 +793,8 @@ private fun TarjetaClienteItem(
                         }
                     }
 
-                    // Días de visita si aplica
-                    if (cliente.tipoCliente == TipoCliente.RUTA && cliente.diasVisita.isNotBlank()) {
+                    // Días de visita si aplica (tanto para clientes de Ruta como de Llamada agendados)
+                    if (cliente.diasVisita.isNotBlank()) {
                         Spacer(modifier = Modifier.height(6.dp))
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1136,47 +1137,58 @@ private fun ModalFormularioCliente(
             }
         }
 
-        // Selector múltiple de Días (si es cliente de ruta)
-        if (tipoCliente == TipoCliente.RUTA) {
-            item {
+        // Selector múltiple de Días en el Calendario de Ruta (disponible tanto para Ruta como para Llamada)
+        item {
+            Text(
+                text = if (tipoCliente == TipoCliente.RUTA) {
+                    "DÍAS DE VISITA EN EL CALENDARIO DE RUTA"
+                } else {
+                    "AGREGAR CLIENTE DE LLAMADA AL CALENDARIO DE RUTA"
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = TextoSecundario
+            )
+            if (tipoCliente == TipoCliente.LLAMADA) {
                 Text(
-                    text = "DÍAS DE VISITA EN LA SEMANA",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = TextoSecundario
+                    text = "Selecciona los días en que este cliente de llamada aparecerá en la ruta del día",
+                    fontSize = 11.sp,
+                    color = AguaPrimaryDark,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    DiaSemana.entries.forEach { dia ->
-                        val sel = diasSeleccionados.contains(dia)
-                        val abrev = when (dia) {
-                            DiaSemana.LUNES -> "LUN"
-                            DiaSemana.MARTES -> "MAR"
-                            DiaSemana.MIERCOLES -> "MIE"
-                            DiaSemana.JUEVES -> "JUE"
-                            DiaSemana.VIERNES -> "VIE"
-                            DiaSemana.SABADO -> "SAB"
-                        }
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    if (sel) diasSeleccionados.remove(dia) else diasSeleccionados.add(dia)
-                                },
-                            color = if (sel) AguaPrimary else Color(0xFFF1F5F9),
-                            shape = RoundedCornerShape(8.dp),
-                            border = if (!sel) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)) else null
-                        ) {
-                            Text(
-                                text = abrev,
-                                color = if (sel) Color.White else TextoOscuro,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(vertical = 10.dp)
-                            )
-                        }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                DiaSemana.entries.forEach { dia ->
+                    val sel = diasSeleccionados.contains(dia)
+                    val abrev = when (dia) {
+                        DiaSemana.LUNES -> "LUN"
+                        DiaSemana.MARTES -> "MAR"
+                        DiaSemana.MIERCOLES -> "MIE"
+                        DiaSemana.JUEVES -> "JUE"
+                        DiaSemana.VIERNES -> "VIE"
+                        DiaSemana.SABADO -> "SAB"
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                if (sel) diasSeleccionados.remove(dia) else diasSeleccionados.add(dia)
+                            },
+                        color = if (sel) AguaPrimary else Color(0xFFF1F5F9),
+                        shape = RoundedCornerShape(8.dp),
+                        border = if (!sel) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)) else null
+                    ) {
+                        Text(
+                            text = abrev,
+                            color = if (sel) Color.White else TextoOscuro,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 10.dp)
+                        )
                     }
                 }
             }

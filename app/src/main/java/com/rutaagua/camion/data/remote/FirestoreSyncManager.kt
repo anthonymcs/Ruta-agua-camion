@@ -170,11 +170,12 @@ class FirestoreSyncManager(
                                     }
                                     val formatoHora = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
                                     val horaStr = formatoHora.format(java.util.Date(fecha))
-                                    val emojiVehiculo = if (vehiculoDoc == "CAMIONETA") "🛻 CAMIONETA" else "🚚 CAMIÓN"
+                                    val nombreVehiculo = if (vehiculoDoc == "CAMIONETA") "La camioneta" else "El camión"
+                                    val emojiVehiculo = if (vehiculoDoc == "CAMIONETA") "🛻" else "🚚"
                                     com.rutaagua.camion.ui.utils.RutaNotificationHelper.mostrarNotificacionRuta(
                                         context = context,
-                                        titulo = "🚨 Ruta Actualizada",
-                                        mensaje = "$emojiVehiculo acaba de atender a $nombreCliente ($horaStr)."
+                                        titulo = "$emojiVehiculo Despacho de Cliente en Ruta",
+                                        mensaje = "$nombreVehiculo realizó el despacho de cliente: $nombreCliente ($horaStr)."
                                     )
                                 }
                             }

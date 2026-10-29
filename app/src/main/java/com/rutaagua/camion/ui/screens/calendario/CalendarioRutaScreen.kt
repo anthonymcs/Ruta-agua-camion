@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.filled.MeetingRoom
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -59,6 +61,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -120,6 +123,7 @@ import com.rutaagua.camion.ui.theme.VerdeEfectivo
 import com.rutaagua.camion.ui.theme.VerdeEfectivoFondo
 import com.rutaagua.camion.ui.utils.EvidenciaVisitaHelper
 import com.rutaagua.camion.ui.utils.GpsLocationHelper
+import com.rutaagua.camion.ui.utils.RutaNotificationHelper
 import com.rutaagua.camion.ui.utils.WhatsAppHelper
 import java.io.File
 import java.text.SimpleDateFormat
@@ -179,6 +183,39 @@ fun CalendarioRutaScreen(
     var fotoZoomPath by remember { mutableStateOf<String?>(null) }
     var fotoZoomNombre by remember { mutableStateOf("") }
     var clienteParaUbicacion by remember { mutableStateOf<ClienteEntity?>(null) }
+    var mostrarModalAsignarClienteLlamada by rememberSaveable { mutableStateOf(false) }
+
+    // Detectar clientes atendidos hoy por el otro vehículo (ej. Camioneta despachó un cliente del Camión o viceversa)
+    val despachosOtroVehiculoHoy = remember(clientesRuta, vehiculoActivo, diaSeleccionado, diaActualHoy) {
+        if (diaSeleccionado == diaActualHoy) {
+            clientesRuta.filter { item ->
+                item.estado == EstadoEntregaRuta.ATENDIDO &&
+                        item.vehiculoEntrega != null &&
+                        item.vehiculoEntrega != vehiculoActivo.name
+            }
+        } else {
+            emptyList()
+        }
+    }
+
+    LaunchedEffect(despachosOtroVehiculoHoy) {
+        if (despachosOtroVehiculoHoy.isNotEmpty()) {
+            val prefs = context.getSharedPreferences("ruta_cruzada_notif_prefs", android.content.Context.MODE_PRIVATE)
+            despachosOtroVehiculoHoy.forEach { item ->
+                val key = "${viewModel.fechaHoyIso}_${item.cliente.id}_${item.vehiculoEntrega}"
+                if (!prefs.getBoolean(key, false)) {
+                    prefs.edit().putBoolean(key, true).apply()
+                    val nombreActor = if (item.vehiculoEntrega == "CAMIONETA") "La camioneta" else "El camión"
+                    val emoji = if (item.vehiculoEntrega == "CAMIONETA") "🛻" else "🚚"
+                    RutaNotificationHelper.mostrarNotificacionRuta(
+                        context = context,
+                        titulo = "$emoji Despacho de Cliente Realizado",
+                        mensaje = "$nombreActor realizó el despacho de cliente: ${item.cliente.nombre}"
+                    )
+                }
+            }
+        }
+    }
 
     // Manejo de Cámara para evidencia de "Cliente No Estaba"
     var clienteParaEvidencia by remember { mutableStateOf<ClienteEntity?>(null) }
@@ -267,24 +304,55 @@ fun CalendarioRutaScreen(
                     )
                 }
 
+                // 2.5 Banner de notificación si otro vehículo realizó el despacho de un cliente hoy
+                if (despachosOtroVehiculoHoy.isNotEmpty()) {
+                    Surface(
+                        color = Color(0xFFDCFCE7),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, VerdeEfectivo),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            despachosOtroVehiculoHoy.forEach { desp ->
+                                val actor = if (desp.vehiculoEntrega == "CAMIONETA") "La camioneta" else "El camión"
+                                val emoji = if (desp.vehiculoEntrega == "CAMIONETA") "🛻" else "🚚"
+                                Text(
+                                    text = "$emoji $actor realizó el despacho de cliente: ${desp.cliente.nombre} (${desp.horaEntrega ?: ""})",
+                                    color = Color(0xFF15803D),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Black,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // 3. Resumen de botellones requeridos por tipo
                 if (clientesRuta.isNotEmpty()) {
                     ResumenBotellonesRequeridos(clientesRuta = clientesRuta)
                 }
 
-                // 4. Filtros rápidos en Chips
+                // 4. Filtros rápidos en Chips + Botón para agregar Cliente de Llamada a Ruta
                 FilaFiltrosEstado(
                     filtroSeleccionado = filtroEstadoSeleccionado,
                     total = totalClientes,
                     atendidos = atendidos,
                     noEstaban = noEstaban,
                     pendientes = pendientes,
-                    onSeleccionarFiltro = { filtroEstadoSeleccionado = it }
+                    onSeleccionarFiltro = { filtroEstadoSeleccionado = it },
+                    onAgregarClienteLlamada = { mostrarModalAsignarClienteLlamada = true }
                 )
 
                 // 5. Lista de Clientes Programados
                 if (clientesFiltrados.isEmpty()) {
-                    EstadoVacioDiaRuta(dia = diaSeleccionado)
+                    EstadoVacioDiaRuta(
+                        dia = diaSeleccionado,
+                        onAgregarClienteLlamada = { mostrarModalAsignarClienteLlamada = true }
+                    )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -382,6 +450,20 @@ fun CalendarioRutaScreen(
             transacciones = historialTransacciones,
             visitasFallidas = historialVisitas,
             onDismiss = { viewModel.cerrarHistorialCliente() }
+        )
+    }
+
+    if (mostrarModalAsignarClienteLlamada) {
+        DialogoAsignarClienteARuta(
+            dia = diaSeleccionado,
+            clientesDisponibles = todosLosClientes.filterNot { c ->
+                c.diasVisita.split(",").map { it.trim() }.contains(diaSeleccionado.name)
+            },
+            onAsignarCliente = { cliente ->
+                viewModel.asignarClienteADiaRuta(cliente, diaSeleccionado)
+                mostrarModalAsignarClienteLlamada = false
+            },
+            onDismiss = { mostrarModalAsignarClienteLlamada = false }
         )
     }
 }
@@ -1149,15 +1231,45 @@ private fun FilaFiltrosEstado(
     atendidos: Int,
     noEstaban: Int,
     pendientes: Int,
-    onSeleccionarFiltro: (FiltroEstadoRuta) -> Unit
+    onSeleccionarFiltro: (FiltroEstadoRuta) -> Unit,
+    onAgregarClienteLlamada: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        Surface(
+            onClick = onAgregarClienteLlamada,
+            color = AguaPrimaryDark,
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.height(32.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "+ Cliente de Llamada",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+
         FiltroEstadoRuta.entries.forEach { filtro ->
             val seleccionado = filtro == filtroSeleccionado
             val contador = when (filtro) {
@@ -1279,14 +1391,33 @@ private fun TarjetaClienteRutaRedisenada(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = cliente.nombre,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
-                        color = TextoOscuro,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = cliente.nombre,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Black,
+                            color = TextoOscuro,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = if (cliente.tipoCliente == TipoCliente.RUTA) Color(0xFFE0F2FE) else Color(0xFFF0FDF4),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = if (cliente.tipoCliente == TipoCliente.RUTA) "RUTA" else "LLAMADA",
+                                color = if (cliente.tipoCliente == TipoCliente.RUTA) AguaPrimaryDark else VerdeEfectivo,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
                     if (cliente.ubicacion.isNotBlank()) {
                         Text(
                             text = cliente.ubicacion,
@@ -1594,6 +1725,11 @@ private fun BadgeEstadoEntrega(
 
     when (item.estado) {
         EstadoEntregaRuta.ATENDIDO -> {
+            val textoVehiculo = if (item.vehiculoEntrega == "CAMIONETA") {
+                "Realizado por la camioneta"
+            } else {
+                "Realizado por el camión"
+            }
             Surface(
                 color = VerdeEfectivoFondo,
                 shape = RoundedCornerShape(8.dp),
@@ -1606,7 +1742,7 @@ private fun BadgeEstadoEntrega(
                     VehiculoThumbnail(tipo = tipoVehiculoEntrega, size = 16.dp)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "✓ ${item.horaEntrega ?: ""} (${item.bidonesEntregados})",
+                        text = "$textoVehiculo (${item.bidonesEntregados})",
                         color = VerdeEfectivo,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Black,
@@ -1709,7 +1845,10 @@ private fun BadgeEstadoEntrega(
 }
 
 @Composable
-private fun EstadoVacioDiaRuta(dia: DiaSemana) {
+private fun EstadoVacioDiaRuta(
+    dia: DiaSemana,
+    onAgregarClienteLlamada: () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1733,11 +1872,149 @@ private fun EstadoVacioDiaRuta(dia: DiaSemana) {
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Edita un cliente en la pestaña de Clientes para asignarle este día de ruta semanal.",
+                text = "Puedes agregar clientes de llamada o de ruta directamente a este día del calendario.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextoSecundario,
                 textAlign = TextAlign.Center
             )
+            Spacer(modifier = Modifier.height(14.dp))
+            Button(
+                onClick = onAgregarClienteLlamada,
+                colors = ButtonDefaults.buttonColors(containerColor = AguaPrimaryDark),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "+ Agregar Cliente de Llamada a Ruta",
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun DialogoAsignarClienteARuta(
+    dia: DiaSemana,
+    clientesDisponibles: List<ClienteEntity>,
+    onAsignarCliente: (ClienteEntity) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var busqueda by remember { mutableStateOf("") }
+    val filtrados = remember(clientesDisponibles, busqueda) {
+        val base = clientesDisponibles.sortedBy { if (it.tipoCliente == TipoCliente.LLAMADA) 0 else 1 }
+        if (busqueda.isBlank()) base
+        else base.filter {
+            it.nombre.contains(busqueda, ignoreCase = true) ||
+                    it.ubicacion.contains(busqueda, ignoreCase = true)
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(
+                    text = "Agregar Cliente al ${dia.name}",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 17.sp,
+                    color = TextoOscuro
+                )
+                Text(
+                    text = "Selecciona un cliente de llamada o de ruta para incluirlo en el calendario de este día",
+                    fontSize = 11.sp,
+                    color = TextoSecundario
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = busqueda,
+                    onValueChange = { busqueda = it },
+                    placeholder = { Text("Buscar cliente...", fontSize = 12.sp) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = marineOutlinedTextFieldColors(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (filtrados.isEmpty()) {
+                    Text(
+                        text = "Todos los clientes ya están asignados a este día o no hay coincidencias.",
+                        fontSize = 12.sp,
+                        color = TextoSecundario,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(260.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(filtrados, key = { it.id }) { cliente ->
+                            Surface(
+                                onClick = { onAsignarCliente(cliente) },
+                                color = FondoGrisClaro,
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, BordeSutil),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = cliente.nombre,
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 13.sp,
+                                            color = TextoOscuro,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${if (cliente.tipoCliente == TipoCliente.LLAMADA) "📞 Llamada" else "🚚 Ruta"} • $${String.format(Locale.US, "%.2f", cliente.precioHabitual)}",
+                                            fontSize = 11.sp,
+                                            color = AguaPrimaryDark,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1
+                                        )
+                                    }
+
+                                    Surface(
+                                        color = AguaPrimary,
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "+ Agregar",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Cerrar", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
 }
