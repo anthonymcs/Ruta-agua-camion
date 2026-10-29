@@ -64,4 +64,31 @@ object RutaNotificationHelper {
             // Ignorar errores inesperados de notificación para no afectar el flujo offline
         }
     }
+
+    /**
+     * Emite una notificación automática cuando existen clientes con crédito pendiente
+     * a los que no se les ha cobrado en un plazo de 2 días o más.
+     */
+    fun notificarCreditosVencidosSiCorresponde(
+        context: Context,
+        nombresClientes: List<String>,
+        totalDeudaVencida: Double,
+        fechaHoyIso: String
+    ) {
+        if (nombresClientes.isEmpty()) return
+
+        val prefs = context.getSharedPreferences("ruta_notif_creditos_prefs", Context.MODE_PRIVATE)
+        val claveHoy = "${fechaHoyIso}_${nombresClientes.size}"
+        if (prefs.getString("ultima_alerta_credito", "") == claveHoy) {
+            return
+        }
+        prefs.edit().putString("ultima_alerta_credito", claveHoy).apply()
+
+        val resumenNombres = nombresClientes.take(4).joinToString(", ")
+        val extra = if (nombresClientes.size > 4) " y ${nombresClientes.size - 4} más" else ""
+        val titulo = "⏰ Créditos sin cobrar (2+ días)"
+        val mensaje = "${nombresClientes.size} cliente(s) llevan 2 días o más sin abonar (Total: $${String.format(java.util.Locale.US, "%.2f", totalDeudaVencida)}): $resumenNombres$extra."
+
+        mostrarNotificacionRuta(context, titulo, mensaje)
+    }
 }

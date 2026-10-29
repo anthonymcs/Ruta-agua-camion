@@ -19,12 +19,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+data class AlertaCreditoVencido(
+    val cliente: ClienteEntity,
+    val diasSinCobrar: Int,
+    val fechaReferenciaTexto: String
+)
 
 enum class FiltroVehiculoRegistro(val titulo: String, val vehiculoKey: String?) {
     CONSOLIDADO("Consolidado", null),
@@ -151,6 +158,64 @@ class RegistroDiaViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    // Clientes con créditos activos a los que no se les ha cobrado en un plazo de 2 días o más
+    val alertasCreditosSinCobroState: StateFlow<List<AlertaCreditoVencido>> = combine(
+        todosLosClientesState,
+        todasLasTransaccionesGlobalState
+    ) { clientes, transacciones ->
+        val ahoraMillis = System.currentTimeMillis()
+        val millisPorDia = 24L * 60L * 60L * 1000L
+        val sdfCorto = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+
+        clientes
+            .filter { it.activo && it.deudaMonetaria > 0.009 }
+            .mapNotNull { cliente ->
+                val txCliente = transacciones.filter { it.clienteId == cliente.id }
+                val ultimoCobro = txCliente
+                    .filter { (it.montoAbono + it.montoCanceladoDeuda) > 0.009 }
+                    .maxOfOrNull { it.fecha }
+                val ultimoCredito = txCliente
+                    .filter { it.montoCredito > 0.009 }
+                    .maxOfOrNull { it.fecha }
+
+                val fechaReferencia = when {
+                    ultimoCobro != null && ultimoCredito != null -> maxOf(ultimoCobro, ultimoCredito)
+                    ultimoCobro != null -> ultimoCobro
+                    ultimoCredito != null -> ultimoCredito
+                    else -> cliente.fechaCreacion
+                }
+
+                val diasPorMillis = ((ahoraMillis - fechaReferencia) / millisPorDia).toInt()
+                val fechaRefIso = formatoFechaIso.format(Date(fechaReferencia))
+                val diasCalendario = try {
+                    val dHoy = formatoFechaIso.parse(fechaHoyTexto)?.time ?: ahoraMillis
+                    val dRef = formatoFechaIso.parse(fechaRefIso)?.time ?: fechaReferencia
+                    ((dHoy - dRef) / millisPorDia).toInt()
+                } catch (_: Exception) {
+                    diasPorMillis
+                }
+
+                val diasSinCobrar = maxOf(diasPorMillis, diasCalendario)
+                if (diasSinCobrar >= 2) {
+                    AlertaCreditoVencido(
+                        cliente = cliente,
+                        diasSinCobrar = diasSinCobrar,
+                        fechaReferenciaTexto = sdfCorto.format(Date(fechaReferencia))
+                    )
+                } else {
+                    null
+                }
+            }
+            .sortedWith(
+                compareByDescending<AlertaCreditoVencido> { it.diasSinCobrar }
+                    .thenByDescending { it.cliente.deudaMonetaria }
+            )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     // Rol activo y costos de planta
     val rolActivo: StateFlow<RolUsuario> = appPreferences.rolActivo

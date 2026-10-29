@@ -106,6 +106,7 @@ import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 import com.rutaagua.camion.ui.theme.VerdeEfectivo
 import com.rutaagua.camion.ui.theme.VerdeEfectivoFondo
+import com.rutaagua.camion.ui.utils.RutaNotificationHelper
 import com.rutaagua.camion.ui.utils.WhatsAppHelper
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -124,6 +125,7 @@ fun RegistroDiaScreen(
     val filtroVehiculo by viewModel.filtroVehiculoState.collectAsState()
     val resumen by viewModel.resumenCierreDiaState.collectAsState()
     val todosLosClientes by viewModel.todosLosClientesState.collectAsState()
+    val alertasCreditos by viewModel.alertasCreditosSinCobroState.collectAsState()
     val rolActivo by viewModel.rolActivo.collectAsState()
     val cierreHoy by viewModel.cierreHoyState.collectAsState()
     val mostrarDialogoCierre by viewModel.mostrarDialogoCierre.collectAsState()
@@ -156,6 +158,18 @@ fun RegistroDiaScreen(
         mensajeSnackbar?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.limpiarMensajeSnackbar()
+        }
+    }
+
+    // Disparar notificación automática cuando haya clientes con crédito sin cobrar en un plazo de 2 días o más
+    LaunchedEffect(alertasCreditos) {
+        if (alertasCreditos.isNotEmpty()) {
+            RutaNotificationHelper.notificarCreditosVencidosSiCorresponde(
+                context = context,
+                nombresClientes = alertasCreditos.map { it.cliente.nombre },
+                totalDeudaVencida = alertasCreditos.sumOf { it.cliente.deudaMonetaria },
+                fechaHoyIso = viewModel.fechaHoyTexto
+            )
         }
     }
 
@@ -228,6 +242,24 @@ fun RegistroDiaScreen(
                         onClick = { viewModel.abrirDialogoCierre() },
                         iconTint = clayTheme.primary,
                         modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // 3.5 Alerta de Clientes con Crédito sin cobrar en plazo >= 2 días
+            if (alertasCreditos.isNotEmpty()) {
+                item {
+                    TarjetaAlertaCreditosSinCobro(
+                        alertas = alertasCreditos,
+                        onCobrarCliente = { cliente ->
+                            viewModel.abrirModalNuevaVenta(cliente)
+                        },
+                        onRecordarWhatsApp = { alerta ->
+                            val msg = "Hola *${alerta.cliente.nombre}*, le saludamos de la Ruta de Agua. " +
+                                    "Le recordamos amablemente su saldo pendiente de *$${String.format(Locale.US, "%.2f", alerta.cliente.deudaMonetaria)}* " +
+                                    "(último movimiento: ${alerta.fechaReferenciaTexto}). ¡Muchas gracias!"
+                            WhatsAppHelper.abrirChatWhatsApp(context, alerta.cliente.telefono, msg)
+                        }
                     )
                 }
             }
@@ -1078,6 +1110,130 @@ private fun DialogoRegistrarGastoBanca(
             }
         }
     )
+}
+
+@Composable
+private fun TarjetaAlertaCreditosSinCobro(
+    alertas: List<AlertaCreditoVencido>,
+    onCobrarCliente: (ClienteEntity) -> Unit,
+    onRecordarWhatsApp: (AlertaCreditoVencido) -> Unit
+) {
+    var expandido by rememberSaveable { mutableStateOf(false) }
+    val totalDeuda = alertas.sumOf { it.cliente.deudaMonetaria }
+
+    ClayCard(
+        modifier = Modifier.fillMaxWidth(),
+        containerColor = Color(0xFFFFFBEB),
+        accentBorderColor = AmbarAdvertencia,
+        cornerRadius = 18.dp,
+        contentPadding = PaddingValues(14.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expandido = !expandido },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "⏰ CRÉDITOS SIN COBRAR (2+ DÍAS): ${alertas.size}",
+                        color = Color(0xFFB45309),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Deuda acumulada: $${String.format(Locale.US, "%.2f", totalDeuda)} • Toca para ${if (expandido) "ocultar" else "ver y cobrar"}",
+                        color = TextoOscuro,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                ClayBadge(
+                    text = if (expandido) "Ocultar" else "Ver (${alertas.size})",
+                    containerColor = AmbarAdvertencia,
+                    contentColor = Color.White
+                )
+            }
+
+            if (expandido) {
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = AmbarAdvertencia.copy(alpha = 0.25f))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                alertas.forEach { alerta ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 5.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = alerta.cliente.nombre,
+                                color = TextoOscuro,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Debe $${String.format(Locale.US, "%.2f", alerta.cliente.deudaMonetaria)} • ${alerta.diasSinCobrar} días sin cobro (${alerta.fechaReferenciaTexto})",
+                                color = RojoAlerta,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Surface(
+                                onClick = { onCobrarCliente(alerta.cliente) },
+                                color = VerdeEfectivo,
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "Cobrar",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                )
+                            }
+
+                            Surface(
+                                onClick = { onRecordarWhatsApp(alerta) },
+                                color = Color(0xFF25D366),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = "WhatsApp",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 private fun compartirPorWhatsApp(context: Context, textoReporte: String) {
