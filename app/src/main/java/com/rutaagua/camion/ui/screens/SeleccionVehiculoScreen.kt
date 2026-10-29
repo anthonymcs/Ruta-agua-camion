@@ -159,7 +159,7 @@ fun SeleccionVehiculoScreen(
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_logo_aqua_apolo),
-                            contentDescription = "Logo Aqua Apolo",
+                            contentDescription = "Logo Atenea",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .fillMaxSize()
@@ -169,7 +169,7 @@ fun SeleccionVehiculoScreen(
                     Spacer(modifier = Modifier.width(14.dp))
                     Column {
                         Text(
-                            text = "Aqua Apolo",
+                            text = "Atenea",
                             color = Color.White,
                             fontSize = 23.sp,
                             fontWeight = FontWeight.Black,

@@ -50,7 +50,7 @@ class WhatsAppHelperTest {
 
         val mensaje = WhatsAppHelper.generarMensajeEstadoCuenta(cliente, fechaDisplay = "19/10/2026")
 
-        assertTrue(mensaje.contains("ESTADO DE CUENTA - AQUA APOLO") || mensaje.contains("ESTADO DE CUENTA - RUTA AGUA"))
+        assertTrue(mensaje.contains("ESTADO DE CUENTA - ATENEA") || mensaje.contains("ESTADO DE CUENTA - AQUA APOLO") || mensaje.contains("ESTADO DE CUENTA - RUTA AGUA"))
         assertTrue(mensaje.contains("Restaurante El Marino"))
         assertTrue(mensaje.contains("19/10/2026"))
         assertTrue(mensaje.contains("Pendiente de pago: $5.00"))
@@ -115,7 +115,7 @@ class WhatsAppHelperTest {
 
         val recibo = WhatsAppHelper.generarMensajeReciboEntrega(transaccion, cliente, fechaDisplay = "19/10/2026")
 
-        assertTrue(recibo.contains("RECIBO DE ENTREGA - AQUA APOLO") || recibo.contains("RECIBO DE ENTREGA - RUTA AGUA"))
+        assertTrue(recibo.contains("RECIBO DE ENTREGA - ATENEA") || recibo.contains("RECIBO DE ENTREGA - AQUA APOLO") || recibo.contains("RECIBO DE ENTREGA - RUTA AGUA"))
         assertTrue(recibo.contains("Panadería La Espiga"))
         assertTrue(recibo.contains("Recarga Bidón 20L (Azul Estándar): *2 un.*"))
         assertTrue(recibo.contains("Galones (4L): *2 un.*"))

@@ -97,8 +97,8 @@ object WhatsAppHelper {
         fechaDisplay: String = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
     ): String {
         return buildString {
-            appendLine("💧 *ESTADO DE CUENTA - AQUA APOLO* 🚚")
-            appendLine("Hola *${cliente.nombre}*, un cordial saludo de parte del equipo de *Aqua Apolo*.")
+            appendLine("💧 *ESTADO DE CUENTA - ATENEA* 🚚")
+            appendLine("Hola *${cliente.nombre}*, un cordial saludo de parte del equipo de *Atenea*.")
             appendLine("📅 *Fecha:* $fechaDisplay")
             appendLine("─────────────────────────")
             appendLine("📊 *RESUMEN DE SU CUENTA:*")
@@ -124,7 +124,7 @@ object WhatsAppHelper {
 
             appendLine("─────────────────────────")
             appendLine("¡Agradecemos mucho su preferencia! Si necesita agua purificada o tiene alguna consulta, con gusto le atendemos.")
-            appendLine("Gracias por confiar en nosotros. Atentamente, Aqua Apolo 💧🚚")
+            appendLine("Gracias por confiar en nosotros. Atentamente, Atenea 💧🚚")
         }
     }
 
@@ -140,7 +140,7 @@ object WhatsAppHelper {
         val nombre = cliente?.nombre ?: transaccion.nombreClientePaso ?: "Estimado(a) Cliente"
 
         return buildString {
-            appendLine("💧 *RECIBO DE ENTREGA - AQUA APOLO* 🚚")
+            appendLine("💧 *RECIBO DE ENTREGA - ATENEA* 🚚")
             appendLine("Hola *$nombre*, confirmamos su entrega de hoy.")
             appendLine("📅 *Fecha:* $fechaDisplay • ⏰ *Hora:* $horaTexto")
             appendLine("─────────────────────────")
@@ -243,7 +243,7 @@ object WhatsAppHelper {
 
             appendLine("─────────────────────────")
             appendLine("¡Muchas gracias por su compra! Que tenga un excelente día.")
-            appendLine("Gracias por confiar en nosotros. Atentamente, Aqua Apolo 💧🚚")
+            appendLine("Gracias por confiar en nosotros. Atentamente, Atenea 💧🚚")
         }
     }
 
@@ -251,7 +251,7 @@ object WhatsAppHelper {
      * Genera el mensaje de cortesía con foto cuando el cliente no estaba en casa.
      */
     fun generarMensajeVisitaFallida(nombreCliente: String, fecha: String, hora: String): String {
-        return "¡Hola $nombreCliente! 🚚💧 Pasamos hoy $fecha a las $hora para realizar su entrega de agua, pero no encontramos a nadie en casa. Le adjuntamos la foto de constancia de nuestra visita. Escríbanos a este número de ruta si desea que pasemos más tarde.\n\nGracias por confiar en nosotros. Atentamente, Aqua Apolo 💧🚚"
+        return "¡Hola $nombreCliente! 🚚💧 Pasamos hoy $fecha a las $hora para realizar su entrega de agua, pero no encontramos a nadie en casa. Le adjuntamos la foto de constancia de nuestra visita. Escríbanos a este número de ruta si desea que pasemos más tarde.\n\nGracias por confiar en nosotros. Atentamente, Atenea 💧🚚"
     }
 
     /**
@@ -366,7 +366,7 @@ object WhatsAppHelper {
                 appendLine("📝 *Observaciones:* ${cierre.observaciones}")
             }
             appendLine("─────────────────────────")
-            appendLine("Enviado desde Aqua Apolo • Cierre de Jornada 💧🚚")
+            appendLine("Enviado desde Atenea • Cierre de Jornada 💧🚚")
         }
     }
 }
