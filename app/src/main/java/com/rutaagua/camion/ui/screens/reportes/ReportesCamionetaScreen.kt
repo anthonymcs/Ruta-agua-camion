@@ -2,17 +2,16 @@ package com.rutaagua.camion.ui.screens.reportes
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,13 +19,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,15 +45,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rutaagua.camion.data.local.entity.GastoExtraEntity
-import com.rutaagua.camion.data.local.model.ResumenPrecioCliente
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.model.TipoVehiculo
-import com.rutaagua.camion.data.local.model.calcularDesglosePorPrecio
 import com.rutaagua.camion.data.local.prefs.RolUsuario
 import com.rutaagua.camion.ui.components.BankingSegmentedTabs
 import com.rutaagua.camion.ui.components.ClayBadge
@@ -75,8 +74,6 @@ import com.rutaagua.camion.ui.theme.FondoGrisClaro
 import com.rutaagua.camion.ui.theme.PichinchaCanvas
 import com.rutaagua.camion.ui.theme.PichinchaNavy
 import com.rutaagua.camion.ui.theme.PichinchaYellow
-import com.rutaagua.camion.ui.theme.RojoAlerta
-import com.rutaagua.camion.ui.theme.RojoAlertaFondo
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 import com.rutaagua.camion.ui.theme.VerdeEfectivo
@@ -92,58 +89,54 @@ enum class PeriodoReporte(val titulo: String) {
     MENSUAL("Mensual")
 }
 
-data class ResumenSemanaMes(
-    val numeroSemana: Int,
-    val rangoDiasLabel: String,
-    val totalEntregas: Int,
-    val bidones: Int,
+data class EntregaBidonDetalle(
+    val transaccionId: Long,
+    val clienteNombre: String,
+    val aliasCliente: String?,
+    val esClientePaso: Boolean,
+    val fechaTexto: String,
+    val horaTexto: String,
+    val fechaMillis: Long,
+    val transparentes: Int,
+    val azules: Int,
+    val marcados: Int,
+    val totalBidones: Int,
+    val envasesNuevos: Int,
+    val prestados: Int,
+    val devueltos: Int,
+    val cortesias: Int,
     val galones: Int,
     val pacas: Int,
     val minis: Int,
-    val ventaBruta: Double,
-    val efectivo: Double,
-    val transferencia: Double,
-    val creditos: Double,
-    val abonos: Double,
-    val gastos: Double,
-    val ingresoNeto: Double,
-    val efectivoNetoCaja: Double
+    val nota: String
 )
 
-private data class ResumenPeriodoCalculado(
+data class ResumenBidonesPeriodo(
     val etiquetaRango: String,
     val vehiculoEtiqueta: String,
-    val totalTransacciones: Int,
-    val ventaBruta: Double,
-    val efectivo: Double,
-    val transferencia: Double,
-    val creditos: Double,
-    val abonos: Double,
-    val gastos: Double,
-    val ingresoNetoTotal: Double,
-    val efectivoNeto: Double,
+    val totalEntregas: Int,
     val totalBidones: Int,
     val transparentes: Int,
     val azules: Int,
     val marcados: Int,
+    val envasesNuevos: Int,
     val prestados: Int,
-    val gratis: Int,
+    val devueltos: Int,
+    val cortesias: Int,
     val galones: Int,
     val pacas: Int,
     val minis: Int,
-    val envasesNuevos: Int,
-    val prestamosPorCliente: List<Pair<String, Int>>,
-    val ventasPorFecha: List<Pair<String, Double>>,
-    val desgloseSemanasMes: List<ResumenSemanaMes>,
-    val desglosePorPrecio: List<ResumenPrecioCliente>,
-    val gastosDetalle: List<GastoExtraEntity>
+    val entregas: List<EntregaBidonDetalle>,
+    val prestamosPorCliente: List<Pair<String, Int>>
 )
 
 /**
- * Apartado de Reportes (Día, Semanal, Mensual) para Camión, Camioneta y Administración (Rolando).
- * Incluye desglose por semanas del mes (Semana 1 a 5), gastos reflejados, ingreso neto,
- * clientes por precio y gran total mensual.
+ * Reportes Operativos de Entrega de Bidones (Día, Semanal, Mensual).
+ * Exclusivo para Choferes y Operadores:
+ * Muestra cuántos bidones se dejaron en el período, qué tipos exactos (Azul, PET, Marcada),
+ * y la lista detallada de "¿A quién se le dejó los bidones?", con opción de compartir por WhatsApp.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ReportesCamionetaScreen(
     viewModel: RegistroDiaViewModel,
@@ -151,13 +144,12 @@ fun ReportesCamionetaScreen(
 ) {
     val context = LocalContext.current
     val todasTransaccionesGlobal by viewModel.todasLasTransaccionesGlobalState.collectAsState()
-    val gastosTodos by viewModel.todosLosGastosState.collectAsState()
     val clientes by viewModel.todosLosClientesState.collectAsState()
     val vehiculoActivo by viewModel.vehiculoActivoState.collectAsState()
     val rolActivo by viewModel.rolActivo.collectAsState()
     val clayTheme = obtenerClayThemePorVehiculo(vehiculoActivo)
 
-    var periodoSeleccionado by rememberSaveable { mutableStateOf(PeriodoReporte.MENSUAL) }
+    var periodoSeleccionado by rememberSaveable { mutableStateOf(PeriodoReporte.DIA) }
     var offsetMeses by rememberSaveable { mutableIntStateOf(0) }
     var filtroVehiculoReporte by rememberSaveable(vehiculoActivo, rolActivo) {
         mutableStateOf(
@@ -173,7 +165,6 @@ fun ReportesCamionetaScreen(
 
     val resumen = remember(
         todasTransaccionesGlobal,
-        gastosTodos,
         clientes,
         periodoSeleccionado,
         offsetMeses,
@@ -182,6 +173,7 @@ fun ReportesCamionetaScreen(
         val ahora = Calendar.getInstance()
         val formatoIso = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val formatoCorto = SimpleDateFormat("dd/MM", Locale.getDefault())
+        val formatoHora = SimpleDateFormat("hh:mm a", Locale.getDefault())
         val hoyIso = formatoIso.format(ahora.time)
 
         val vehiculoKey = filtroVehiculoReporte.vehiculoKey
@@ -197,15 +189,8 @@ fun ReportesCamionetaScreen(
             todasTransaccionesGlobal.filter { it.vehiculo == vehiculoKey }
         }
 
-        val gastosVehiculo = if (vehiculoKey == null) {
-            gastosTodos
-        } else {
-            gastosTodos.filter { it.vehiculo == vehiculoKey }
-        }
-
         val etiquetaRango: String
         val prefijoMesTarget: String
-        val maxDiaMesTarget: Int
         val inicioMillis: Long
 
         when (periodoSeleccionado) {
@@ -218,7 +203,6 @@ fun ReportesCamionetaScreen(
                 }
                 inicioMillis = calInicio.timeInMillis
                 prefijoMesTarget = hoyIso.take(7)
-                maxDiaMesTarget = calInicio.getActualMaximum(Calendar.DAY_OF_MONTH)
                 etiquetaRango = "Hoy (${formatoCorto.format(Date())})"
             }
             PeriodoReporte.SEMANAL -> {
@@ -231,7 +215,6 @@ fun ReportesCamionetaScreen(
                 }
                 inicioMillis = calInicio.timeInMillis
                 prefijoMesTarget = hoyIso.take(7)
-                maxDiaMesTarget = calInicio.getActualMaximum(Calendar.DAY_OF_MONTH)
                 etiquetaRango = "Últimos 7 días (${formatoCorto.format(calInicio.time)} - ${formatoCorto.format(Date())})"
             }
             PeriodoReporte.MENSUAL -> {
@@ -245,7 +228,6 @@ fun ReportesCamionetaScreen(
                 }
                 inicioMillis = calMes.timeInMillis
                 prefijoMesTarget = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(calMes.time)
-                maxDiaMesTarget = calMes.getActualMaximum(Calendar.DAY_OF_MONTH)
                 etiquetaRango = SimpleDateFormat("MMMM yyyy", Locale("es", "EC"))
                     .format(calMes.time)
                     .replaceFirstChar { it.uppercase() }
@@ -260,150 +242,119 @@ fun ReportesCamionetaScreen(
             }
         }
 
-        val gastosFiltrados = gastosVehiculo.filter { g ->
-            when (periodoSeleccionado) {
-                PeriodoReporte.DIA -> g.fechaTexto == hoyIso
-                PeriodoReporte.SEMANAL -> g.fecha >= inicioMillis
-                PeriodoReporte.MENSUAL -> g.fechaTexto.startsWith(prefijoMesTarget)
-            }
-        }
+        val mapaClientes = clientes.associateBy { it.id }
 
         var transCount = 0
         var azulCount = 0
         var marcCount = 0
+        var envasesCount = 0
+        var prestCount = 0
+        var devCount = 0
+        var gratisCount = 0
+        var galCount = 0
+        var pacCount = 0
+        var minCount = 0
+
+        val listaEntregas = mutableListOf<EntregaBidonDetalle>()
 
         transFiltradas.forEach { t ->
-            val sumaRecargaDet = t.recargaTransparentes + t.recargaAzules + t.recargaMarcados
-            val rT = if (sumaRecargaDet > 0) t.recargaTransparentes else if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesRecarga else 0
-            val rA = if (sumaRecargaDet > 0) t.recargaAzules else if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesRecarga else 0
-            val rM = if (sumaRecargaDet > 0) t.recargaMarcados else if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesRecarga else 0
+            val sumaRecargas = t.recargaTransparentes + t.recargaAzules + t.recargaMarcados
+            val rT = if (sumaRecargas > 0) t.recargaTransparentes else if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesRecarga else 0
+            val rA = if (sumaRecargas > 0) t.recargaAzules else if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesRecarga else 0
+            val rM = if (sumaRecargas > 0) t.recargaMarcados else if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesRecarga else 0
 
-            val sumaPrestDet = t.prestadosTransparentes + t.prestadosAzules + t.prestadosMarcados
-            val pT = if (sumaPrestDet > 0) t.prestadosTransparentes else if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesPrestados else 0
-            val pA = if (sumaPrestDet > 0) t.prestadosAzules else if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesPrestados else 0
-            val pM = if (sumaPrestDet > 0) t.prestadosMarcados else if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesPrestados else 0
+            val sumaPrestados = t.prestadosTransparentes + t.prestadosAzules + t.prestadosMarcados
+            val pT = if (sumaPrestados > 0) t.prestadosTransparentes else if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesPrestados else 0
+            val pA = if (sumaPrestados > 0) t.prestadosAzules else if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesPrestados else 0
+            val pM = if (sumaPrestados > 0) t.prestadosMarcados else if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesPrestados else 0
 
-            val vT = if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesVendidosEnvase else 0
-            val vA = if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesVendidosEnvase else 0
-            val vM = if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesVendidosEnvase else 0
+            val sumaEnvases = t.envasesVendidosTransparentes + t.envasesVendidosAzules + t.envasesVendidosMarcados
+            val vT = if (sumaEnvases > 0) t.envasesVendidosTransparentes else if (t.tipoBidon == TipoBidon.TRANSPARENTE) t.cantidadBidonesVendidosEnvase else 0
+            val vA = if (sumaEnvases > 0) t.envasesVendidosAzules else if (t.tipoBidon == TipoBidon.AZUL) t.cantidadBidonesVendidosEnvase else 0
+            val vM = if (sumaEnvases > 0) t.envasesVendidosMarcados else if (t.tipoBidon == TipoBidon.MARCADO) t.cantidadBidonesVendidosEnvase else 0
 
-            transCount += rT + pT + vT
-            azulCount += rA + pA + vA
-            marcCount += rM + pM + vM
-        }
+            val tT = rT + pT + vT
+            val tA = rA + pA + vA
+            val tM = rM + pM + vM
+            val totalBidonesEntrega = tT + tA + tM + t.cantidadBidonesGratis
 
-        // Cálculo de Semanas del Mes (Semana 1..5) cuando el reporte es MENSUAL
-        val desgloseSemanas = if (periodoSeleccionado == PeriodoReporte.MENSUAL) {
-            val rangos = listOf(
-                Triple(1, 1, 7),
-                Triple(2, 8, 14),
-                Triple(3, 15, 21),
-                Triple(4, 22, 28),
-                Triple(5, 29, maxDiaMesTarget)
-            ).filter { it.second <= it.third }
+            transCount += tT
+            azulCount += tA
+            marcCount += tM
+            envasesCount += (vT + vA + vM)
+            prestCount += t.cantidadBidonesPrestados
+            devCount += t.cantidadBidonesDevueltos
+            gratisCount += t.cantidadBidonesGratis
+            galCount += t.cantidadGalones
+            pacCount += t.cantidadPacas
+            minCount += t.cantidadMinis
 
-            rangos.map { (numSem, diaIni, diaFin) ->
-                val txSemana = transFiltradas.filter { tx ->
-                    val diaNum = tx.fechaTexto.takeLast(2).toIntOrNull() ?: 0
-                    diaNum in diaIni..diaFin
-                }
-                val gastosSemana = gastosFiltrados.filter { g ->
-                    val diaNum = g.fechaTexto.takeLast(2).toIntOrNull() ?: 0
-                    diaNum in diaIni..diaFin
-                }
-                val bidSem = txSemana.sumOf {
-                    it.cantidadBidonesRecarga + it.cantidadBidonesPrestados + it.cantidadBidonesVendidosEnvase
-                }
-                val galSem = txSemana.sumOf { it.cantidadGalones }
-                val pacSem = txSemana.sumOf { it.cantidadPacas }
-                val minSem = txSemana.sumOf { it.cantidadMinis }
-                val brutaSem = txSemana.sumOf { it.totalImporte }
-                val efecSem = txSemana.sumOf { it.montoEfectivo }
-                val transfSem = txSemana.sumOf { it.montoTransferencia }
-                val credSem = txSemana.sumOf { it.montoCredito }
-                val abonSem = txSemana.sumOf { it.montoAbono + it.montoCanceladoDeuda }
-                val gastSem = gastosSemana.sumOf { it.monto }
-                val ingNetoSem = (efecSem + transfSem + abonSem) - gastSem
-                val efecNetoSem = (efecSem + abonSem) - gastSem
+            val clienteObj = t.clienteId?.let { mapaClientes[it] }
+            val nombreResolv = clienteObj?.nombre
+                ?: t.nombreClientePaso?.takeIf { it.isNotBlank() }
+                ?: "Cliente de paso"
+            val aliasResolv = clienteObj?.alias?.takeIf { it.isNotBlank() }
 
-                ResumenSemanaMes(
-                    numeroSemana = numSem,
-                    rangoDiasLabel = "Días ${String.format(Locale.US, "%02d", diaIni)}-${String.format(Locale.US, "%02d", diaFin)}",
-                    totalEntregas = txSemana.size,
-                    bidones = bidSem,
-                    galones = galSem,
-                    pacas = pacSem,
-                    minis = minSem,
-                    ventaBruta = brutaSem,
-                    efectivo = efecSem,
-                    transferencia = transfSem,
-                    creditos = credSem,
-                    abonos = abonSem,
-                    gastos = gastSem,
-                    ingresoNeto = ingNetoSem,
-                    efectivoNetoCaja = efecNetoSem
-                )
+            val horaFormateada = try {
+                formatoHora.format(Date(t.fecha))
+            } catch (_: Exception) {
+                ""
             }
-        } else {
-            emptyList()
+
+            listaEntregas.add(
+                EntregaBidonDetalle(
+                    transaccionId = t.id,
+                    clienteNombre = nombreResolv,
+                    aliasCliente = aliasResolv,
+                    esClientePaso = t.clienteId == null,
+                    fechaTexto = t.fechaTexto,
+                    horaTexto = horaFormateada,
+                    fechaMillis = t.fecha,
+                    transparentes = tT,
+                    azules = tA,
+                    marcados = tM,
+                    totalBidones = totalBidonesEntrega,
+                    envasesNuevos = vT + vA + vM,
+                    prestados = t.cantidadBidonesPrestados,
+                    devueltos = t.cantidadBidonesDevueltos,
+                    cortesias = t.cantidadBidonesGratis,
+                    galones = t.cantidadGalones,
+                    pacas = t.cantidadPacas,
+                    minis = t.cantidadMinis,
+                    nota = t.nota
+                )
+            )
         }
 
-        val mapaClientes = clientes.associateBy({ it.id }, { it.nombre })
+        // Préstamos pendientes agrupados por cliente en este período
         val prestamosAgrupados = transFiltradas
             .filter { it.cantidadBidonesPrestados > 0 }
             .groupBy { t ->
-                t.clienteId?.let { mapaClientes[it] }
+                val clienteObj = t.clienteId?.let { mapaClientes[it] }
+                clienteObj?.alias?.takeIf { it.isNotBlank() }
+                    ?: clienteObj?.nombre
                     ?: t.nombreClientePaso?.takeIf { it.isNotBlank() }
                     ?: "Cliente #${t.id}"
             }
             .map { (nombre, lista) -> nombre to lista.sumOf { it.cantidadBidonesPrestados } }
 
-        val agrupadoPorDia = transFiltradas
-            .groupBy { it.fechaTexto }
-            .entries
-            .sortedBy { it.key }
-            .takeLast(7)
-            .map { (fechaIso, lista) ->
-                val etiqueta = fechaIso.takeLast(5).replace("-", "/")
-                etiqueta to lista.sumOf { it.totalImporte }
-            }
-
-        val efec = transFiltradas.sumOf { it.montoEfectivo }
-        val transf = transFiltradas.sumOf { it.montoTransferencia }
-        val cred = transFiltradas.sumOf { it.montoCredito }
-        val abon = transFiltradas.sumOf { it.montoAbono + it.montoCanceladoDeuda }
-        val gast = gastosFiltrados.sumOf { it.monto }
-        val bruta = transFiltradas.sumOf { it.totalImporte }
-        val netoCaja = (efec + abon) - gast
-        val ingresoNetoTotal = (efec + transf + abon) - gast
-
-        ResumenPeriodoCalculado(
+        ResumenBidonesPeriodo(
             etiquetaRango = etiquetaRango,
             vehiculoEtiqueta = vehiculoEtiqueta,
-            totalTransacciones = transFiltradas.size,
-            ventaBruta = bruta,
-            efectivo = efec,
-            transferencia = transf,
-            creditos = cred,
-            abonos = abon,
-            gastos = gast,
-            ingresoNetoTotal = ingresoNetoTotal,
-            efectivoNeto = netoCaja,
-            totalBidones = transCount + azulCount + marcCount,
+            totalEntregas = transFiltradas.size,
+            totalBidones = transCount + azulCount + marcCount + gratisCount,
             transparentes = transCount,
             azules = azulCount,
             marcados = marcCount,
-            prestados = transFiltradas.sumOf { it.cantidadBidonesPrestados },
-            gratis = transFiltradas.sumOf { it.cantidadBidonesGratis },
-            galones = transFiltradas.sumOf { it.cantidadGalones },
-            pacas = transFiltradas.sumOf { it.cantidadPacas },
-            minis = transFiltradas.sumOf { it.cantidadMinis },
-            envasesNuevos = transFiltradas.sumOf { it.cantidadBidonesVendidosEnvase },
-            prestamosPorCliente = prestamosAgrupados,
-            ventasPorFecha = agrupadoPorDia,
-            desgloseSemanasMes = desgloseSemanas,
-            desglosePorPrecio = calcularDesglosePorPrecio(transFiltradas),
-            gastosDetalle = gastosFiltrados.sortedByDescending { it.fecha }
+            envasesNuevos = envasesCount,
+            prestados = prestCount,
+            devueltos = devCount,
+            cortesias = gratisCount,
+            galones = galCount,
+            pacas = pacCount,
+            minis = minCount,
+            entregas = listaEntregas.sortedByDescending { it.fechaMillis },
+            prestamosPorCliente = prestamosAgrupados
         )
     }
 
@@ -471,7 +422,7 @@ fun ReportesCamionetaScreen(
                                     maxLines = 1
                                 )
                                 Text(
-                                    text = if (offsetMeses == 0) "Mes en curso (Semanas 1 a 5)" else "Mes histórico • Toca ▶ para volver",
+                                    text = if (offsetMeses == 0) "Mes en curso" else "Mes histórico • Toca ▶ para volver",
                                     fontSize = 11.sp,
                                     color = TextoSecundario,
                                     fontWeight = FontWeight.SemiBold,
@@ -499,9 +450,9 @@ fun ReportesCamionetaScreen(
             }
         }
 
-        // 2. Tarjeta Principal estilo Banca Móvil con Ingreso Neto y Venta Bruta
+        // 2. Tarjeta Resumen Principal de Bidones Entregados
         item {
-            AnimatedContent(targetState = resumen, label = "resumenAnim") { data ->
+            AnimatedContent(targetState = resumen, label = "resumenBidonesAnim") { data ->
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -521,7 +472,7 @@ fun ReportesCamionetaScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "REPORTE ${periodoSeleccionado.titulo.uppercase()} • ${data.vehiculoEtiqueta.uppercase()}",
+                                    text = "ENTREGA DE BIDONES • ${data.vehiculoEtiqueta.uppercase()}",
                                     color = Color.White.copy(alpha = 0.8f),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
@@ -542,12 +493,15 @@ fun ReportesCamionetaScreen(
 
                             ClayButton(
                                 onClick = {
-                                    val texto = construirTextoReportePeriodo(periodoSeleccionado, data)
+                                    val texto = construirTextoReporteBidones(
+                                        periodo = periodoSeleccionado,
+                                        data = data
+                                    )
                                     val intent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
                                         putExtra(Intent.EXTRA_TEXT, texto)
                                     }
-                                    context.startActivity(Intent.createChooser(intent, "Compartir reporte"))
+                                    context.startActivity(Intent.createChooser(intent, "Compartir reporte de bidones"))
                                 },
                                 containerColor = PichinchaYellow,
                                 contentColor = PichinchaNavy,
@@ -581,19 +535,19 @@ fun ReportesCamionetaScreen(
                         ) {
                             Column {
                                 Text(
-                                    text = "Ingreso Neto (Efec + Transf + Abonos - Gastos)",
+                                    text = "Total Botellones 20L Entregados",
                                     color = Color.White.copy(alpha = 0.85f),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "$${String.format(Locale.US, "%.2f", data.ingresoNetoTotal)}",
+                                    text = "${data.totalBidones}",
                                     color = Color.White,
-                                    fontSize = 30.sp,
+                                    fontSize = 34.sp,
                                     fontWeight = FontWeight.Black
                                 )
                                 Text(
-                                    text = "Efectivo Neto Caja: $${String.format(Locale.US, "%.2f", data.efectivoNeto)}",
+                                    text = "${data.totalEntregas} entregas registradas",
                                     color = PichinchaYellow,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
@@ -602,20 +556,27 @@ fun ReportesCamionetaScreen(
 
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = "Venta Bruta",
+                                    text = "Tipos de Bidones:",
                                     color = Color.White.copy(alpha = 0.8f),
                                     fontSize = 11.sp
                                 )
                                 Text(
-                                    text = "$${String.format(Locale.US, "%.2f", data.ventaBruta)}",
-                                    color = PichinchaYellow,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Black
+                                    text = "🔵 ${data.azules} Azules",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "${data.totalTransacciones} entregas",
-                                    color = Color.White.copy(alpha = 0.8f),
-                                    fontSize = 11.sp
+                                    text = "⚪ ${data.transparentes} PET",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "🏷️ ${data.marcados} Marcadas",
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
@@ -624,238 +585,7 @@ fun ReportesCamionetaScreen(
             }
         }
 
-        // 3. DESGLOSE POR SEMANAS DEL MES (Semana 1 a 5) + GRAN TOTAL ABAJO (Cuando es MENSUAL)
-        if (periodoSeleccionado == PeriodoReporte.MENSUAL && resumen.desgloseSemanasMes.isNotEmpty()) {
-            item {
-                ClayCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    cornerRadius = 20.dp
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Desglose por Semanas del Mes",
-                                color = PichinchaNavy,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Black,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "División semanal de bidones, ventas, créditos, gastos e ingreso neto",
-                                color = TextoSecundario,
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        ClayBadge(
-                            text = resumen.etiquetaRango,
-                            containerColor = Color(0xFFE6ECF5),
-                            contentColor = PichinchaNavy
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    resumen.desgloseSemanasMes.forEach { sem ->
-                        Surface(
-                            color = if (sem.totalEntregas > 0 || sem.gastos > 0.0) Color(0xFFF8FAFC) else FondoGrisClaro.copy(alpha = 0.45f),
-                            shape = RoundedCornerShape(14.dp),
-                            border = BorderStroke(1.dp, BordeSuave),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Surface(
-                                            color = clayTheme.primaryColor,
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Text(
-                                                text = "SEMANA ${sem.numeroSemana}",
-                                                color = Color.White,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Black,
-                                                maxLines = 1,
-                                                softWrap = false,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = sem.rangoDiasLabel,
-                                            color = TextoSecundario,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1
-                                        )
-                                    }
-
-                                    Text(
-                                        text = "${sem.bidones} bidones • $${String.format(Locale.US, "%.2f", sem.ventaBruta)}",
-                                        color = PichinchaNavy,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Black,
-                                        maxLines = 1
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                // Sub-métricas de la semana
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "Efec: $${String.format(Locale.US, "%.2f", sem.efectivo)}",
-                                        color = VerdeEfectivo,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Transf: $${String.format(Locale.US, "%.2f", sem.transferencia)}",
-                                        color = PichinchaNavy,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Créd: $${String.format(Locale.US, "%.2f", sem.creditos)}",
-                                        color = AmbarAdvertencia,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "Abonos: $${String.format(Locale.US, "%.2f", sem.abonos)}",
-                                        color = clayTheme.primaryDarkColor,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Gastos: -$${String.format(Locale.US, "%.2f", sem.gastos)}",
-                                        color = RojoAlerta,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Neto: $${String.format(Locale.US, "%.2f", sem.ingresoNeto)}",
-                                        color = VerdeEfectivo,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Black
-                                    )
-                                }
-
-                                if (sem.galones > 0 || sem.pacas > 0 || sem.minis > 0) {
-                                    Spacer(modifier = Modifier.height(3.dp))
-                                    Text(
-                                        text = "Otros: ${sem.galones} galones • ${sem.pacas} pacas • ${sem.minis} minis",
-                                        color = TextoSecundario,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // GRAN TOTAL MENSUAL ABAJO DE LAS SEMANAS
-                    Surface(
-                        color = VerdeEfectivoFondo,
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.5.dp, VerdeEfectivo.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "TOTAL MENSUAL ACUMULADO (${resumen.etiquetaRango.uppercase()})",
-                                fontWeight = FontWeight.Black,
-                                fontSize = 12.sp,
-                                color = PichinchaNavy,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Total Bidones: ${resumen.totalBidones}",
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 12.sp,
-                                    color = TextoOscuro
-                                )
-                                Text(
-                                    text = "Venta Total: $${String.format(Locale.US, "%.2f", resumen.ventaBruta)}",
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 12.sp,
-                                    color = PichinchaNavy
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Gal: ${resumen.galones} • Pacas: ${resumen.pacas} • Minis: ${resumen.minis}",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
-                                    color = TextoSecundario
-                                )
-                                Text(
-                                    text = "Créditos Mes: $${String.format(Locale.US, "%.2f", resumen.creditos)}",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
-                                    color = AmbarAdvertencia
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Gastos Mes: -$${String.format(Locale.US, "%.2f", resumen.gastos)}",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
-                                    color = RojoAlerta
-                                )
-                                Text(
-                                    text = "Ingreso Neto Mes: $${String.format(Locale.US, "%.2f", resumen.ingresoNetoTotal)}",
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 13.sp,
-                                    color = VerdeEfectivo
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 4. Bidones en General, Galones, Pacas y Minis del Período
+        // 3. Tarjeta de Métricas por Tipo de Bidón y Productos Adicionales
         item {
             ClayCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -867,7 +597,7 @@ fun ReportesCamionetaScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Bidones, Galones, Pacas y Minis",
+                        text = "Desglose por Tipo de Botella",
                         color = PichinchaNavy,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Black,
@@ -888,7 +618,7 @@ fun ReportesCamionetaScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     CeldaMetricaProducto(
-                        titulo = "PET",
+                        titulo = "PET Transp.",
                         valor = "${resumen.transparentes}",
                         fondo = BidonTransparenteFondo,
                         colorTexto = BidonTransparenteColor,
@@ -902,7 +632,7 @@ fun ReportesCamionetaScreen(
                         modifier = Modifier.weight(1f)
                     )
                     CeldaMetricaProducto(
-                        titulo = "MARCADA",
+                        titulo = "Marcada",
                         valor = "${resumen.marcados}",
                         fondo = BidonMarcadoFondo,
                         colorTexto = BidonMarcadoColor,
@@ -920,8 +650,10 @@ fun ReportesCamionetaScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
+                        DatoMiniInline("Envases Nuevos", "${resumen.envasesNuevos}", PichinchaNavy)
                         DatoMiniInline("Prestados", "${resumen.prestados}", AmbarAdvertencia)
-                        DatoMiniInline("Cortesía", "${resumen.gratis}", VerdeEfectivo)
+                        DatoMiniInline("Devueltos", "${resumen.devueltos}", VerdeEfectivo)
+                        DatoMiniInline("Cortesía", "${resumen.cortesias}", clayTheme.primaryColor)
                         DatoMiniInline("Galones", "${resumen.galones}", PichinchaNavy)
                         DatoMiniInline("Pacas", "${resumen.pacas}", PichinchaNavy)
                         DatoMiniInline("Minis", "${resumen.minis}", PichinchaNavy)
@@ -930,266 +662,67 @@ fun ReportesCamionetaScreen(
             }
         }
 
-        // 5. Clientes por Precio de Agua (Desglose solicitado por Rolando)
-        if (resumen.desglosePorPrecio.isNotEmpty()) {
-            item {
-                ClayCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    cornerRadius = 20.dp
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Clientes por Precio de Agua",
-                            color = PichinchaNavy,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                        ClayBadge(
-                            text = "${resumen.desglosePorPrecio.sumOf { it.cantidadClientes }} clientes",
-                            containerColor = Color(0xFFE6ECF5),
-                            contentColor = PichinchaNavy
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    resumen.desglosePorPrecio.forEach { itemPrecio ->
-                        val etiquetaPrecio = "$${String.format(Locale.US, "%.2f", itemPrecio.precioUnitario)}"
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Clientes $etiquetaPrecio: ${itemPrecio.cantidadClientes} clientes (${itemPrecio.cantidadBidonesCobrados} bid.)",
-                                color = TextoOscuro,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Total $${String.format(Locale.US, "%.2f", itemPrecio.totalImporteAgua)}",
-                                color = VerdeEfectivo,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Black,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 6. Desglose Financiero e Ingreso Neto del Período
+        // 4. SECCIÓN DESTACADA: "¿A QUIÉN SE LE DEJÓ LOS BIDONES?"
         item {
-            ClayCard(
-                modifier = Modifier.fillMaxWidth(),
-                cornerRadius = 20.dp
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Resumen Financiero e Ingreso Neto",
+                    text = "¿A QUIÉN SE LE DEJÓ LOS BIDONES?",
                     color = PichinchaNavy,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Black
                 )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                FilaFinancieraBanca("Venta Total Facturada", resumen.ventaBruta, PichinchaNavy)
-                FilaFinancieraBanca("Efectivo cobrado en ventas", resumen.efectivo, VerdeEfectivo)
-                FilaFinancieraBanca("Transferencias bancarias", resumen.transferencia, PichinchaNavy)
-                FilaFinancieraBanca("Abonos recibidos de deuda", resumen.abonos, clayTheme.primaryColor)
-                FilaFinancieraBanca("Créditos otorgados (fiado)", resumen.creditos, AmbarAdvertencia)
-                FilaFinancieraBanca("Gastos ingresados en ruta", -resumen.gastos, RojoAlerta)
-
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    color = BordeSuave
+                ClayBadge(
+                    text = "${resumen.entregas.size} despachos",
+                    containerColor = Color(0xFFE6ECF5),
+                    contentColor = PichinchaNavy
                 )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Efectivo Neto en Caja",
-                        color = TextoOscuro,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
-                    Text(
-                        text = "$${String.format(Locale.US, "%.2f", resumen.efectivoNeto)}",
-                        color = PichinchaNavy,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 15.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "INGRESO NETO TOTAL (C/ TRANSF.)",
-                        color = PichinchaNavy,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 14.sp
-                    )
-                    Text(
-                        text = "$${String.format(Locale.US, "%.2f", resumen.ingresoNetoTotal)}",
-                        color = VerdeEfectivo,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 17.sp
-                    )
-                }
             }
         }
 
-        // 7. Gastos Ingresados en el Período (Reflejados detalladamente)
-        item {
-            ClayCard(
-                modifier = Modifier.fillMaxWidth(),
-                cornerRadius = 20.dp
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Gastos Ingresados en el Reporte",
-                        color = PichinchaNavy,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    ClayBadge(
-                        text = "-$${String.format(Locale.US, "%.2f", resumen.gastos)}",
-                        containerColor = RojoAlertaFondo,
-                        contentColor = RojoAlerta
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (resumen.gastosDetalle.isEmpty()) {
-                    Text(
-                        text = "No se registraron gastos en este período.",
-                        color = TextoSecundario,
-                        fontSize = 12.sp
-                    )
-                } else {
-                    resumen.gastosDetalle.forEach { gasto ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = gasto.concepto,
-                                    color = TextoOscuro,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "${gasto.fechaTexto} • ${gasto.vehiculo} • ${gasto.categoria}",
-                                    color = TextoSecundario,
-                                    fontSize = 11.sp,
-                                    maxLines = 1
-                                )
-                            }
-                            Text(
-                                text = "-$${String.format(Locale.US, "%.2f", gasto.monto)}",
-                                color = RojoAlerta,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 8. Gráfico de Barras por Día (cuando hay actividad)
-        if (resumen.ventasPorFecha.isNotEmpty()) {
+        if (resumen.entregas.isEmpty()) {
             item {
                 ClayCard(
                     modifier = Modifier.fillMaxWidth(),
-                    cornerRadius = 20.dp
+                    cornerRadius = 16.dp
                 ) {
-                    Text(
-                        text = "Evolución Diaria",
-                        color = PichinchaNavy,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    val maxMonto = (resumen.ventasPorFecha.maxOfOrNull { it.second } ?: 1.0).coerceAtLeast(1.0)
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(110.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.Bottom
+                            .padding(vertical = 20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        resumen.ventasPorFecha.forEach { (fechaLabel, monto) ->
-                            val frac by animateFloatAsState(
-                                targetValue = (monto / maxMonto).toFloat().coerceIn(0.08f, 1f),
-                                animationSpec = tween(400),
-                                label = "barHeight"
-                            )
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Bottom,
-                                modifier = Modifier.fillMaxHeight()
-                            ) {
-                                Text(
-                                    text = "$${monto.toInt()}",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = PichinchaNavy
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .width(24.dp)
-                                        .fillMaxHeight(frac * 0.7f)
-                                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                        .background(clayTheme.primaryColor)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = fechaLabel,
-                                    fontSize = 10.sp,
-                                    color = TextoSecundario,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
+                        Icon(
+                            imageVector = Icons.Default.LocalShipping,
+                            contentDescription = null,
+                            tint = TextoSecundario,
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "No se registraron entregas de bidones en este período.",
+                            color = TextoSecundario,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }
+        } else {
+            items(resumen.entregas, key = { it.transaccionId }) { entrega ->
+                TarjetaEntregaClienteClay(
+                    entrega = entrega,
+                    esModoDia = periodoSeleccionado == PeriodoReporte.DIA
+                )
+            }
         }
 
-        // 9. Clientes con Bidones Prestados en el período
+        // 5. Clientes con Bidones Prestados en el período
         if (resumen.prestamosPorCliente.isNotEmpty()) {
             item {
                 ClayCard(
@@ -1202,13 +735,13 @@ fun ReportesCamionetaScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Bidones Prestados (${resumen.prestados})",
+                            text = "Bidones Prestados Pendientes",
                             color = PichinchaNavy,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Black
                         )
                         ClayBadge(
-                            text = "${resumen.prestamosPorCliente.size} clientes",
+                            text = "${resumen.prestados} botellones",
                             containerColor = AmbarFondo,
                             contentColor = AmbarAdvertencia
                         )
@@ -1257,6 +790,190 @@ fun ReportesCamionetaScreen(
         item {
             Spacer(modifier = Modifier.height(72.dp))
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TarjetaEntregaClienteClay(
+    entrega: EntregaBidonDetalle,
+    esModoDia: Boolean,
+    modifier: Modifier = Modifier
+) {
+    ClayCard(
+        modifier = modifier.fillMaxWidth(),
+        cornerRadius = 16.dp,
+        contentPadding = PaddingValues(12.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .background(Color(0xFFE2E8F0), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = PichinchaNavy,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        val tituloMostrar = entrega.aliasCliente?.let { "$it (${entrega.clienteNombre})" }
+                            ?: entrega.clienteNombre
+                        Text(
+                            text = tituloMostrar,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 14.sp,
+                            color = TextoOscuro,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        val subtituloHora = if (esModoDia) {
+                            if (entrega.horaTexto.isNotBlank()) entrega.horaTexto else entrega.fechaTexto
+                        } else {
+                            "${entrega.fechaTexto} • ${entrega.horaTexto}"
+                        }
+                        Text(
+                            text = subtituloHora,
+                            fontSize = 11.sp,
+                            color = TextoSecundario,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                if (entrega.esClientePaso) {
+                    ClayBadge(
+                        text = "De paso",
+                        containerColor = FondoGrisClaro,
+                        contentColor = TextoSecundario
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Chips con los bidones dejados exactamente
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (entrega.azules > 0) {
+                    ChipDetalleBidon(
+                        texto = "${entrega.azules} Azul${if (entrega.azules > 1) "es" else ""}",
+                        colorFondo = BidonAzulFondo,
+                        colorTexto = BidonAzulColor
+                    )
+                }
+                if (entrega.transparentes > 0) {
+                    ChipDetalleBidon(
+                        texto = "${entrega.transparentes} PET",
+                        colorFondo = BidonTransparenteFondo,
+                        colorTexto = BidonTransparenteColor
+                    )
+                }
+                if (entrega.marcados > 0) {
+                    ChipDetalleBidon(
+                        texto = "${entrega.marcados} Marcada${if (entrega.marcados > 1) "s" else ""}",
+                        colorFondo = BidonMarcadoFondo,
+                        colorTexto = BidonMarcadoColor
+                    )
+                }
+                if (entrega.envasesNuevos > 0) {
+                    ChipDetalleBidon(
+                        texto = "+${entrega.envasesNuevos} Envase Nuevo",
+                        colorFondo = Color(0xFFE0E7FF),
+                        colorTexto = Color(0xFF4338CA)
+                    )
+                }
+                if (entrega.prestados > 0) {
+                    ChipDetalleBidon(
+                        texto = "⚠️ ${entrega.prestados} Prestado${if (entrega.prestados > 1) "s" else ""}",
+                        colorFondo = AmbarFondo,
+                        colorTexto = AmbarAdvertencia
+                    )
+                }
+                if (entrega.devueltos > 0) {
+                    ChipDetalleBidon(
+                        texto = "🔄 ${entrega.devueltos} Devuelto${if (entrega.devueltos > 1) "s" else ""}",
+                        colorFondo = VerdeEfectivoFondo,
+                        colorTexto = VerdeEfectivo
+                    )
+                }
+                if (entrega.cortesias > 0) {
+                    ChipDetalleBidon(
+                        texto = "🎁 ${entrega.cortesias} Cortesía",
+                        colorFondo = VerdeEfectivoFondo,
+                        colorTexto = VerdeEfectivo
+                    )
+                }
+                if (entrega.galones > 0) {
+                    ChipDetalleBidon(
+                        texto = "${entrega.galones} Galón${if (entrega.galones > 1) "es" else ""}",
+                        colorFondo = FondoGrisClaro,
+                        colorTexto = PichinchaNavy
+                    )
+                }
+                if (entrega.pacas > 0) {
+                    ChipDetalleBidon(
+                        texto = "${entrega.pacas} Paca${if (entrega.pacas > 1) "s" else ""}",
+                        colorFondo = FondoGrisClaro,
+                        colorTexto = PichinchaNavy
+                    )
+                }
+                if (entrega.minis > 0) {
+                    ChipDetalleBidon(
+                        texto = "${entrega.minis} Mini${if (entrega.minis > 1) "s" else ""}",
+                        colorFondo = FondoGrisClaro,
+                        colorTexto = PichinchaNavy
+                    )
+                }
+            }
+
+            if (entrega.nota.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Nota: ${entrega.nota}",
+                    fontStyle = FontStyle.Italic,
+                    fontSize = 11.sp,
+                    color = TextoSecundario
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChipDetalleBidon(
+    texto: String,
+    colorFondo: Color,
+    colorTexto: Color
+) {
+    Surface(
+        color = colorFondo,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, colorTexto.copy(alpha = 0.25f))
+    ) {
+        Text(
+            text = texto,
+            color = colorTexto,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            maxLines = 1
+        )
     }
 }
 
@@ -1317,100 +1034,69 @@ private fun DatoMiniInline(
     }
 }
 
-@Composable
-private fun FilaFinancieraBanca(
-    etiqueta: String,
-    monto: Double,
-    colorMonto: Color
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = etiqueta,
-            color = TextoSecundario,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium
-        )
-        Text(
-            text = "$${String.format(Locale.US, "%.2f", monto)}",
-            color = colorMonto,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-private fun construirTextoReportePeriodo(
+private fun construirTextoReporteBidones(
     periodo: PeriodoReporte,
-    data: ResumenPeriodoCalculado
+    data: ResumenBidonesPeriodo
 ): String {
     return buildString {
-        appendLine("*📊 REPORTE ${periodo.titulo.uppercase()} - ${data.vehiculoEtiqueta.uppercase()}*")
-        appendLine("*Período:* ${data.etiquetaRango}")
+        appendLine("*💧 REPORTE DE ENTREGA DE BIDONES*")
+        appendLine("*Unidad:* ${data.vehiculoEtiqueta.uppercase()}")
+        appendLine("*Período:* ${data.etiquetaRango} (${periodo.titulo})")
         appendLine("─────────────────────────")
-
-        if (periodo == PeriodoReporte.MENSUAL && data.desgloseSemanasMes.isNotEmpty()) {
-            appendLine("*📅 DIVISIÓN POR SEMANAS DEL MES:*")
-            data.desgloseSemanasMes.forEach { sem ->
-                appendLine(
-                    "• *Semana ${sem.numeroSemana} (${sem.rangoDiasLabel}):* ${sem.bidones} bidones | " +
-                            "Venta: *$${String.format(Locale.US, "%.2f", sem.ventaBruta)}* | " +
-                            "Créditos: $${String.format(Locale.US, "%.2f", sem.creditos)} | " +
-                            "Abonos: $${String.format(Locale.US, "%.2f", sem.abonos)} | " +
-                            "Gastos: -$${String.format(Locale.US, "%.2f", sem.gastos)} | " +
-                            "Neto: *$${String.format(Locale.US, "%.2f", sem.ingresoNeto)}*"
-                )
-            }
-            appendLine("─────────────────────────")
+        appendLine("*📦 RESUMEN TOTAL DE BOTELLONES:*")
+        appendLine("• *Total Bidones 20L:* *${data.totalBidones}*")
+        appendLine("  ↳ 🔵 Azules: *${data.azules}*")
+        appendLine("  ↳ ⚪ PET: *${data.transparentes}*")
+        appendLine("  ↳ 🏷️ Marcadas: *${data.marcados}*")
+        if (data.envasesNuevos > 0) {
+            appendLine("• *Envases Nuevos Vendidos:* ${data.envasesNuevos}")
         }
-
-        appendLine("*💧 PRODUCTOS VENDIDOS EN GENERAL:*")
-        appendLine("• *Bidones 20L Totales:* *${data.totalBidones}* (PET: ${data.transparentes} | Azul: ${data.azules} | Marcada: ${data.marcados})")
-        appendLine("• *Galones:* *${data.galones}* | *Pacas:* *${data.pacas}* | *Minis:* *${data.minis}*")
         if (data.prestados > 0) {
             appendLine("• *Bidones Prestados:* ${data.prestados}")
-            data.prestamosPorCliente.forEach { (nombre, cant) ->
-                appendLine("  ↳ $nombre: *$cant bidones*")
-            }
         }
-        if (data.gratis > 0) {
-            appendLine("• *Cortesías:* ${data.gratis}")
+        if (data.devueltos > 0) {
+            appendLine("• *Bidones Devueltos (Recuperados):* ${data.devueltos}")
         }
-
-        if (data.desglosePorPrecio.isNotEmpty()) {
-            appendLine("─────────────────────────")
-            appendLine("*🏷️ CLIENTES POR PRECIO DE AGUA:*")
-            data.desglosePorPrecio.forEach { item ->
-                val etiq = "$${String.format(Locale.US, "%.2f", item.precioUnitario)}"
-                appendLine(
-                    "• *Clientes $etiq:* ${item.cantidadClientes} clientes (${item.cantidadBidonesCobrados} bidones) → *Total: $${String.format(Locale.US, "%.2f", item.totalImporteAgua)}*"
-                )
-            }
+        if (data.cortesias > 0) {
+            appendLine("• *Cortesías:* ${data.cortesias}")
         }
-
-        if (data.gastosDetalle.isNotEmpty()) {
-            appendLine("─────────────────────────")
-            appendLine("*⛽ GASTOS INGRESADOS EN EL PERÍODO:*")
-            data.gastosDetalle.forEach { g ->
-                appendLine("• ${g.fechaTexto} - ${g.concepto}: *-$${String.format(Locale.US, "%.2f", g.monto)}*")
-            }
+        if (data.galones > 0 || data.pacas > 0 || data.minis > 0) {
+            appendLine("• *Otros Productos:* ${data.galones} galones | ${data.pacas} pacas | ${data.minis} minis")
         }
-
         appendLine("─────────────────────────")
-        appendLine("*💰 GRAN TOTAL DEL PERÍODO (${data.etiquetaRango.uppercase()}):*")
-        appendLine("• *Total Bidones:* ${data.totalBidones} | *Gal:* ${data.galones} | *Pacas:* ${data.pacas} | *Minis:* ${data.minis}")
-        appendLine("• *Venta Total Bruta:* $${String.format(Locale.US, "%.2f", data.ventaBruta)}")
-        appendLine("• *Suma Efectivo:* $${String.format(Locale.US, "%.2f", data.efectivo)}")
-        appendLine("• *Suma Transferencias:* $${String.format(Locale.US, "%.2f", data.transferencia)}")
-        appendLine("• *Suma Abonos:* $${String.format(Locale.US, "%.2f", data.abonos)}")
-        appendLine("• *Suma Créditos:* $${String.format(Locale.US, "%.2f", data.creditos)}")
-        appendLine("• *Suma Gastos:* -$${String.format(Locale.US, "%.2f", data.gastos)}")
-        appendLine("• *Efectivo Neto en Caja:* *$${String.format(Locale.US, "%.2f", data.efectivoNeto)}*")
-        appendLine("• *INGRESO NETO TOTAL:* *$${String.format(Locale.US, "%.2f", data.ingresoNetoTotal)}*")
+        appendLine("*📋 DETALLE: ¿A QUIÉN SE LE DEJÓ LOS BIDONES?*")
+        if (data.entregas.isEmpty()) {
+            appendLine("• Sin entregas registradas en este período.")
+        } else {
+            data.entregas.forEachIndexed { index, entrega ->
+                val clienteLabel = entrega.aliasCliente?.let { "$it (${entrega.clienteNombre})" } ?: entrega.clienteNombre
+                val horaLabel = if (entrega.horaTexto.isNotBlank()) " [${entrega.horaTexto}]" else ""
+                val detalleList = mutableListOf<String>()
+                if (entrega.azules > 0) detalleList.add("${entrega.azules} Azul${if (entrega.azules > 1) "es" else ""}")
+                if (entrega.transparentes > 0) detalleList.add("${entrega.transparentes} PET")
+                if (entrega.marcados > 0) detalleList.add("${entrega.marcados} Marcada${if (entrega.marcados > 1) "s" else ""}")
+                if (entrega.envasesNuevos > 0) detalleList.add("+${entrega.envasesNuevos} Envase Nuevo")
+                if (entrega.prestados > 0) detalleList.add("⚠️ ${entrega.prestados} Prestado")
+                if (entrega.devueltos > 0) detalleList.add("🔄 ${entrega.devueltos} Devuelto")
+                if (entrega.cortesias > 0) detalleList.add("🎁 ${entrega.cortesias} Cortesía")
+                if (entrega.galones > 0) detalleList.add("${entrega.galones} Gal.")
+                if (entrega.pacas > 0) detalleList.add("${entrega.pacas} Paca")
+                if (entrega.minis > 0) detalleList.add("${entrega.minis} Mini")
+
+                appendLine("${index + 1}. *$clienteLabel*$horaLabel:")
+                appendLine("   ↳ ${detalleList.joinToString(", ")}")
+                if (entrega.nota.isNotBlank()) {
+                    appendLine("     _Nota: ${entrega.nota}_")
+                }
+            }
+        }
+
+        if (data.prestamosPorCliente.isNotEmpty()) {
+            appendLine("─────────────────────────")
+            appendLine("*⚠️ PRÉSTAMOS PENDIENTES DE RECOGER:*")
+            data.prestamosPorCliente.forEach { (nombre, cant) ->
+                appendLine("• $nombre: *$cant bidones*")
+            }
+        }
     }
 }

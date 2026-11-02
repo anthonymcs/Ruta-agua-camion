@@ -5,6 +5,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -124,6 +126,7 @@ fun InventarioCamionScreen(
     val mostrarModalEditarCargaActual by viewModel.mostrarModalEditarCargaActual.collectAsState()
     val mensajeSnackbar by viewModel.mensajeSnackbar.collectAsState()
     val recargasHoy by viewModel.recargasHoyState.collectAsState()
+    val ultimaRecargaAnterior by viewModel.ultimaRecargaAnteriorState.collectAsState()
     val recargaEnEdicion by viewModel.recargaEnEdicion.collectAsState()
 
     val clayTheme = obtenerClayThemePorVehiculo(vehiculoActivo)
@@ -255,7 +258,57 @@ fun InventarioCamionScreen(
                 )
             }
 
-            // 7. Historial de Recargas del Día (Editar / Eliminar con PIN 1234)
+            // Carga dejada lista el día anterior (iniciar la jornada sin reingresar desde cero)
+            ultimaRecargaAnterior?.let { recAnt ->
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    ClayInsetBox(
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = Color(0xFFF1F5F9),
+                        cornerRadius = 16.dp,
+                        contentPadding = PaddingValues(12.dp)
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "CARGA INICIAL (DEJADA DÍA ANTERIOR)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = TextoSecundario
+                                )
+                                Text(
+                                    text = recAnt.fechaTexto,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextoSecundario
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val totAnt = recAnt.totalBidonesCargados()
+                            val detAnt = buildList {
+                                if (recAnt.bidonesCargadosAzules > 0) add("${recAnt.bidonesCargadosAzules} azules")
+                                if (recAnt.bidonesCargadosTransparentes > 0) add("${recAnt.bidonesCargadosTransparentes} PET")
+                                if (recAnt.bidonesCargadosMarcados > 0) add("${recAnt.bidonesCargadosMarcados} marcadas")
+                                if (recAnt.galonesCargados > 0) add("${recAnt.galonesCargados} galones")
+                                if (recAnt.pacasCargadas > 0) add("${recAnt.pacasCargadas} pacas")
+                                if (recAnt.minisCargadas > 0) add("${recAnt.minisCargadas} minis")
+                            }.joinToString(", ")
+                            Text(
+                                text = "El vehículo inició listo con +$totAnt bidones ($detAnt) cargados al cierre previo.",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextoOscuro
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 7. Historial de Cargas del Día (Editar / Eliminar con PIN 1234)
             if (recargasHoy.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(2.dp))
@@ -312,6 +365,7 @@ fun InventarioCamionScreen(
                 inventario = inventario,
                 calculoRecarga = calculoRecarga,
                 recargaEnEdicion = recargaEnEdicion,
+                siguienteNumeroCarga = if (recargaEnEdicion != null) recargaEnEdicion!!.numeroVuelta else (recargasHoy.size + 1),
                 clayTheme = clayTheme,
                 onConfirmarRecarga = { v, t, a, m, vac, gal, pac, min, obs ->
                     viewModel.registrarRecargaPlanta(v, t, a, m, vac, gal, pac, min, obs)
@@ -981,10 +1035,6 @@ private fun FilaTarjetasBidonesClay(
     estadisticas: EstadisticasVentasTipo? = null,
     onCardClick: (() -> Unit)? = null
 ) {
-    val totalTrans = inventario.bidonesLlenosTransparentes + (estadisticas?.transparentesVendidos ?: 0)
-    val totalAzul = inventario.bidonesLlenosAzules + (estadisticas?.azulesVendidos ?: 0)
-    val totalMarc = inventario.bidonesLlenosMarcados + (estadisticas?.marcadosVendidos ?: 0)
-
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -993,7 +1043,6 @@ private fun FilaTarjetasBidonesClay(
             tipo = TipoBidon.TRANSPARENTE,
             nombre = "PET",
             cantidad = inventario.bidonesLlenosTransparentes,
-            totalCargado = totalTrans,
             vendidosHoy = estadisticas?.transparentesVendidos ?: 0,
             colorFondo = BidonTransparenteFondo,
             colorAcento = BidonTransparenteColor,
@@ -1006,7 +1055,6 @@ private fun FilaTarjetasBidonesClay(
             tipo = TipoBidon.AZUL,
             nombre = "Azul",
             cantidad = inventario.bidonesLlenosAzules,
-            totalCargado = totalAzul,
             vendidosHoy = estadisticas?.azulesVendidos ?: 0,
             colorFondo = BidonAzulFondo,
             colorAcento = BidonAzulColor,
@@ -1019,7 +1067,6 @@ private fun FilaTarjetasBidonesClay(
             tipo = TipoBidon.MARCADO,
             nombre = "Marcada",
             cantidad = inventario.bidonesLlenosMarcados,
-            totalCargado = totalMarc,
             vendidosHoy = estadisticas?.marcadosVendidos ?: 0,
             colorFondo = BidonMarcadoFondo,
             colorAcento = BidonMarcadoColor,
@@ -1035,7 +1082,6 @@ private fun TarjetaBidonIndividualClay(
     tipo: TipoBidon,
     nombre: String,
     cantidad: Int,
-    totalCargado: Int = 0,
     vendidosHoy: Int = 0,
     colorFondo: Color,
     colorAcento: Color,
@@ -1044,7 +1090,6 @@ private fun TarjetaBidonIndividualClay(
     modifier: Modifier = Modifier
 ) {
     val stockBajo = cantidad <= 10
-    val textoCantidad = if (totalCargado > 0) "$cantidad/$totalCargado" else "$cantidad"
 
     ClayCard(
         modifier = modifier,
@@ -1064,8 +1109,8 @@ private fun TarjetaBidonIndividualClay(
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = textoCantidad,
-                fontSize = 18.sp,
+                text = "$cantidad",
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Black,
                 color = if (stockBajo) RojoAlerta else colorAcento,
                 maxLines = 1,
@@ -1113,10 +1158,6 @@ private fun FilaOtrosProductosClay(
     clayTheme: ClayVehicleTheme,
     onCardClick: (() -> Unit)? = null
 ) {
-    val totalGalones = inventario.galonesLlenos + estadisticas.galonesVendidos
-    val totalPacas = inventario.pacasLlenas + estadisticas.pacasVendidas
-    val totalMinis = inventario.minisLlenas + estadisticas.minisVendidas
-
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1124,7 +1165,7 @@ private fun FilaOtrosProductosClay(
         TarjetaProductoSecundarioClay(
             nombre = "Galones",
             cantidad = inventario.galonesLlenos,
-            total = if (totalGalones > 0) totalGalones else inventario.capacidadTopeGalones,
+            tope = inventario.capacidadTopeGalones,
             vendidos = estadisticas.galonesVendidos,
             ilustracion = { GalonIllustration(size = 42.dp) },
             clayTheme = clayTheme,
@@ -1135,7 +1176,7 @@ private fun FilaOtrosProductosClay(
         TarjetaProductoSecundarioClay(
             nombre = "Pacas",
             cantidad = inventario.pacasLlenas,
-            total = if (totalPacas > 0) totalPacas else inventario.capacidadTopePacas,
+            tope = inventario.capacidadTopePacas,
             vendidos = estadisticas.pacasVendidas,
             ilustracion = { PacaIllustration(size = 42.dp) },
             clayTheme = clayTheme,
@@ -1146,7 +1187,7 @@ private fun FilaOtrosProductosClay(
         TarjetaProductoSecundarioClay(
             nombre = "Minis",
             cantidad = inventario.minisLlenas,
-            total = if (totalMinis > 0) totalMinis else inventario.capacidadTopeMinis,
+            tope = inventario.capacidadTopeMinis,
             vendidos = estadisticas.minisVendidas,
             ilustracion = { MiniIllustration(size = 42.dp) },
             clayTheme = clayTheme,
@@ -1160,7 +1201,7 @@ private fun FilaOtrosProductosClay(
 private fun TarjetaProductoSecundarioClay(
     nombre: String,
     cantidad: Int,
-    total: Int,
+    tope: Int,
     vendidos: Int,
     ilustracion: @Composable () -> Unit,
     clayTheme: ClayVehicleTheme,
@@ -1189,7 +1230,7 @@ private fun TarjetaProductoSecundarioClay(
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "$cantidad/$total",
+                text = "$cantidad / $tope",
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Black,
                 color = clayTheme.primaryColor,
@@ -1239,6 +1280,7 @@ private fun ModalRecargaPlantaContentClay(
     inventario: InventarioCamionEntity?,
     calculoRecarga: RecargaCalculada?,
     recargaEnEdicion: RecargaPlantaEntity? = null,
+    siguienteNumeroCarga: Int = 1,
     clayTheme: ClayVehicleTheme,
     onConfirmarRecarga: (
         numeroVuelta: Int,
@@ -1254,17 +1296,17 @@ private fun ModalRecargaPlantaContentClay(
     onCancelar: () -> Unit
 ) {
     val editId = recargaEnEdicion?.id ?: -1L
-    var numeroVuelta by rememberSaveable(editId) { mutableIntStateOf(recargaEnEdicion?.numeroVuelta ?: 1) }
+    var numeroVuelta by rememberSaveable(editId) { mutableIntStateOf(recargaEnEdicion?.numeroVuelta ?: siguienteNumeroCarga) }
 
     val faltantes = calculoRecarga?.bidonesFaltantesParaTope ?: 0
     var cantTrans by rememberSaveable(editId) {
-        mutableIntStateOf(recargaEnEdicion?.bidonesCargadosTransparentes ?: (faltantes / 3))
+        mutableIntStateOf(recargaEnEdicion?.bidonesCargadosTransparentes ?: 0)
     }
     var cantAzul by rememberSaveable(editId) {
-        mutableIntStateOf(recargaEnEdicion?.bidonesCargadosAzules ?: (faltantes - (faltantes / 3) - (faltantes / 6)))
+        mutableIntStateOf(recargaEnEdicion?.bidonesCargadosAzules ?: 0)
     }
     var cantMarc by rememberSaveable(editId) {
-        mutableIntStateOf(recargaEnEdicion?.bidonesCargadosMarcados ?: (faltantes / 6))
+        mutableIntStateOf(recargaEnEdicion?.bidonesCargadosMarcados ?: 0)
     }
     var cantVaciosBajar by rememberSaveable(editId) {
         mutableIntStateOf(recargaEnEdicion?.bidonesVaciosDescargados ?: (inventario?.bidonesVacios ?: 0))
@@ -1283,6 +1325,10 @@ private fun ModalRecargaPlantaContentClay(
     val observaciones by rememberSaveable(editId) { mutableStateOf(recargaEnEdicion?.observaciones ?: "") }
 
     val totalCargados = cantTrans + cantAzul + cantMarc
+
+    val galonesFaltan = maxOf(0, (inventario?.capacidadTopeGalones ?: 90) - (inventario?.galonesLlenos ?: 0))
+    val pacasFaltan = maxOf(0, (inventario?.capacidadTopePacas ?: 6) - (inventario?.pacasLlenas ?: 0))
+    val minisFaltan = maxOf(0, (inventario?.capacidadTopeMinis ?: 2) - (inventario?.minisLlenas ?: 0))
 
     LazyColumn(
         modifier = Modifier
@@ -1306,7 +1352,7 @@ private fun ModalRecargaPlantaContentClay(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "Toca cualquier número para escribir directo con el teclado",
+                        text = "Ingresa los productos que subes al vehículo",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextoSecundario,
                         maxLines = 1,
@@ -1319,33 +1365,33 @@ private fun ModalRecargaPlantaContentClay(
             }
         }
 
-        // Selector de Vuelta + Botón Poner en 0
+        // Selector dinámico de Carga (Carga 1, Carga 2, Carga 3...) + Botón Cero
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                FilterChip(
-                    selected = numeroVuelta == 1,
-                    onClick = { numeroVuelta = 1 },
-                    label = { Text("Vuelta 1", fontWeight = FontWeight.Bold, maxLines = 1) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = clayTheme.accentBgColor,
-                        selectedLabelColor = clayTheme.primaryDarkColor
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-                FilterChip(
-                    selected = numeroVuelta == 2,
-                    onClick = { numeroVuelta = 2 },
-                    label = { Text("Vuelta 2", fontWeight = FontWeight.Bold, maxLines = 1) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = clayTheme.accentBgColor,
-                        selectedLabelColor = clayTheme.primaryDarkColor
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val totalOpciones = maxOf(4, siguienteNumeroCarga, numeroVuelta)
+                    (1..totalOpciones).forEach { num ->
+                        FilterChip(
+                            selected = numeroVuelta == num,
+                            onClick = { numeroVuelta = num },
+                            label = { Text("Carga $num", fontWeight = FontWeight.Bold, maxLines = 1) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = clayTheme.accentBgColor,
+                                selectedLabelColor = clayTheme.primaryDarkColor
+                            )
+                        )
+                    }
+                }
                 TextButton(
                     onClick = {
                         cantTrans = 0
@@ -1390,7 +1436,7 @@ private fun ModalRecargaPlantaContentClay(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "En unidad: ${calculoRecarga?.bidonesLlenosActuales ?: 0} • Libres: $faltantes",
+                            text = "En unidad: ${calculoRecarga?.bidonesLlenosActuales ?: 0} • Faltan: $faltantes bidones para tope",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextoOscuro,
                             fontWeight = FontWeight.SemiBold,
@@ -1464,7 +1510,7 @@ private fun ModalRecargaPlantaContentClay(
         item {
             FilaRecargaManualClay(
                 label = "Galones (4L)",
-                subtitulo = "En unidad: ${inventario?.galonesLlenos ?: 0}",
+                subtitulo = "En unidad: ${inventario?.galonesLlenos ?: 0} / ${inventario?.capacidadTopeGalones ?: 90} • Faltan: $galonesFaltan para tope",
                 cantidad = cantGalones,
                 accentColor = clayTheme.primaryColor,
                 ilustracion = { GalonIllustration(size = 34.dp) },
@@ -1475,7 +1521,7 @@ private fun ModalRecargaPlantaContentClay(
         item {
             FilaRecargaManualClay(
                 label = "Pacas (24x500ml)",
-                subtitulo = "En unidad: ${inventario?.pacasLlenas ?: 0}",
+                subtitulo = "En unidad: ${inventario?.pacasLlenas ?: 0} / ${inventario?.capacidadTopePacas ?: 6} • Faltan: $pacasFaltan para tope",
                 cantidad = cantPacas,
                 accentColor = clayTheme.primaryColor,
                 ilustracion = { PacaIllustration(size = 34.dp) },
@@ -1486,7 +1532,7 @@ private fun ModalRecargaPlantaContentClay(
         item {
             FilaRecargaManualClay(
                 label = "Minis (12x500ml)",
-                subtitulo = "En unidad: ${inventario?.minisLlenas ?: 0}",
+                subtitulo = "En unidad: ${inventario?.minisLlenas ?: 0} / ${inventario?.capacidadTopeMinis ?: 2} • Faltan: $minisFaltan para tope",
                 cantidad = cantMinis,
                 accentColor = clayTheme.primaryColor,
                 ilustracion = { MiniIllustration(size = 34.dp) },
@@ -1653,7 +1699,7 @@ private fun TarjetaRecargaItemClay(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ClayBadge(
-                    text = "Vuelta ${recarga.numeroVuelta}",
+                    text = "Carga #${recarga.numeroVuelta}",
                     backgroundColor = clayTheme.accentBgColor,
                     textColor = clayTheme.primaryDarkColor
                 )
@@ -1880,10 +1926,6 @@ private fun SeccionEstadisticasVentasHoyClay(
     val pctAzul = if (baseTotalGrafico > 0) valorAzulGrafico.toFloat() / baseTotalGrafico else 0f
     val pctMarc = if (baseTotalGrafico > 0) valorMarcGrafico.toFloat() / baseTotalGrafico else 0f
 
-    val totalTransCargados = estadisticas.transparentesVendidos + stockTrans
-    val totalAzulCargados = estadisticas.azulesVendidos + stockAzul
-    val totalMarcCargados = estadisticas.marcadosVendidos + stockMarc
-
     ClayCard(
         modifier = Modifier.fillMaxWidth(),
         containerColor = clayTheme.cardColor,
@@ -1971,7 +2013,7 @@ private fun SeccionEstadisticasVentasHoyClay(
                 }
             }
 
-            // Leyenda de 1 sola línea por ítem (Sin redundancia ni saltos de línea)
+            // Leyenda de 1 sola línea por ítem mostrando stock actual real en unidad
             Column(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.weight(1f)
@@ -1982,7 +2024,6 @@ private fun SeccionEstadisticasVentasHoyClay(
                     nombre = "Marcadas",
                     vendidos = estadisticas.marcadosVendidos,
                     quedan = stockMarc,
-                    totalCargado = totalMarcCargados,
                     resaltado = true
                 )
                 ElementoLeyendaDonutClay(
@@ -1991,7 +2032,6 @@ private fun SeccionEstadisticasVentasHoyClay(
                     nombre = "PET",
                     vendidos = estadisticas.transparentesVendidos,
                     quedan = stockTrans,
-                    totalCargado = totalTransCargados,
                     resaltado = false
                 )
                 ElementoLeyendaDonutClay(
@@ -2000,7 +2040,6 @@ private fun SeccionEstadisticasVentasHoyClay(
                     nombre = "Azules",
                     vendidos = estadisticas.azulesVendidos,
                     quedan = stockAzul,
-                    totalCargado = totalAzulCargados,
                     resaltado = false
                 )
             }
@@ -2015,7 +2054,6 @@ private fun ElementoLeyendaDonutClay(
     nombre: String,
     vendidos: Int,
     quedan: Int,
-    totalCargado: Int,
     resaltado: Boolean
 ) {
     Surface(
@@ -2056,7 +2094,7 @@ private fun ElementoLeyendaDonutClay(
             }
 
             Text(
-                text = "Quedan $quedan/$totalCargado (Sal: $vendidos)",
+                text = "$quedan en unidad (Sal: $vendidos)",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (resaltado) color else TextoSecundario,

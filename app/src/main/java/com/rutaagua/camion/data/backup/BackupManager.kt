@@ -634,7 +634,7 @@ object BackupManager {
                             cantidadPacas = obj.optInt("cantidadPacas", 0),
                             precioUnitarioPaca = obj.optDouble("precioUnitarioPaca", 3.75),
                             cantidadMinis = obj.optInt("cantidadMinis", 0),
-                            precioUnitarioMini = obj.optDouble("precioUnitarioMini", 1.75),
+                            precioUnitarioMini = obj.optDouble("precioUnitarioMini", 1.90),
                             totalImporte = obj.optDouble("totalImporte", 0.0),
                             formaPagoPrincipal = runCatching { FormaPago.valueOf(obj.getString("formaPagoPrincipal")) }.getOrDefault(FormaPago.EFECTIVO),
                             montoEfectivo = obj.optDouble("montoEfectivo", 0.0),

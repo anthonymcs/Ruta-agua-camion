@@ -77,6 +77,17 @@ class InventarioCamionViewModel(
             initialValue = emptyList()
         )
 
+    // Carga dejada al final del día anterior (lista para iniciar la jornada)
+    val ultimaRecargaAnteriorState: StateFlow<RecargaPlantaEntity?> = vehiculoActivoState
+        .flatMapLatest { vehiculo ->
+            repository.obtenerUltimaRecargaAnterior(fechaHoyTexto, vehiculo.name)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
     // Estadísticas de ventas de hoy por tipo de bidón y producto para el vehículo activo
     val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = vehiculoActivoState
         .flatMapLatest { vehiculo ->

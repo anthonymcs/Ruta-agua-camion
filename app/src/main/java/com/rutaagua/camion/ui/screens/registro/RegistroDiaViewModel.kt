@@ -6,6 +6,7 @@ import com.rutaagua.camion.data.local.entity.CierreCajaEntity
 import com.rutaagua.camion.data.local.entity.ClienteEntity
 import com.rutaagua.camion.data.local.entity.GastoExtraEntity
 import com.rutaagua.camion.data.local.entity.InventarioCamionEntity
+import com.rutaagua.camion.data.local.entity.RecargaPlantaEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
 import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.FormaPago
@@ -148,6 +149,17 @@ class RegistroDiaViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = EstadisticasVentasTipo()
+        )
+
+    // Recargas en planta de hoy según filtro de vehículo
+    val recargasHoyState: StateFlow<List<RecargaPlantaEntity>> = filtroVehiculoState
+        .flatMapLatest { filtro ->
+            repository.obtenerRecargasPorFecha(fechaHoyTexto, filtro.vehiculoKey)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
         )
 
     // Lista de clientes para autocompletado en el modal de venta
@@ -357,7 +369,10 @@ class RegistroDiaViewModel(
         prestadosAzules: Int = 0,
         prestadosMarcados: Int = 0,
         cantidadBidonesGratis: Int = 0,
-        totalPersonalizado: Double? = null
+        totalPersonalizado: Double? = null,
+        precioUnitarioGalon: Double = 0.75,
+        precioUnitarioPaca: Double = 3.75,
+        precioUnitarioMini: Double = 1.90
     ) {
         viewModelScope.launch {
             val vehiculoOperativo = appPreferences.obtenerVehiculoActivo().name
@@ -396,9 +411,9 @@ class RegistroDiaViewModel(
             val bidonesAguaACobrar = maxOf(0, cantidadRecarga + cantidadPrestados - cantidadBidonesGratis)
             val subtotalAgua = bidonesAguaACobrar * precioUnitarioBidon
             val subtotalVendidosEnvase = cantidadVendidosEnvase * precioUnitarioBidonVendido
-            val subtotalGalones = cantidadGalones * 0.75
-            val subtotalPacas = cantidadPacas * 3.75
-            val subtotalMinis = cantidadMinis * 1.75
+            val subtotalGalones = cantidadGalones * precioUnitarioGalon
+            val subtotalPacas = cantidadPacas * precioUnitarioPaca
+            val subtotalMinis = cantidadMinis * precioUnitarioMini
             val totalCalculado = subtotalAgua + subtotalVendidosEnvase + subtotalGalones + subtotalPacas + subtotalMinis
             val totalVentaHoy = totalPersonalizado ?: totalCalculado
 
@@ -457,11 +472,11 @@ class RegistroDiaViewModel(
                 envasesVendidosAzules = if (tipoBidon == TipoBidon.AZUL) cantidadVendidosEnvase else 0,
                 envasesVendidosMarcados = if (tipoBidon == TipoBidon.MARCADO) cantidadVendidosEnvase else 0,
                 cantidadGalones = cantidadGalones,
-                precioUnitarioGalon = 0.75,
+                precioUnitarioGalon = precioUnitarioGalon,
                 cantidadPacas = cantidadPacas,
-                precioUnitarioPaca = 3.75,
+                precioUnitarioPaca = precioUnitarioPaca,
                 cantidadMinis = cantidadMinis,
-                precioUnitarioMini = 1.75,
+                precioUnitarioMini = precioUnitarioMini,
                 totalImporte = totalVentaHoy,
                 formaPagoPrincipal = formaPago,
                 montoEfectivo = finalEfectivo,

@@ -120,7 +120,10 @@ fun NuevaVentaSheet(
         prestadosAzules: Int,
         prestadosMarcados: Int,
         cantidadBidonesGratis: Int,
-        totalPersonalizado: Double?
+        totalPersonalizado: Double?,
+        precioUnitarioGalon: Double,
+        precioUnitarioPaca: Double,
+        precioUnitarioMini: Double
     ) -> Unit,
     onCancelar: () -> Unit
 ) {
@@ -194,19 +197,34 @@ fun NuevaVentaSheet(
         )
     }
 
-    // 6. OTROS PRODUCTOS
+    // 6. OTROS PRODUCTOS (PRECIOS EDITABLES POR CLIENTE / NEGOCIACIÓN)
     var cantGalones by remember { mutableIntStateOf(transaccionAEditar?.cantidadGalones ?: 0) }
     var cantPacas by remember { mutableIntStateOf(transaccionAEditar?.cantidadPacas ?: 0) }
     var cantMinis by remember { mutableIntStateOf(transaccionAEditar?.cantidadMinis ?: 0) }
+
+    var precioUnitarioGalon by remember {
+        mutableDoubleStateOf(if (transaccionAEditar != null && transaccionAEditar.precioUnitarioGalon > 0) transaccionAEditar.precioUnitarioGalon else 0.75)
+    }
+    var precioUnitarioPaca by remember {
+        mutableDoubleStateOf(if (transaccionAEditar != null && transaccionAEditar.precioUnitarioPaca > 0) transaccionAEditar.precioUnitarioPaca else 3.75)
+    }
+    var precioUnitarioMini by remember {
+        mutableDoubleStateOf(if (transaccionAEditar != null && transaccionAEditar.precioUnitarioMini > 0) transaccionAEditar.precioUnitarioMini else 1.90)
+    }
+
+    var mostrarDialogoPrecioBidon by remember { mutableStateOf(false) }
+    var textoNuevoPrecioBidon by remember { mutableStateOf("") }
+    var productoAEditarPrecio by remember { mutableStateOf<Triple<String, Double, (Double) -> Unit>?>(null) }
+    var textoNuevoPrecioProducto by remember { mutableStateOf("") }
 
     // 7. CÁLCULO DE TOTALES (RECARGAS + PRESTADOS SE COBRAN, MENOS GRATIS)
     val totalAguaEntregada = cantRecarga + cantPrestados
     val bidonesAguaACobrar = maxOf(0, totalAguaEntregada - cantGratis)
     val totalAgua = bidonesAguaACobrar * precioUnitarioBidon
     val totalEnvaseVendido = cantVendidosEnvase * precioEnvaseVendido
-    val totalGalones = cantGalones * 0.75
-    val totalPacas = cantPacas * 3.75
-    val totalMinis = cantMinis * 1.75
+    val totalGalones = cantGalones * precioUnitarioGalon
+    val totalPacas = cantPacas * precioUnitarioPaca
+    val totalMinis = cantMinis * precioUnitarioMini
     val totalCalculado = totalAgua + totalEnvaseVendido + totalGalones + totalPacas + totalMinis
 
     var usarTotalManual by remember { mutableStateOf(false) }
@@ -488,31 +506,56 @@ fun NuevaVentaSheet(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Selector rápido de precio unitario
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Precio:",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = TextoSecundario,
-                        modifier = Modifier.padding(end = 4.dp)
-                    )
-                    listOf(0.75, 0.85, 1.00, 1.25).forEach { precio ->
-                        val sel = abs(precioUnitarioBidon - precio) < 0.001
-                        FilterChip(
-                            selected = sel,
-                            onClick = { precioUnitarioBidon = precio },
-                            label = { Text("$${String.format(Locale.US, "%.2f", precio)}", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = AguaPrimary,
-                                selectedLabelColor = Color.White
-                            ),
-                            modifier = Modifier.weight(1f)
+                // Selector de precio unitario para bidones (con 0.80, 0.90 y precio personalizado)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Precio Bidón: $${String.format(Locale.US, "%.2f", precioUnitarioBidon)} c/u",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 13.sp,
+                            color = AguaPrimaryDark
                         )
+                        Surface(
+                            onClick = {
+                                textoNuevoPrecioBidon = String.format(Locale.US, "%.2f", precioUnitarioBidon)
+                                mostrarDialogoPrecioBidon = true
+                            },
+                            color = AguaPrimary.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null, tint = AguaPrimary, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Personalizar $", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AguaPrimary)
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        listOf(0.75, 0.80, 0.85, 0.90, 1.00, 1.25).forEach { precio ->
+                            val sel = abs(precioUnitarioBidon - precio) < 0.001
+                            FilterChip(
+                                selected = sel,
+                                onClick = { precioUnitarioBidon = precio },
+                                label = { Text("$${String.format(Locale.US, "%.2f", precio)}", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = AguaPrimary,
+                                    selectedLabelColor = Color.White
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
             }
@@ -749,7 +792,11 @@ fun NuevaVentaSheet(
                 ) {
                     TarjetaSelectorSecundarioClay(
                         nombre = "Galón 4L",
-                        precio = "$0.75",
+                        precioUnitario = precioUnitarioGalon,
+                        onEditarPrecio = {
+                            textoNuevoPrecioProducto = String.format(Locale.US, "%.2f", precioUnitarioGalon)
+                            productoAEditarPrecio = Triple("Galón 4L", precioUnitarioGalon) { precioUnitarioGalon = it }
+                        },
                         disponibles = inventario?.galonesLlenos ?: 0,
                         valor = cantGalones,
                         ilustracion = { GalonIllustration(size = 32.dp) },
@@ -758,7 +805,11 @@ fun NuevaVentaSheet(
                     )
                     TarjetaSelectorSecundarioClay(
                         nombre = "Paca 24x",
-                        precio = "$3.75",
+                        precioUnitario = precioUnitarioPaca,
+                        onEditarPrecio = {
+                            textoNuevoPrecioProducto = String.format(Locale.US, "%.2f", precioUnitarioPaca)
+                            productoAEditarPrecio = Triple("Paca 24x", precioUnitarioPaca) { precioUnitarioPaca = it }
+                        },
                         disponibles = inventario?.pacasLlenas ?: 0,
                         valor = cantPacas,
                         ilustracion = { PacaIllustration(size = 32.dp) },
@@ -767,7 +818,11 @@ fun NuevaVentaSheet(
                     )
                     TarjetaSelectorSecundarioClay(
                         nombre = "Mini 12x",
-                        precio = "$1.75",
+                        precioUnitario = precioUnitarioMini,
+                        onEditarPrecio = {
+                            textoNuevoPrecioProducto = String.format(Locale.US, "%.2f", precioUnitarioMini)
+                            productoAEditarPrecio = Triple("Mini 12x", precioUnitarioMini) { precioUnitarioMini = it }
+                        },
                         disponibles = inventario?.minisLlenas ?: 0,
                         valor = cantMinis,
                         ilustracion = { MiniIllustration(size = 32.dp) },
@@ -1162,7 +1217,10 @@ fun NuevaVentaSheet(
                         pAzul,
                         pMarc,
                         cantGratis,
-                        if (usarTotalManual) totalGeneral else null
+                        if (usarTotalManual) totalGeneral else null,
+                        precioUnitarioGalon,
+                        precioUnitarioPaca,
+                        precioUnitarioMini
                     )
                 },
                 containerColor = VerdeEfectivo,
@@ -1190,6 +1248,114 @@ fun NuevaVentaSheet(
             nombreCliente = nombreDest,
             montoACobrar = totalGeneral.takeIf { it > 0.0 },
             onDismiss = { mostrarCuentasBancarias = false }
+        )
+    }
+
+    if (mostrarDialogoPrecioBidon) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { mostrarDialogoPrecioBidon = false },
+            title = {
+                Text(
+                    text = "Precio por Bidón de 20L",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 17.sp,
+                    color = TextoOscuro
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Ingresa el precio unitario acordado para este despacho (ej. 0.80, 0.70):",
+                        fontSize = 12.sp,
+                        color = TextoSecundario
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = textoNuevoPrecioBidon,
+                        onValueChange = { textoNuevoPrecioBidon = it },
+                        label = { Text("Precio Unitario ($)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = marineOutlinedTextFieldColors(accentColor = AguaPrimary),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = {
+                        val p = textoNuevoPrecioBidon.replace(',', '.').toDoubleOrNull()
+                        if (p != null && p > 0.0) {
+                            precioUnitarioBidon = p
+                        }
+                        mostrarDialogoPrecioBidon = false
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = AguaPrimary),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Aplicar Precio", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { mostrarDialogoPrecioBidon = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    productoAEditarPrecio?.let { (nombreProd, _, onActualizar) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { productoAEditarPrecio = null },
+            title = {
+                Text(
+                    text = "Precio Unitario - $nombreProd",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 17.sp,
+                    color = TextoOscuro
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Modifica el precio unitario pactado para este cliente:",
+                        fontSize = 12.sp,
+                        color = TextoSecundario
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = textoNuevoPrecioProducto,
+                        onValueChange = { textoNuevoPrecioProducto = it },
+                        label = { Text("Precio Unitario ($)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = marineOutlinedTextFieldColors(accentColor = AguaPrimary),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = {
+                        val p = textoNuevoPrecioProducto.replace(',', '.').toDoubleOrNull()
+                        if (p != null && p >= 0.0) {
+                            onActualizar(p)
+                        }
+                        productoAEditarPrecio = null
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = AguaPrimary),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Aplicar", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { productoAEditarPrecio = null }) {
+                    Text("Cancelar")
+                }
+            }
         )
     }
 }
@@ -1247,7 +1413,8 @@ private fun FilaBidonClay(
 @Composable
 private fun TarjetaSelectorSecundarioClay(
     nombre: String,
-    precio: String,
+    precioUnitario: Double,
+    onEditarPrecio: () -> Unit,
     disponibles: Int,
     valor: Int,
     ilustracion: @Composable () -> Unit,
@@ -1267,8 +1434,36 @@ private fun TarjetaSelectorSecundarioClay(
                 ilustracion()
             }
             Text(text = nombre, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextoOscuro)
-            Text(text = "$precio ($disponibles)", fontSize = 10.sp, color = TextoSecundario)
-            Spacer(modifier = Modifier.height(6.dp))
+
+            Surface(
+                onClick = onEditarPrecio,
+                shape = RoundedCornerShape(6.dp),
+                color = Color.White.copy(alpha = 0.85f),
+                border = BorderStroke(0.5.dp, AguaPrimary.copy(alpha = 0.35f)),
+                modifier = Modifier.padding(vertical = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "$${String.format(Locale.US, "%.2f", precioUnitario)}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        color = AguaPrimaryDark
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Editar precio",
+                        tint = AguaPrimary,
+                        modifier = Modifier.size(9.dp)
+                    )
+                }
+            }
+
+            Text(text = "En unid: $disponibles", fontSize = 10.sp, color = TextoSecundario)
+            Spacer(modifier = Modifier.height(4.dp))
             ClayEditableCounter(
                 valor = valor,
                 onCambio = onCambio,

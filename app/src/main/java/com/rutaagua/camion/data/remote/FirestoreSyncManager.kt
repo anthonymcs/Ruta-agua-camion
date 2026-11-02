@@ -229,7 +229,7 @@ class FirestoreSyncManager(
                                 val cantPac = doc.getLong("cantidadPacas")?.toInt() ?: 0
                                 val pPac = doc.getDouble("precioUnitarioPaca") ?: 3.75
                                 val cantMin = doc.getLong("cantidadMinis")?.toInt() ?: 0
-                                val pMin = doc.getDouble("precioUnitarioMini") ?: 1.75
+                                val pMin = doc.getDouble("precioUnitarioMini") ?: 1.90
                                 val totalImp = doc.getDouble("totalImporte") ?: 0.0
                                 val formaPago = runCatching { FormaPago.valueOf(doc.getString("formaPagoPrincipal") ?: "EFECTIVO") }.getOrDefault(FormaPago.EFECTIVO)
                                 val mEf = doc.getDouble("montoEfectivo") ?: 0.0

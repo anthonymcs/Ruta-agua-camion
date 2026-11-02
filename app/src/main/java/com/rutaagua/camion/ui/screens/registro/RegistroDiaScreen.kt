@@ -126,6 +126,8 @@ fun RegistroDiaScreen(
     val inventario by viewModel.inventarioVehiculoActivoState.collectAsState()
     val filtroVehiculo by viewModel.filtroVehiculoState.collectAsState()
     val resumen by viewModel.resumenCierreDiaState.collectAsState()
+    val estadisticasVentas by viewModel.estadisticasVentasHoyState.collectAsState()
+    val recargasHoy by viewModel.recargasHoyState.collectAsState()
     val todosLosClientes by viewModel.todosLosClientesState.collectAsState()
     val alertasCreditos by viewModel.alertasCreditosSinCobroState.collectAsState()
     val rolActivo by viewModel.rolActivo.collectAsState()
@@ -390,7 +392,7 @@ fun RegistroDiaScreen(
                 clientePreseleccionado = clientePreseleccionado,
                 transaccionAEditar = transaccionEnEdicion,
                 inventario = inventario,
-                onConfirmarVenta = { cId, nomPaso, tBidon, cRec, pBidon, cPrest, cDev, cVend, pVend, cGal, cPac, cMin, fPago, mPagado, nota, rTrans, rAzul, rMarc, mEfec, mTransf, mCred, mAbono, mCanc, pTrans, pAzul, pMarc, cGratis, totalPers ->
+                onConfirmarVenta = { cId, nomPaso, tBidon, cRec, pBidon, cPrest, cDev, cVend, pVend, cGal, cPac, cMin, fPago, mPagado, nota, rTrans, rAzul, rMarc, mEfec, mTransf, mCred, mAbono, mCanc, pTrans, pAzul, pMarc, cGratis, totalPers, pGal, pPac, pMin ->
                     viewModel.registrarOEditarVenta(
                         clienteId = cId,
                         nombreClientePaso = nomPaso,
@@ -419,7 +421,10 @@ fun RegistroDiaScreen(
                         prestadosAzules = pAzul,
                         prestadosMarcados = pMarc,
                         cantidadBidonesGratis = cGratis,
-                        totalPersonalizado = totalPers
+                        totalPersonalizado = totalPers,
+                        precioUnitarioGalon = pGal,
+                        precioUnitarioPaca = pPac,
+                        precioUnitarioMini = pMin
                     )
                 },
                 onCancelar = { viewModel.cerrarModalNuevaVenta() }
@@ -439,6 +444,8 @@ fun RegistroDiaScreen(
         CierreCajaDialog(
             cierreExistente = cierreHoy,
             resumenDia = resumen,
+            estadisticas = estadisticasVentas,
+            recargasHoy = recargasHoy,
             onConfirmarCierre = { efec, transf, obs ->
                 viewModel.registrarCierreCaja(
                     efectivoDeclarado = efec,

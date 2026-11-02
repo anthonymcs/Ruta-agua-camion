@@ -20,6 +20,13 @@ interface RecargaPlantaDao {
     """)
     fun obtenerRecargasPorFechaYVehiculoFlow(fechaTexto: String, vehiculo: String?): Flow<List<RecargaPlantaEntity>>
 
+    @Query("""
+        SELECT * FROM recargas_planta 
+        WHERE fechaTexto < :fechaTexto AND (:vehiculo IS NULL OR vehiculo = :vehiculo) 
+        ORDER BY fecha DESC LIMIT 1
+    """)
+    fun obtenerUltimaRecargaAnteriorFlow(fechaTexto: String, vehiculo: String?): Flow<RecargaPlantaEntity?>
+
     @Query("SELECT * FROM recargas_planta ORDER BY fecha DESC")
     fun obtenerTodasFlow(): Flow<List<RecargaPlantaEntity>>
 

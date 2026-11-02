@@ -334,7 +334,7 @@ fun RutaAguaNavHost(
 
                     NavigationDrawerItem(
                         icon = { Icon(Icons.Default.BarChart, contentDescription = null) },
-                        label = { Text("Reportes (Día / Semanal / Mensual)", fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        label = { Text("Reportes de Bidones", fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = currentRoute == "reportes_camioneta",
                         onClick = {
                             coroutineScope.launch { drawerState.close() }
@@ -355,7 +355,7 @@ fun RutaAguaNavHost(
                     if (rolActivo == RolUsuario.ADMIN_ROLANDO) {
                         NavigationDrawerItem(
                             icon = { Icon(Icons.Default.Analytics, contentDescription = null, tint = AzulCorporativo) },
-                            label = { Text("Panel Rolando", fontWeight = FontWeight.Black, color = AzulCorporativo, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            label = { Text("Contabilidad (Rolando)", fontWeight = FontWeight.Black, color = AzulCorporativo, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             selected = currentRoute == AppDestinations.PANEL_ROLANDO.ruta,
                             onClick = {
                                 coroutineScope.launch { drawerState.close() }
@@ -438,8 +438,8 @@ fun RutaAguaNavHost(
             AppDestinations.CAMION.ruta -> "Carga e Inventario"
             AppDestinations.CLIENTES.ruta -> "Clientes"
             AppDestinations.CALENDARIO.ruta -> "Ruta y Calendario"
-            "reportes_camioneta" -> "Reportes"
-            AppDestinations.PANEL_ROLANDO.ruta -> "Panel Rolando"
+            "reportes_camioneta" -> "Reportes de Bidones"
+            AppDestinations.PANEL_ROLANDO.ruta -> "Contabilidad (Rolando)"
             else -> "Ventas y Caja"
         }
 

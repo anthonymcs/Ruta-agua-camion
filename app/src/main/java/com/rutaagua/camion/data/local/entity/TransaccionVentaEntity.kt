@@ -52,8 +52,8 @@ data class TransaccionVentaEntity(
     val precioUnitarioGalon: Double = 0.75,
     val cantidadPacas: Int = 0, // Pack 24 x 500ml ($3.75 c/u)
     val precioUnitarioPaca: Double = 3.75,
-    val cantidadMinis: Int = 0, // Pack 12 x 500ml ($1.75 c/u)
-    val precioUnitarioMini: Double = 1.75,
+    val cantidadMinis: Int = 0, // Pack 12 x 500ml ($1.90 c/u)
+    val precioUnitarioMini: Double = 1.90,
 
     // Liquidación financiera
     val totalImporte: Double = 0.0, // Monto total de los artículos vendidos hoy

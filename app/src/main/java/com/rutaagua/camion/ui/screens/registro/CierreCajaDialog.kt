@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -46,6 +47,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rutaagua.camion.data.local.entity.CierreCajaEntity
+import com.rutaagua.camion.data.local.entity.RecargaPlantaEntity
+import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.ui.components.marineOutlinedTextFieldColors
 import com.rutaagua.camion.ui.theme.AguaPrimary
@@ -70,6 +73,8 @@ import java.util.Locale
 fun CierreCajaDialog(
     cierreExistente: CierreCajaEntity?,
     resumenDia: ResumenCierreDia? = null,
+    estadisticas: EstadisticasVentasTipo? = null,
+    recargasHoy: List<RecargaPlantaEntity> = emptyList(),
     onConfirmarCierre: (efectivo: Double, transferencias: Double, observaciones: String) -> Unit,
     onDismissRequest: () -> Unit
 ) {
@@ -308,7 +313,100 @@ fun CierreCajaDialog(
                             }
                         }
 
-                        // 2. Desglose de Clientes por Precio de Agua (Ej: "Clientes $0.80: 20 clientes • Total $16.00")
+                        // 2. Bidones Exactos Vendidos por Tipo en la Ruta
+                        if (estadisticas != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                color = FondoGrisClaro,
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, BordeSutil),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = "BIDONES EXACTOS VENDIDOS EN RUTA",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Black,
+                                        color = AguaPrimaryDark,
+                                        maxLines = 1
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Azules Estándar:", fontSize = 12.sp, color = TextoSecundario)
+                                        Text("${estadisticas.azulesVendidos} un.", fontSize = 12.sp, fontWeight = FontWeight.Black, color = TextoOscuro)
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Transparentes (PET):", fontSize = 12.sp, color = TextoSecundario)
+                                        Text("${estadisticas.transparentesVendidos} un.", fontSize = 12.sp, fontWeight = FontWeight.Black, color = TextoOscuro)
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Marcadas:", fontSize = 12.sp, color = TextoSecundario)
+                                        Text("${estadisticas.marcadosVendidos} un.", fontSize = 12.sp, fontWeight = FontWeight.Black, color = TextoOscuro)
+                                    }
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = BordeSutil)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("TOTAL BIDONES 20L:", fontSize = 12.sp, fontWeight = FontWeight.Black, color = TextoOscuro)
+                                        Text("${estadisticas.totalBidonesVendidos} botellones", fontSize = 12.sp, fontWeight = FontWeight.Black, color = AguaPrimaryDark)
+                                    }
+                                    if (estadisticas.galonesVendidos > 0 || estadisticas.pacasVendidas > 0 || estadisticas.minisVendidas > 0) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        val otros = buildList {
+                                            if (estadisticas.galonesVendidos > 0) add("${estadisticas.galonesVendidos} gal.")
+                                            if (estadisticas.pacasVendidas > 0) add("${estadisticas.pacasVendidas} pacas")
+                                            if (estadisticas.minisVendidas > 0) add("${estadisticas.minisVendidas} minis")
+                                        }.joinToString(" • ")
+                                        Text("Otros productos: $otros", fontSize = 11.sp, color = TextoSecundario, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        // 3. Cargas Realizadas en el Día
+                        if (recargasHoy.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                color = FondoGrisClaro,
+                                shape = RoundedCornerShape(14.dp),
+                                border = BorderStroke(1.dp, BordeSutil),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = "CARGAS REALIZADAS EN EL DÍA (${recargasHoy.size})",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Black,
+                                        color = AguaPrimaryDark,
+                                        maxLines = 1
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    recargasHoy.sortedBy { it.numeroVuelta }.forEach { r ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 2.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text("Carga #${r.numeroVuelta}:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextoOscuro)
+                                            Text("+${r.totalBidonesCargados()} bidones", fontSize = 12.sp, fontWeight = FontWeight.Black, color = VerdeEfectivo)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 4. Desglose de Clientes por Precio de Agua (Ej: "Clientes $0.80: 20 clientes • Total $16.00")
                         if (resumenDia.desglosePorPrecio.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(10.dp))
                             Surface(
@@ -364,7 +462,7 @@ fun CierreCajaDialog(
 
                     Button(
                         onClick = {
-                            val mensaje = WhatsAppHelper.generarMensajeCierreCajaOperador(c, resumenDia)
+                            val mensaje = WhatsAppHelper.generarMensajeCierreCajaOperador(c, resumenDia, estadisticas, recargasHoy)
                             WhatsAppHelper.abrirChatWhatsApp(context, null, mensaje)
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),

@@ -6,7 +6,9 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import com.rutaagua.camion.data.local.entity.CierreCajaEntity
 import com.rutaagua.camion.data.local.entity.ClienteEntity
+import com.rutaagua.camion.data.local.entity.RecargaPlantaEntity
 import com.rutaagua.camion.data.local.entity.TransaccionVentaEntity
+import com.rutaagua.camion.data.local.model.EstadisticasVentasTipo
 import com.rutaagua.camion.data.local.model.FormaPago
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.TipoBidon
@@ -317,11 +319,14 @@ object WhatsAppHelper {
 
     /**
      * Genera el texto del resumen de Cierre de Caja para enviar por WhatsApp a Rolando,
-     * incluyendo la suma de Créditos, Abonos, Efectivo, Transferencias y el desglose por precio de cliente.
+     * incluyendo la suma de Créditos, Abonos, Efectivo, Transferencias, bidones exactos vendidos por tipo
+     * y el desglose de cargas del día.
      */
     fun generarMensajeCierreCajaOperador(
         cierre: CierreCajaEntity,
-        resumenDia: ResumenCierreDia? = null
+        resumenDia: ResumenCierreDia? = null,
+        estadisticas: EstadisticasVentasTipo? = null,
+        recargasHoy: List<RecargaPlantaEntity> = emptyList()
     ): String {
         val total = cierre.totalDeclarado
         val efectivo = cierre.efectivoDeclarado
@@ -341,24 +346,57 @@ object WhatsAppHelper {
 
             if (resumenDia != null) {
                 appendLine("─────────────────────────")
-                appendLine("📊 *SUMA DE OPERACIONES DEL DÍA:*")
+                appendLine("📊 *SUMA CONTABLE DEL DÍA:*")
                 appendLine("• Efectivo del día: *$${String.format(Locale.US, "%.2f", resumenDia.totalIngresoEfectivo)}*")
                 appendLine("• Transferencias del día: *$${String.format(Locale.US, "%.2f", resumenDia.totalIngresoTransferencia)}*")
                 appendLine("• Créditos otorgados (Fiado): *$${String.format(Locale.US, "%.2f", resumenDia.totalCreditosOtorgados)}*")
                 appendLine("• Abonos / Deudas cobradas: *$${String.format(Locale.US, "%.2f", resumenDia.totalAbonosYCancelados)}*")
                 appendLine("• Gastos en ruta: *$${String.format(Locale.US, "%.2f", resumenDia.totalGastosRuta)}*")
-                appendLine("• Efectivo Neto Sistema: *$${String.format(Locale.US, "%.2f", resumenDia.efectivoNetoCaja)}*")
+                appendLine("• Efectivo Neto en Caja: *$${String.format(Locale.US, "%.2f", resumenDia.efectivoNetoCaja)}*")
+            }
 
-                if (resumenDia.desglosePorPrecio.isNotEmpty()) {
-                    appendLine("─────────────────────────")
-                    appendLine("🏷️ *CLIENTES POR PRECIO DE AGUA:*")
-                    resumenDia.desglosePorPrecio.forEach { item ->
-                        val etiquetaClientes = if (item.cantidadClientes == 1) "1 cliente" else "${item.cantidadClientes} clientes"
-                        appendLine(
-                            "  • Clientes $${String.format(Locale.US, "%.2f", item.precioUnitario)}: *$etiquetaClientes* (${item.cantidadBidonesCobrados} bidones) → *Total: $${String.format(Locale.US, "%.2f", item.totalImporteAgua)}*"
-                        )
-                    }
+            if (estadisticas != null) {
+                appendLine("─────────────────────────")
+                appendLine("📦 *BIDONES EXACTOS VENDIDOS EN RUTA:*")
+                appendLine("  • Azules: *${estadisticas.azulesVendidos} un.*")
+                appendLine("  • Transparentes (PET): *${estadisticas.transparentesVendidos} un.*")
+                appendLine("  • Marcadas: *${estadisticas.marcadosVendidos} un.*")
+                appendLine("  • TOTAL BIDONES 20L: *${estadisticas.totalBidonesVendidos} un.*")
+                if (estadisticas.envasesNuevosVendidos > 0) {
+                    appendLine("  • Envases nuevos (con todo): *${estadisticas.envasesNuevosVendidos} un.*")
                 }
+                if (estadisticas.galonesVendidos > 0) appendLine("  • Galones (4L): *${estadisticas.galonesVendidos} un.*")
+                if (estadisticas.pacasVendidas > 0) appendLine("  • Pacas (24x): *${estadisticas.pacasVendidas} un.*")
+                if (estadisticas.minisVendidas > 0) appendLine("  • Minis (12x): *${estadisticas.minisVendidas} un.*")
+            }
+
+            if (resumenDia != null && resumenDia.desglosePorPrecio.isNotEmpty()) {
+                appendLine("─────────────────────────")
+                appendLine("🏷️ *CLIENTES POR PRECIO DE AGUA:*")
+                resumenDia.desglosePorPrecio.forEach { item ->
+                    val etiquetaClientes = if (item.cantidadClientes == 1) "1 cliente" else "${item.cantidadClientes} clientes"
+                    appendLine(
+                        "  • Clientes $${String.format(Locale.US, "%.2f", item.precioUnitario)}: *$etiquetaClientes* (${item.cantidadBidonesCobrados} bidones) → *Total: $${String.format(Locale.US, "%.2f", item.totalImporteAgua)}*"
+                    )
+                }
+            }
+
+            if (recargasHoy.isNotEmpty()) {
+                appendLine("─────────────────────────")
+                appendLine("🚚 *CARGAS REALIZADAS EN EL DÍA (${recargasHoy.size}):*")
+                recargasHoy.sortedBy { it.numeroVuelta }.forEach { r ->
+                    val detalle = buildList {
+                        if (r.bidonesCargadosAzules > 0) add("${r.bidonesCargadosAzules} azules")
+                        if (r.bidonesCargadosTransparentes > 0) add("${r.bidonesCargadosTransparentes} PET")
+                        if (r.bidonesCargadosMarcados > 0) add("${r.bidonesCargadosMarcados} marcadas")
+                        if (r.galonesCargados > 0) add("${r.galonesCargados} galones")
+                        if (r.pacasCargadas > 0) add("${r.pacasCargadas} pacas")
+                        if (r.minisCargadas > 0) add("${r.minisCargadas} minis")
+                    }.joinToString(", ")
+                    appendLine("  • Carga ${r.numeroVuelta}: *+${r.totalBidonesCargados()} bidones* ($detalle)")
+                }
+                val totalBidonesCargadosHoy = recargasHoy.sumOf { it.totalBidonesCargados() }
+                appendLine("  • Total abastecido hoy: *+$totalBidonesCargadosHoy bidones*")
             }
 
             if (cierre.observaciones.isNotBlank()) {

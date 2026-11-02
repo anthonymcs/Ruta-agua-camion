@@ -271,6 +271,9 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     fun obtenerRecargasPorFecha(fechaTexto: String, vehiculo: String? = null): Flow<List<RecargaPlantaEntity>> =
         recargaPlantaDao.obtenerRecargasPorFechaYVehiculoFlow(fechaTexto, vehiculo)
 
+    fun obtenerUltimaRecargaAnterior(fechaTexto: String, vehiculo: String? = null): Flow<RecargaPlantaEntity?> =
+        recargaPlantaDao.obtenerUltimaRecargaAnteriorFlow(fechaTexto, vehiculo)
+
     /**
      * Elimina una recarga en planta y descuenta su stock del inventario de forma segura.
      */
