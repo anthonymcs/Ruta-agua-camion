@@ -174,20 +174,8 @@ Desde su celular con la cuenta `rolando@rutaatenea.app`:
    - Cuánto dinero entró en efectivo y cuánto en transferencia bancaria.
    - Cuánto dinero hay en la calle fiado (créditos pendientes por cobrar).
    - Cuáles fueron los gastos de gasolina y comida de cada carro.
+   - **Ganancia Neta del día:** El total vendido menos los gastos de gasolina/ruta.
    - El resultado del Cierre de Caja de cada chofer para verificar que entregaron todo el dinero completo.
-
-### 💡 ¿A qué se refiere "Costo del agua en la planta"?
-En un negocio de distribución de agua purificada, cada botellón vendido tiene un pequeño costo interno de producción (lo que cuesta el llenado, la tapa plástica nueva, el sello de seguridad y la electricidad en la planta, por ejemplo `$0.35` por cada botellón):
-
-* **Ejemplo práctico:**
-  - El camión vende **100 botellones** a `$1.00` = Trae **`$100.00`** en plata cobrada.
-  - El costo de planta de esos 100 botellones fue de **`$35.00`** (100 botellones × $0.35 de tapas/sellos/llenado).
-  - Gastaron **`$10.00`** en gasolina.
-  - **Ganancia Neta Real de Don Rolando:** `$100.00 - $35.00 - $10.00 = $55.00` de ganancia libre.
-
-> 🔒 **Importante:**
-> 1. Este costo de planta es **completamente confidencial y secreto**: los choferes **NO lo pueden ver**, solo Don Rolando desde su cuenta.
-> 2. Si Don Rolando **no desea descontar el costo de planta** y solo quiere ver cuánto dinero cobraron los carros menos los gastos de gasolina, el costo de planta se puede poner en `$0.00` en los ajustes y así el sistema le mostrará el total de ventas menos gasolina directamente.
 
 ---
 

@@ -355,13 +355,9 @@ fun PanelRolandoScreen(
         val netoCaja = (efec + abon) - gast
         val ingresoNetoTotal = (efec + transf + abon) - gast
 
-        val costoTotalAguaPlanta = (totalBid * costoBidon) +
-                (totalGal * costoGalon) +
-                (totalPac * costoPaca) +
-                (totalMin * costoMini)
-
-        val utilidadBruta = (bruta - costoTotalAguaPlanta).coerceAtLeast(0.0)
-        val utilidadNeta = utilidadBruta - gast
+        val costoTotalAguaPlanta = 0.0
+        val utilidadBruta = bruta
+        val utilidadNeta = bruta - gast
 
         val agrupadoPorDia = transFiltradas
             .groupBy { it.fechaTexto }
@@ -576,15 +572,15 @@ fun PanelRolandoScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             ItemMetricaFinanciera(
-                                titulo = "Ventas Brutas",
+                                titulo = "Ventas Totales",
                                 valor = "$${String.format(Locale.US, "%.2f", resumen.ventaBruta)}",
                                 color = AzulCorporativo,
                                 modifier = Modifier.weight(1f)
                             )
                             ItemMetricaFinanciera(
-                                titulo = "Costo Agua Planta",
-                                valor = "-$${String.format(Locale.US, "%.2f", resumen.costoPlantaTotal)}",
-                                color = RojoAlerta,
+                                titulo = "Cobrado (Efec + Transf)",
+                                valor = "$${String.format(Locale.US, "%.2f", resumen.efectivo + resumen.transferencia)}",
+                                color = Color(0xFF0284C7),
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -1112,12 +1108,10 @@ private fun construirTextoReporteFinanciero(
         appendLine("*Unidad:* ${data.vehiculoEtiqueta.uppercase()}")
         appendLine("*Período:* ${data.etiquetaRango} (${periodo.titulo})")
         appendLine("─────────────────────────")
-        appendLine("*💵 ESTADO DE RESULTADOS FINANCIEROS:*")
-        appendLine("• *Ventas Brutas:* $${String.format(Locale.US, "%.2f", data.ventaBruta)}")
-        appendLine("• *Costo Agua en Planta:* -$${String.format(Locale.US, "%.2f", data.costoPlantaTotal)}")
-        appendLine("• *Gastos Operativos:* -$${String.format(Locale.US, "%.2f", data.gastos)}")
-        appendLine("• *UTILIDAD BRUTA:* $${String.format(Locale.US, "%.2f", data.utilidadBruta)}")
-        appendLine("• *UTILIDAD NETA:* *$${String.format(Locale.US, "%.2f", data.utilidadNeta)}*")
+        appendLine("*💵 ESTADO DE RESULTADOS:*")
+        appendLine("• *Ventas Totales:* $${String.format(Locale.US, "%.2f", data.ventaBruta)}")
+        appendLine("• *Gastos Operativos (Ruta):* -$${String.format(Locale.US, "%.2f", data.gastos)}")
+        appendLine("• *GANANCIA NETA:* *$${String.format(Locale.US, "%.2f", data.utilidadNeta)}*")
         appendLine("─────────────────────────")
         appendLine("*🏦 ARQUEO Y FLUJO DE FONDOS:*")
         appendLine("• *Efectivo Cobrado:* $${String.format(Locale.US, "%.2f", data.efectivo)}")

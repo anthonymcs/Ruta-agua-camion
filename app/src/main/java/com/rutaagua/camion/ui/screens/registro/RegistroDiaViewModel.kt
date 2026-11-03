@@ -560,13 +560,9 @@ class RegistroDiaViewModel(
             val diferenciaTransferencia = transferenciasDeclaradas - transferenciasSistema
             val diferenciaTotal = totalDeclarado - totalSistema
 
-            val costoTotalPlanta = (resumen.totalBidonesVendidos * costoPlantaBidon) +
-                    (resumen.totalGalonesVendidos * costoPlantaGalon) +
-                    (resumen.totalPacasVendidas * costoPlantaPaca) +
-                    (resumen.totalMinisVendidas * costoPlantaMini)
-
-            val utilidadBruta = maxOf(0.0, resumen.granTotalVenta - costoTotalPlanta)
-            val utilidadNeta = utilidadBruta - resumen.totalGastosRuta
+            val costoTotalPlanta = 0.0
+            val utilidadBruta = resumen.granTotalVenta
+            val utilidadNeta = resumen.granTotalVenta - resumen.totalGastosRuta
 
             val cierreExistente = cierreHoyState.value
             val cierreEntity = CierreCajaEntity(

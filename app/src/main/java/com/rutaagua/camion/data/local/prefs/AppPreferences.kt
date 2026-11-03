@@ -99,20 +99,20 @@ class AppPreferences(context: Context) {
     }
 
     // Costos de planta configurables por Rolando
-    fun obtenerCostoPlantaBidon(): Double = prefs.getFloat(KEY_COSTO_BIDON, 0.35f).toDouble()
-    fun guardarCostoPlantaBidon(costo: Double) = prefs.edit().putFloat(KEY_COSTO_BIDON, costo.toFloat()).apply()
+    fun obtenerCostoPlantaBidon(): Double = 0.0
+    fun guardarCostoPlantaBidon(costo: Double) = Unit
 
-    fun obtenerCostoPlantaGalon(): Double = prefs.getFloat(KEY_COSTO_GALON, 0.25f).toDouble()
-    fun guardarCostoPlantaGalon(costo: Double) = prefs.edit().putFloat(KEY_COSTO_GALON, costo.toFloat()).apply()
+    fun obtenerCostoPlantaGalon(): Double = 0.0
+    fun guardarCostoPlantaGalon(costo: Double) = Unit
 
-    fun obtenerCostoPlantaPaca(): Double = prefs.getFloat(KEY_COSTO_PACA, 2.20f).toDouble()
-    fun guardarCostoPlantaPaca(costo: Double) = prefs.edit().putFloat(KEY_COSTO_PACA, costo.toFloat()).apply()
+    fun obtenerCostoPlantaPaca(): Double = 0.0
+    fun guardarCostoPlantaPaca(costo: Double) = Unit
 
-    fun obtenerCostoPlantaMini(): Double = prefs.getFloat(KEY_COSTO_MINI, 1.10f).toDouble()
-    fun guardarCostoPlantaMini(costo: Double) = prefs.edit().putFloat(KEY_COSTO_MINI, costo.toFloat()).apply()
+    fun obtenerCostoPlantaMini(): Double = 0.0
+    fun guardarCostoPlantaMini(costo: Double) = Unit
 
-    fun obtenerCostoPlantaEnvaseNuevo(): Double = prefs.getFloat(KEY_COSTO_ENVASE_NUEVO, 3.00f).toDouble()
-    fun guardarCostoPlantaEnvaseNuevo(costo: Double) = prefs.edit().putFloat(KEY_COSTO_ENVASE_NUEVO, costo.toFloat()).apply()
+    fun obtenerCostoPlantaEnvaseNuevo(): Double = 0.0
+    fun guardarCostoPlantaEnvaseNuevo(costo: Double) = Unit
 
     fun obtenerUrlOta(): String {
         val valor = prefs.getString(KEY_URL_OTA, DEFAULT_OTA_URL) ?: DEFAULT_OTA_URL

@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.rutaagua.camion.data.local.entity.CierreCajaEntity
 import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.ui.theme.AguaPrimary
+import com.rutaagua.camion.ui.theme.AmbarAdvertencia
 import com.rutaagua.camion.ui.theme.BordeSutil
 import com.rutaagua.camion.ui.theme.FondoGrisClaro
 import com.rutaagua.camion.ui.theme.RojoAlerta
@@ -83,13 +84,7 @@ fun AuditoriaCierreRP3Card(
     val totalPacas = resumen.totalPacasVendidas
     val totalMinis = resumen.totalMinisVendidas
 
-    val costoTotalAgua = (totalBidones * costoPlantaBidon) +
-            (totalGalones * costoPlantaGalon) +
-            (totalPacas * costoPlantaPaca) +
-            (totalMinis * costoPlantaMini)
-
-    val utilidadBruta = maxOf(0.0, resumen.granTotalVenta - costoTotalAgua)
-    val utilidadNeta = utilidadBruta - resumen.totalGastosRuta
+    val utilidadNeta = resumen.granTotalVenta - resumen.totalGastosRuta
 
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -262,19 +257,19 @@ fun AuditoriaCierreRP3Card(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 MetricaFinancieraMini(
-                    titulo = "Costo Planta",
-                    valor = "$${String.format(Locale.US, "%.2f", costoTotalAgua)}",
-                    color = Color(0xFF64748B),
+                    titulo = "Ventas Totales",
+                    valor = "$${String.format(Locale.US, "%.2f", resumen.granTotalVenta)}",
+                    color = Color(0xFF0284C7),
                     modifier = Modifier.weight(1f)
                 )
                 MetricaFinancieraMini(
-                    titulo = "Utilidad Bruta",
-                    valor = "$${String.format(Locale.US, "%.2f", utilidadBruta)}",
-                    color = AguaPrimary,
+                    titulo = "Gastos Ruta",
+                    valor = "-$${String.format(Locale.US, "%.2f", resumen.totalGastosRuta)}",
+                    color = AmbarAdvertencia,
                     modifier = Modifier.weight(1f)
                 )
                 MetricaFinancieraMini(
-                    titulo = "Utilidad Neta",
+                    titulo = "Ganancia Neta",
                     valor = "$${String.format(Locale.US, "%.2f", utilidadNeta)}",
                     color = VerdeEfectivo,
                     modifier = Modifier.weight(1f)
