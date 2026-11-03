@@ -464,8 +464,8 @@ fun LoginScreen(
                         },
                         placeholder = {
                             Text(
-                                text = "Ej: camion o camion@rutaatenea.app",
-                                color = TextoSecundario.copy(alpha = 0.6f),
+                                text = "Ingresa tu usuario o correo",
+                                color = TextoSecundario.copy(alpha = 0.5f),
                                 maxLines = 1
                             )
                         },

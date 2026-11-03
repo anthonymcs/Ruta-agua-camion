@@ -325,13 +325,6 @@ fun InventarioCamionScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Text(
-                            text = "PIN 1234",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextoSecundario,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
                     }
                 }
 
@@ -379,7 +372,7 @@ fun InventarioCamionScreen(
     if (mostrarPinParaEditarRecarga && recargaParaEditar != null) {
         com.rutaagua.camion.ui.security.SecurityPinDialog(
             titulo = "Editar Carga",
-            subtitulo = "Ingresa el PIN 1234 para modificar la recarga",
+            subtitulo = "Ingresa el PIN de seguridad para modificar la recarga",
             onDismissRequest = {
                 mostrarPinParaEditarRecarga = false
                 recargaParaEditar = null
@@ -397,7 +390,7 @@ fun InventarioCamionScreen(
     if (mostrarPinParaEliminarRecarga && recargaParaEliminar != null) {
         com.rutaagua.camion.ui.security.SecurityPinDialog(
             titulo = "Eliminar Carga",
-            subtitulo = "Ingresa el PIN 1234 para revertir esta carga",
+            subtitulo = "Ingresa el PIN de seguridad para revertir esta carga",
             onDismissRequest = {
                 mostrarPinParaEliminarRecarga = false
                 recargaParaEliminar = null
@@ -414,7 +407,7 @@ fun InventarioCamionScreen(
     if (mostrarPinParaEditarCargaActual) {
         com.rutaagua.camion.ui.security.SecurityPinDialog(
             titulo = "Editar Carga Actual",
-            subtitulo = "Ingresa el PIN 1234 para modificar o reemplazar la carga actual del vehículo",
+            subtitulo = "Ingresa el PIN de seguridad para modificar o reemplazar la carga actual",
             onDismissRequest = { mostrarPinParaEditarCargaActual = false },
             onPinCorrecto = {
                 mostrarPinParaEditarCargaActual = false
@@ -427,7 +420,7 @@ fun InventarioCamionScreen(
     if (mostrarPinParaBorrarCargaActual) {
         com.rutaagua.camion.ui.security.SecurityPinDialog(
             titulo = "Borrar Carga Actual",
-            subtitulo = "Ingresa el PIN 1234 para poner en 0 toda la carga actual del vehículo",
+            subtitulo = "Ingresa el PIN de seguridad para vaciar la carga actual del vehículo",
             onDismissRequest = { mostrarPinParaBorrarCargaActual = false },
             onPinCorrecto = {
                 mostrarPinParaBorrarCargaActual = false

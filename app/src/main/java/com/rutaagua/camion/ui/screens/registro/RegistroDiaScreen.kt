@@ -491,7 +491,7 @@ fun RegistroDiaScreen(
     if (mostrarPinParaEditar && ventaParaEditar != null) {
         SecurityPinDialog(
             titulo = "Editar Venta",
-            subtitulo = "Ingresa el PIN 1234",
+            subtitulo = "Ingresa el PIN de seguridad de 4 dígitos",
             onDismissRequest = {
                 mostrarPinParaEditar = false
                 ventaParaEditar = null
@@ -508,7 +508,7 @@ fun RegistroDiaScreen(
     if (mostrarPinParaEliminar && ventaParaEliminar != null) {
         SecurityPinDialog(
             titulo = "Eliminar Venta",
-            subtitulo = "Ingresa el PIN 1234",
+            subtitulo = "Ingresa el PIN de seguridad de 4 dígitos",
             onDismissRequest = {
                 mostrarPinParaEliminar = false
                 ventaParaEliminar = null

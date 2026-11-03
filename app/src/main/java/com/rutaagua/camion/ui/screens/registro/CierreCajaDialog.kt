@@ -241,7 +241,7 @@ fun CierreCajaDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "TOTAL DECLARADO A ENTREGAR A ROLANDO",
+                                text = "TOTAL DECLARADO A ENTREGAR",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = TextoSecundario,
@@ -287,10 +287,10 @@ fun CierreCajaDialog(
                                     maxLines = 1
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
-                                FilaResumenReporteCierre("Efectivo del Día", resumenDia.totalIngresoEfectivo, VerdeEfectivo)
-                                FilaResumenReporteCierre("Transferencias del Día", resumenDia.totalIngresoTransferencia, AguaPrimaryDark)
-                                FilaResumenReporteCierre("Créditos del Día (Fiado)", resumenDia.totalCreditosOtorgados, RojoAlerta)
-                                FilaResumenReporteCierre("Abonos / Deudas Cobradas", resumenDia.totalAbonosYCancelados, AmbarAdvertencia)
+                                FilaResumenReporteCierre("Efectivo Cobrado", resumenDia.totalIngresoEfectivo, VerdeEfectivo)
+                                FilaResumenReporteCierre("Transferencias", resumenDia.totalIngresoTransferencia, AguaPrimaryDark)
+                                FilaResumenReporteCierre("Créditos (Fiado)", resumenDia.totalCreditosOtorgados, RojoAlerta)
+                                FilaResumenReporteCierre("Abonos a Deuda", resumenDia.totalAbonosYCancelados, AmbarAdvertencia)
                                 FilaResumenReporteCierre("Gastos en Ruta", resumenDia.totalGastosRuta, TextoSecundario)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(

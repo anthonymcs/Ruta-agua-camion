@@ -506,7 +506,7 @@ fun NuevaVentaSheet(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Selector de precio unitario para bidones (con 0.80, 0.90 y precio personalizado)
+                // Selector de precio unitario para bidones (2 filas amplias de 3 opciones para evitar saltos de línea)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -517,7 +517,9 @@ fun NuevaVentaSheet(
                             text = "Precio Bidón: $${String.format(Locale.US, "%.2f", precioUnitarioBidon)} c/u",
                             fontWeight = FontWeight.Black,
                             fontSize = 13.sp,
-                            color = AguaPrimaryDark
+                            color = AguaPrimaryDark,
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Surface(
                             onClick = {
@@ -533,28 +535,70 @@ fun NuevaVentaSheet(
                             ) {
                                 Icon(Icons.Default.Edit, contentDescription = null, tint = AguaPrimary, modifier = Modifier.size(12.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Personalizar $", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AguaPrimary)
+                                Text("Personalizar $", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AguaPrimary, maxLines = 1, softWrap = false)
                             }
                         }
                     }
 
+                    // Fila 1: 0.75, 0.80, 0.85
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        listOf(0.75, 0.80, 0.85, 0.90, 1.00, 1.25).forEach { precio ->
+                        listOf(0.75, 0.80, 0.85).forEach { precio ->
                             val sel = abs(precioUnitarioBidon - precio) < 0.001
-                            FilterChip(
-                                selected = sel,
+                            Surface(
                                 onClick = { precioUnitarioBidon = precio },
-                                label = { Text("$${String.format(Locale.US, "%.2f", precio)}", fontWeight = FontWeight.Bold, fontSize = 11.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = AguaPrimary,
-                                    selectedLabelColor = Color.White
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (sel) AguaPrimary else Color(0xFFF1F5F9),
+                                border = BorderStroke(1.dp, if (sel) AguaPrimaryDark else Color(0xFFCBD5E1)),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "$${String.format(Locale.US, "%.2f", precio)}",
+                                        fontWeight = if (sel) FontWeight.Black else FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = if (sel) Color.White else TextoOscuro,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Fila 2: 0.90, 1.00, 1.25
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        listOf(0.90, 1.00, 1.25).forEach { precio ->
+                            val sel = abs(precioUnitarioBidon - precio) < 0.001
+                            Surface(
+                                onClick = { precioUnitarioBidon = precio },
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (sel) AguaPrimary else Color(0xFFF1F5F9),
+                                border = BorderStroke(1.dp, if (sel) AguaPrimaryDark else Color(0xFFCBD5E1)),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "$${String.format(Locale.US, "%.2f", precio)}",
+                                        fontWeight = if (sel) FontWeight.Black else FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = if (sel) Color.White else TextoOscuro,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -749,17 +793,34 @@ fun NuevaVentaSheet(
                                 fontSize = 14.sp,
                                 color = TextoOscuro
                             )
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                FilterChip(
-                                    selected = precioEnvaseVendido == 5.50,
-                                    onClick = { precioEnvaseVendido = 5.50 },
-                                    label = { Text("$5.50", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                                )
-                                FilterChip(
-                                    selected = precioEnvaseVendido == 6.00,
-                                    onClick = { precioEnvaseVendido = 6.00 },
-                                    label = { Text("$6.00", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                                )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                listOf(5.50, 6.00).forEach { precio ->
+                                    val sel = abs(precioEnvaseVendido - precio) < 0.001
+                                    Surface(
+                                        onClick = { precioEnvaseVendido = precio },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (sel) AguaPrimary else Color(0xFFF1F5F9),
+                                        border = BorderStroke(1.dp, if (sel) AguaPrimaryDark else Color(0xFFCBD5E1)),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.padding(horizontal = 8.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "$${String.format(Locale.US, "%.2f", precio)}",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (sel) Color.White else TextoOscuro,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         ClayEditableCounter(
@@ -1433,12 +1494,20 @@ private fun TarjetaSelectorSecundarioClay(
             Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
                 ilustracion()
             }
-            Text(text = nombre, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextoOscuro)
+            Text(
+                text = nombre,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextoOscuro,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
 
             Surface(
                 onClick = onEditarPrecio,
                 shape = RoundedCornerShape(6.dp),
-                color = Color.White.copy(alpha = 0.85f),
+                color = Color.White.copy(alpha = 0.9f),
                 border = BorderStroke(0.5.dp, AguaPrimary.copy(alpha = 0.35f)),
                 modifier = Modifier.padding(vertical = 2.dp)
             ) {
@@ -1450,7 +1519,9 @@ private fun TarjetaSelectorSecundarioClay(
                         text = "$${String.format(Locale.US, "%.2f", precioUnitario)}",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Black,
-                        color = AguaPrimaryDark
+                        color = AguaPrimaryDark,
+                        maxLines = 1,
+                        softWrap = false
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Icon(
@@ -1462,7 +1533,13 @@ private fun TarjetaSelectorSecundarioClay(
                 }
             }
 
-            Text(text = "En unid: $disponibles", fontSize = 10.sp, color = TextoSecundario)
+            Text(
+                text = "$disponibles disp.",
+                fontSize = 10.sp,
+                color = TextoSecundario,
+                maxLines = 1,
+                softWrap = false
+            )
             Spacer(modifier = Modifier.height(4.dp))
             ClayEditableCounter(
                 valor = valor,

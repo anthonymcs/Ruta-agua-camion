@@ -1086,13 +1086,19 @@ private fun FilaFlujoCaja(
             text = etiqueta,
             fontSize = 13.sp,
             color = if (negrita) TextoOscuro else TextoSecundario,
-            fontWeight = if (negrita) FontWeight.Bold else FontWeight.Normal
+            fontWeight = if (negrita) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.weight(1f, fill = false),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = valor,
             fontSize = 13.sp,
             fontWeight = FontWeight.Black,
-            color = color
+            color = color,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

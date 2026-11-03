@@ -135,6 +135,14 @@ class AppPreferences(context: Context) {
         prefs.edit().putBoolean(KEY_SESION_INICIADA, iniciada).apply()
     }
 
+    fun obtenerVibracionHabilitada(): Boolean {
+        return prefs.getBoolean(KEY_VIBRACION_HABILITADA, true)
+    }
+
+    fun guardarVibracionHabilitada(habilitada: Boolean) {
+        prefs.edit().putBoolean(KEY_VIBRACION_HABILITADA, habilitada).apply()
+    }
+
     fun obtenerRecordarSesion(): Boolean {
         return prefs.getBoolean(KEY_RECORDAR_SESION, true)
     }
@@ -249,6 +257,7 @@ class AppPreferences(context: Context) {
         private const val KEY_CLAVE_CAMION = "key_clave_camion"
         private const val KEY_CLAVE_CAMIONETA = "key_clave_camioneta"
         private const val KEY_URL_OTA = "key_url_ota"
+        private const val KEY_VIBRACION_HABILITADA = "key_vibracion_habilitada"
         private const val KEY_MES_RESPALDO_AUTO = "key_mes_respaldo_auto"
         private const val KEY_FECHA_RESPALDO_AUTO = "key_fecha_respaldo_auto"
         private const val KEY_DETALLE_RESPALDO_AUTO = "key_detalle_respaldo_auto"
