@@ -861,6 +861,13 @@ private fun TarjetaTransaccionBanca(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            // Indicador de qué vehículo realizó la venta
+            ClayBadge(
+                text = if (transaccion.vehiculo == "CAMIONETA") "🛻 Camioneta" else "🚚 Camión",
+                containerColor = if (transaccion.vehiculo == "CAMIONETA") Color(0xFFFEF3C7) else Color(0xFFE0F2FE),
+                contentColor = if (transaccion.vehiculo == "CAMIONETA") Color(0xFFB45309) else Color(0xFF0369A1)
+            )
+
             val tieneMulti = (transaccion.recargaTransparentes + transaccion.recargaAzules + transaccion.recargaMarcados) > 0
             if (tieneMulti) {
                 if (transaccion.recargaTransparentes > 0) {

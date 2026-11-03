@@ -52,8 +52,15 @@ class FirestoreSyncManager(
     private var listenerCierres: ListenerRegistration? = null
     private var listenerVisitasFallidas: ListenerRegistration? = null
 
-    // Timestamp de inicio para filtrar transacciones nuevas y lanzar notificaciones
-    private val appStartTimestamp = System.currentTimeMillis()
+    // Control de notificaciones en tiempo real para eventos de flota (Camión y Camioneta)
+    private var esPrimerCargueClientes = true
+    private val clientesNotificados = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
+
+    private var esPrimerCargueTransacciones = true
+    private val transaccionesNotificadas = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
+
+    private var esPrimerCargueVisitas = true
+    private val visitasNotificadas = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
 
     // Flags para evitar bucles de eco local -> remoto -> local
     private var sincronizandoDesdeRemoto = false
@@ -107,6 +114,32 @@ class FirestoreSyncManager(
                 scope.launch {
                     sincronizandoDesdeRemoto = true
                     try {
+                        // Detectar clientes nuevos registrados en tiempo real por el otro vehículo
+                        for (change in snapshot.documentChanges) {
+                            val doc = change.document
+                            val cId = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
+                            if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                                if (!esPrimerCargueClientes && cId !in clientesNotificados) {
+                                    clientesNotificados.add(cId)
+                                    val creadoPor = doc.getString("creadoPorVehiculo") ?: "CAMION"
+                                    val miVehiculo = com.rutaagua.camion.data.local.prefs.AppPreferences.getInstance(context).obtenerVehiculoActivo().name
+                                    val esRolando = com.rutaagua.camion.data.local.prefs.AppPreferences.getInstance(context).obtenerRolActivo() == com.rutaagua.camion.data.local.prefs.RolUsuario.ADMIN_ROLANDO
+                                    if (creadoPor != miVehiculo || esRolando) {
+                                        val nombreCli = doc.getString("nombre") ?: "Nuevo Cliente"
+                                        val nombreVehiculo = if (creadoPor == "CAMIONETA") "La camioneta" else "El camión"
+                                        val emojiVehiculo = if (creadoPor == "CAMIONETA") "🛻" else "🚚"
+                                        com.rutaagua.camion.ui.utils.RutaNotificationHelper.mostrarNotificacionRuta(
+                                            context = context,
+                                            titulo = "$emojiVehiculo Nuevo Cliente Registrado",
+                                            mensaje = "$nombreVehiculo registró a $nombreCli en la base de clientes."
+                                        )
+                                    }
+                                } else {
+                                    clientesNotificados.add(cId)
+                                }
+                            }
+                        }
+                        esPrimerCargueClientes = false
                         for (doc in snapshot.documents) {
                             try {
                                 val id = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
@@ -184,33 +217,41 @@ class FirestoreSyncManager(
                     try {
                         // Detectar notificaciones en tiempo real cuando el otro vehículo realiza una venta
                         for (change in snapshot.documentChanges) {
+                            val doc = change.document
+                            val txId = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
                             if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                                val doc = change.document
-                                val fecha = doc.getLong("fecha") ?: 0L
                                 val vehiculoDoc = doc.getString("vehiculo") ?: "CAMION"
                                 val miVehiculo = com.rutaagua.camion.data.local.prefs.AppPreferences.getInstance(context).obtenerVehiculoActivo().name
-                                if (fecha >= appStartTimestamp && vehiculoDoc != miVehiculo) {
-                                    val cId = doc.getLong("clienteId")
-                                    val nombrePaso = doc.getString("nombreClientePaso")
-                                    val nombreCliente = if (!nombrePaso.isNullOrBlank()) {
-                                        nombrePaso
-                                    } else if (cId != null) {
-                                        database.clienteDao().obtenerPorIdDirecto(cId)?.nombre ?: "Cliente de Ruta"
-                                    } else {
-                                        "Cliente de Ruta"
+                                val esRolando = com.rutaagua.camion.data.local.prefs.AppPreferences.getInstance(context).obtenerRolActivo() == com.rutaagua.camion.data.local.prefs.RolUsuario.ADMIN_ROLANDO
+                                if (!esPrimerCargueTransacciones && txId !in transaccionesNotificadas) {
+                                    transaccionesNotificadas.add(txId)
+                                    if (vehiculoDoc != miVehiculo || esRolando) {
+                                        val cId = doc.getLong("clienteId")
+                                        val nombrePaso = doc.getString("nombreClientePaso")
+                                        val nombreCliente = if (!nombrePaso.isNullOrBlank()) {
+                                            nombrePaso
+                                        } else if (cId != null) {
+                                            database.clienteDao().obtenerPorIdDirecto(cId)?.nombre ?: "Cliente de Ruta"
+                                        } else {
+                                            "Cliente de Ruta"
+                                        }
+                                        val fecha = doc.getLong("fecha") ?: System.currentTimeMillis()
+                                        val formatoHora = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                                        val horaStr = formatoHora.format(java.util.Date(fecha))
+                                        val nombreVehiculo = if (vehiculoDoc == "CAMIONETA") "La camioneta" else "El camión"
+                                        val emojiVehiculo = if (vehiculoDoc == "CAMIONETA") "🛻" else "🚚"
+                                        com.rutaagua.camion.ui.utils.RutaNotificationHelper.mostrarNotificacionRuta(
+                                            context = context,
+                                            titulo = "$emojiVehiculo Despacho de Cliente en Ruta",
+                                            mensaje = "$nombreVehiculo atendió al cliente: $nombreCliente ($horaStr)."
+                                        )
                                     }
-                                    val formatoHora = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-                                    val horaStr = formatoHora.format(java.util.Date(fecha))
-                                    val nombreVehiculo = if (vehiculoDoc == "CAMIONETA") "La camioneta" else "El camión"
-                                    val emojiVehiculo = if (vehiculoDoc == "CAMIONETA") "🛻" else "🚚"
-                                    com.rutaagua.camion.ui.utils.RutaNotificationHelper.mostrarNotificacionRuta(
-                                        context = context,
-                                        titulo = "$emojiVehiculo Despacho de Cliente en Ruta",
-                                        mensaje = "$nombreVehiculo realizó el despacho de cliente: $nombreCliente ($horaStr)."
-                                    )
+                                } else {
+                                    transaccionesNotificadas.add(txId)
                                 }
                             }
                         }
+                        esPrimerCargueTransacciones = false
 
                         for (doc in snapshot.documents) {
                             try {
@@ -458,6 +499,33 @@ class FirestoreSyncManager(
                 scope.launch {
                     sincronizandoDesdeRemoto = true
                     try {
+                        // Detectar avisos de clientes ausentes en tiempo real
+                        for (change in snapshot.documentChanges) {
+                            val doc = change.document
+                            val vId = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
+                            if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                                val vehiculoDoc = doc.getString("vehiculo") ?: "CAMION"
+                                val miVehiculo = com.rutaagua.camion.data.local.prefs.AppPreferences.getInstance(context).obtenerVehiculoActivo().name
+                                val esRolando = com.rutaagua.camion.data.local.prefs.AppPreferences.getInstance(context).obtenerRolActivo() == com.rutaagua.camion.data.local.prefs.RolUsuario.ADMIN_ROLANDO
+                                if (!esPrimerCargueVisitas && vId !in visitasNotificadas) {
+                                    visitasNotificadas.add(vId)
+                                    if (vehiculoDoc != miVehiculo || esRolando) {
+                                        val nombreCliente = doc.getString("nombreCliente") ?: "Cliente"
+                                        val horaStr = doc.getString("horaDisplay") ?: ""
+                                        val nombreVehiculo = if (vehiculoDoc == "CAMIONETA") "La camioneta" else "El camión"
+                                        val emojiVehiculo = if (vehiculoDoc == "CAMIONETA") "🛻" else "🚚"
+                                        com.rutaagua.camion.ui.utils.RutaNotificationHelper.mostrarNotificacionRuta(
+                                            context = context,
+                                            titulo = "$emojiVehiculo Cliente Ausente",
+                                            mensaje = "$nombreVehiculo reportó que $nombreCliente no estaba en casa ($horaStr)."
+                                        )
+                                    }
+                                } else {
+                                    visitasNotificadas.add(vId)
+                                }
+                            }
+                        }
+                        esPrimerCargueVisitas = false
                         for (doc in snapshot.documents) {
                             val id = doc.getLong("id") ?: doc.id.toLongOrNull() ?: continue
                             val clienteId = doc.getLong("clienteId") ?: 0L
@@ -497,9 +565,11 @@ class FirestoreSyncManager(
         if (sincronizandoDesdeRemoto) return
         scope.launch {
             val fotoMiniaturaBase64 = cliente.fotoReferenciaPath?.let { comprimirFotoABase64(it) }
+            val vehiculoActual = com.rutaagua.camion.data.local.prefs.AppPreferences.getInstance(context).obtenerVehiculoActivo().name
 
             val data = hashMapOf(
                 "id" to cliente.id,
+                "creadoPorVehiculo" to vehiculoActual,
                 "nombre" to cliente.nombre,
                 "alias" to cliente.alias,
                 "telefono" to cliente.telefono,
@@ -717,6 +787,13 @@ class FirestoreSyncManager(
         listenerCierres = null
         listenerVisitasFallidas?.remove()
         listenerVisitasFallidas = null
+
+        esPrimerCargueClientes = true
+        clientesNotificados.clear()
+        esPrimerCargueTransacciones = true
+        transaccionesNotificadas.clear()
+        esPrimerCargueVisitas = true
+        visitasNotificadas.clear()
     }
 
     // =========================================================================

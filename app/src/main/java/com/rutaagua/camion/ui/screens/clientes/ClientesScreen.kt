@@ -684,13 +684,14 @@ private fun TarjetaClienteItem(
 
                     if (transaccionHoy != null) {
                         val esCamioneta = transaccionHoy.vehiculo == "CAMIONETA"
+                        val horaTx = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(transaccionHoy.fecha))
                         Surface(
                             color = Color(0xFFF0FDF4),
                             shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(1.dp, Color(0xFF86EFAC))
                         ) {
                             Text(
-                                text = if (esCamioneta) "🛻 Realizado por Camioneta" else "🚚 Realizado por Camión",
+                                text = if (esCamioneta) "🛻 Atendido por Camioneta ($horaTx)" else "🚚 Atendido por Camión ($horaTx)",
                                 color = Color(0xFF15803D),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
@@ -700,13 +701,20 @@ private fun TarjetaClienteItem(
                             )
                         }
                     } else if (visitaFallidaHoy != null) {
+                        val esCamioneta = visitaFallidaHoy.vehiculo == "CAMIONETA"
+                        val horaAusente = visitaFallidaHoy.horaDisplay.trim()
+                        val textoAusente = buildString {
+                            append(if (esCamioneta) "🚪 Ausente (🛻 Camioneta" else "🚪 Ausente (🚚 Camión")
+                            if (horaAusente.isNotBlank()) append(" $horaAusente")
+                            append(")")
+                        }
                         Surface(
                             color = Color(0xFFFFFBEB),
                             shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(1.dp, Color(0xFFFDE68A))
                         ) {
                             Text(
-                                text = "🚪 Ausente",
+                                text = textoAusente,
                                 color = AmbarAdvertencia,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,

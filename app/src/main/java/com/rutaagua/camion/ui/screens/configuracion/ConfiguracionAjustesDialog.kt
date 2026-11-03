@@ -29,8 +29,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.SystemUpdate
-import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,8 +40,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -109,10 +107,6 @@ fun ConfiguracionAjustesDialog(
 
     val vehiculoActivo by appPreferences.vehiculoActivo.collectAsState()
     val rolActivo by appPreferences.rolActivo.collectAsState()
-
-    var vibracionHabilitada by rememberSaveable {
-        mutableStateOf(appPreferences.obtenerVibracionHabilitada())
-    }
 
     var mostrarCambiarPin by rememberSaveable { mutableStateOf(false) }
     var pinActual by rememberSaveable { mutableStateOf("") }
@@ -284,48 +278,39 @@ fun ConfiguracionAjustesDialog(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Switch Vibración
+                        // Flota compartida
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Vibration,
-                                    contentDescription = null,
-                                    tint = AguaPrimaryDark,
-                                    modifier = Modifier.size(20.dp)
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = null,
+                                tint = AguaPrimaryDark,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Base de Clientes Compartida",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = TextoOscuro,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text(
-                                        text = "Vibración al registrar",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        color = TextoOscuro,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                    Text(
-                                        text = "Retroalimentación táctil en entregas",
-                                        fontSize = 11.sp,
-                                        color = TextoSecundario,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
+                                Text(
+                                    text = "Camión y Camioneta sincronizados en tiempo real",
+                                    fontSize = 11.sp,
+                                    color = TextoSecundario,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
-                            Switch(
-                                checked = vibracionHabilitada,
-                                onCheckedChange = {
-                                    vibracionHabilitada = it
-                                    appPreferences.guardarVibracionHabilitada(it)
-                                },
-                                colors = SwitchDefaults.colors(checkedThumbColor = AguaPrimary)
+                            ClayBadge(
+                                text = "Activo",
+                                containerColor = Color(0xFFF0FDF4),
+                                contentColor = VerdeEfectivo
                             )
                         }
 
