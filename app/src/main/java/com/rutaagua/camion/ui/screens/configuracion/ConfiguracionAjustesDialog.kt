@@ -671,7 +671,8 @@ fun ConfiguracionAjustesDialog(
                                 urlOta = it
                                 appPreferences.guardarUrlOta(it)
                             },
-                            label = { Text("URL de version.json") },
+                            label = { Text("URL de GitHub Releases / OTA") },
+                            placeholder = { Text("https://api.github.com/repos/.../releases/latest") },
                             singleLine = true,
                             colors = marineOutlinedTextFieldColors(),
                             modifier = Modifier.fillMaxWidth()

@@ -4,4 +4,6 @@
     <files-path name="fotos_evidencia" path="fotos_evidencia/" />
     <files-path name="internal_files" path="." />
     <cache-path name="fotos_cache" path="." />
+    <external-files-path name="external_files" path="." />
+    <external-cache-path name="external_cache" path="." />
 </paths>

@@ -290,3 +290,17 @@
    - Al arrancar la aplicación, se evalúa `FirebaseAuth.getInstance().currentUser`. Si existe sesión, se configuran las preferencias locales y navega directo a la pantalla principal sin volver a solicitar credenciales.
    - En `ModalNavigationDrawer`, el botón **"Cerrar Sesión"** despliega un diálogo de confirmación antes de ejecutar `auth.signOut()`, limpiando la pila de navegación y regresando a la pantalla de login.
    - En `FirestoreSyncManager.kt`, se eliminó `signInAnonymously()`; los listeners en tiempo real se inicializan dinámicamente mediante `AuthStateListener` únicamente cuando se detecta un usuario autenticado verificado.
+
+---
+
+## 17. Sistema de Actualizaciones Automáticas OTA (Over-The-Air) con GitHub Releases
+1. **Endpoint Oficial**:
+   - Conectado a la API pública de GitHub Releases: `https://api.github.com/repos/anthonymcs/Ruta-agua-camion/releases/latest`.
+   - Incluye cabecera HTTP `User-Agent: AteneaApp-Android` y soporte dual para respuesta estándar GitHub API y formato json directo.
+2. **Comparación Inteligente de Versiones**:
+   - Extrae el tag de versión (ej. `v1.1.0`), parsea semánticamente `versionName` y evalúa `versionCode` contra `BuildConfig.VERSION_CODE` y `BuildConfig.VERSION_NAME`.
+   - Si detecta una versión superior, activa el diálogo interactivo con las notas del parche.
+3. **Flujo de Descarga e Instalación Desatendida**:
+   - Descarga en segundo plano utilizando `DownloadManager`.
+   - Receptor broadcast dinámico (`ACTION_DOWNLOAD_COMPLETE`) que captura la finalización y lanza el instalador oficial de Android mediante `FileProvider` (`application/vnd.android.package-archive`).
+   - Requiere permiso `REQUEST_INSTALL_PACKAGES` y rutas declaradas en `file_paths.xml`.

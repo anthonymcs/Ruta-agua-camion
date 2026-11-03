@@ -151,11 +151,16 @@ El sistema utiliza **Firebase Authentication** (Email/Password) con asignación 
 
 ---
 
-## 🎯 Control de Distribución y Versiones (App Distribution)
+## 🎯 Control de Distribución y Versiones (GitHub Releases & OTA Updates)
 
-- **Firebase App Distribution:**
-  - Configuración del plugin de Gradle `com.google.firebase.appdistribution`.
-  - Automatización de subida de APK (`./gradlew appDistributionUploadDebug`) para enviar versiones de prueba OTA a los teléfonos de los choferes sin tener que pasar APKs manuales por chat.
+- **Actualizaciones Automáticas OTA (Over-The-Air):**
+  - Conectado a la API pública de **GitHub Releases** (`/releases/latest`).
+  - Detección automática al arrancar la app o desde el menú de Ajustes.
+  - Al detectar una versión superior en GitHub (ej. `v1.1.0`), muestra diálogo interactivo con notas del parche y botón **"Actualizar Ahora"**.
+  - Descarga en segundo plano con `DownloadManager` e instalación desatendida mediante `FileProvider`.
+
+- **Firebase App Distribution (Opcional):**
+  - Soporte para subida de builds de prueba a evaluadores (`./gradlew appDistributionUploadDebug`).
 
 ---
 

@@ -23,11 +23,13 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -76,6 +78,8 @@ import com.rutaagua.camion.data.local.model.TipoVehiculo
 import com.rutaagua.camion.data.local.prefs.AppPreferences
 import com.rutaagua.camion.data.local.prefs.RolUsuario
 import com.rutaagua.camion.data.local.prefs.resolverPerfilPorEmail
+import com.rutaagua.camion.data.remote.InfoActualizacionOta
+import com.rutaagua.camion.data.remote.OTAUpdateChecker
 import com.rutaagua.camion.data.repository.RutaAguaRepository
 import com.rutaagua.camion.ui.auth.LoginScreen
 import com.rutaagua.camion.ui.components.CamionIllustration
@@ -103,6 +107,8 @@ import com.rutaagua.camion.ui.theme.RojoAlerta
 import com.rutaagua.camion.ui.theme.RojoAlertaFondo
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
+import com.rutaagua.camion.ui.theme.VerdeEfectivo
+import com.rutaagua.camion.ui.theme.VerdeEfectivoFondo
 import kotlinx.coroutines.launch
 
 class RutaAguaViewModelFactory(
@@ -146,6 +152,8 @@ fun RutaAguaNavHost(
 
     var mostrarModalAjustes by rememberSaveable { mutableStateOf(false) }
     var mostrarDialogoConfirmarLogout by rememberSaveable { mutableStateOf(false) }
+    var infoActualizacionOta by remember { mutableStateOf<InfoActualizacionOta?>(null) }
+    var mostrarDialogoActualizacion by rememberSaveable { mutableStateOf(false) }
 
     val clayTheme = obtenerClayThemePorVehiculo(vehiculoActivo)
 
@@ -183,6 +191,19 @@ fun RutaAguaNavHost(
             database = database,
             forzarAhora = false
         )
+    }
+
+    // Comprobación automática de actualizaciones remotas OTA desde GitHub Releases
+    LaunchedEffect(Unit) {
+        try {
+            val result = OTAUpdateChecker.verificarNuevaVersion(context)
+            result.onSuccess { info ->
+                if (info.hayNuevaVersion && info.urlDescargaApk.isNotBlank()) {
+                    infoActualizacionOta = info
+                    mostrarDialogoActualizacion = true
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     ModalNavigationDrawer(
@@ -665,6 +686,106 @@ fun RutaAguaNavHost(
                             cornerRadius = 12.dp
                         ) {
                             Text("Cancelar", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        }
+                    }
+                )
+            }
+
+            // Diálogo Interactivo Estilo Duolingo de Actualización OTA Automática
+            if (mostrarDialogoActualizacion && infoActualizacionOta != null) {
+                val info = infoActualizacionOta!!
+                AlertDialog(
+                    onDismissRequest = { mostrarDialogoActualizacion = false },
+                    icon = {
+                        Box(
+                            modifier = Modifier
+                                .size(54.dp)
+                                .background(VerdeEfectivoFondo, RoundedCornerShape(16.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SystemUpdate,
+                                contentDescription = null,
+                                tint = VerdeEfectivo,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    },
+                    title = {
+                        Text(
+                            text = "¡Nueva Versión Disponible!",
+                            fontWeight = FontWeight.Black,
+                            color = TextoOscuro,
+                            fontSize = 18.sp
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Atenea v${info.versionNameRemoto} lista para instalar.",
+                                color = VerdeEfectivo,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            if (info.notasVersion.isNotBlank()) {
+                                Surface(
+                                    color = FondoGrisClaro,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = info.notasVersion,
+                                        color = TextoSecundario,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(10.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Se descargará mediante DownloadManager y se abrirá el instalador oficial automáticamente.",
+                                color = TextoSecundario,
+                                fontSize = 11.sp
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        ClayButton(
+                            onClick = {
+                                mostrarDialogoActualizacion = false
+                                OTAUpdateChecker.descargarEInstalarApk(
+                                    context = context,
+                                    urlApk = info.urlDescargaApk,
+                                    versionName = info.versionNameRemoto
+                                )
+                            },
+                            containerColor = VerdeEfectivo,
+                            contentColor = Color.White,
+                            height = 46.dp,
+                            cornerRadius = 14.dp
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Actualizar Ahora", fontWeight = FontWeight.Black, fontSize = 13.sp)
+                        }
+                    },
+                    dismissButton = {
+                        ClayButton(
+                            onClick = { mostrarDialogoActualizacion = false },
+                            containerColor = FondoGrisClaro,
+                            contentColor = TextoOscuro,
+                            height = 46.dp,
+                            cornerRadius = 14.dp
+                        ) {
+                            Text("Más tarde", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         }
                     }
                 )

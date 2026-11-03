@@ -115,7 +115,12 @@ class AppPreferences(context: Context) {
     fun guardarCostoPlantaEnvaseNuevo(costo: Double) = prefs.edit().putFloat(KEY_COSTO_ENVASE_NUEVO, costo.toFloat()).apply()
 
     fun obtenerUrlOta(): String {
-        return prefs.getString(KEY_URL_OTA, DEFAULT_OTA_URL) ?: DEFAULT_OTA_URL
+        val valor = prefs.getString(KEY_URL_OTA, DEFAULT_OTA_URL) ?: DEFAULT_OTA_URL
+        return if (valor.contains("anthony-dev") || valor.isBlank()) {
+            DEFAULT_OTA_URL
+        } else {
+            valor
+        }
     }
 
     fun guardarUrlOta(url: String) {
@@ -256,7 +261,8 @@ class AppPreferences(context: Context) {
         private const val KEY_COSTO_ENVASE_NUEVO = "key_costo_envase_nuevo"
 
         const val DEFAULT_PIN = "1234"
-        const val DEFAULT_OTA_URL = "https://raw.githubusercontent.com/anthony-dev/ruta-agua/main/ota/version.json"
+        const val DEFAULT_GITHUB_REPO = "anthonymcs/Ruta-agua-camion"
+        const val DEFAULT_OTA_URL = "https://api.github.com/repos/anthonymcs/Ruta-agua-camion/releases/latest"
 
         @Volatile
         private var INSTANCE: AppPreferences? = null
