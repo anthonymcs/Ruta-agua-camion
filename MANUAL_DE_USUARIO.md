@@ -92,7 +92,42 @@ Si la Camioneta pasa por la tienda de un cliente del Camión y le deja agua:
 
 ---
 
-## 🏭 PARTE 5: Al mediodía (Recargar en la planta)
+## 👥 PARTE 5: Cómo agregar y organizar a los Clientes
+
+Para que los clientes queden guardados en el sistema y ambos carros (Camión y Camioneta) los tengan disponibles:
+
+### 1. ¿Cómo agregar un cliente nuevo?
+1. En el menú de abajo, toca el botón de **"Clientes"** 👥.
+2. Toca el botón flotante azul **"+ Nuevo Cliente"**.
+3. Llena los datos básicos:
+   - **Nombre Oficial:** Nombre y apellido del cliente (ejemplo: *Carlos Mendoza*). Este nombre saldrá en sus comprobantes de WhatsApp.
+   - **Apodo o Alias:** Cómo lo conocen en la calle (ejemplo: *Don Carlitos - Taller Mecánico*). Este es el que se verá grande en la lista para encontrarlo rápido.
+   - **Teléfono:** Su número celular de WhatsApp.
+   - **Dirección o Referencia:** Ejemplo: *Frente a la cancha, casa de dos pisos portón negro*.
+   - **Tipo de Cliente:**
+     - **De Ruta:** Si le dejas agua ciertos días fijos de la semana.
+     - **De Llamada:** Si solo pide de vez en cuando cuando se le acaba el agua.
+   - **Días de visita:** Si es cliente fijo de ruta, marca qué días pasa el carro (ejemplo: *Lunes* y *Jueves*).
+   - **Tipo de Botellón preferido:** Si usa botellones **Azules** o **Transparentes (PET)**.
+   - **Precio habitual:** Cuánto se le cobra a él por botellón (ejemplo: `$0.80` o `$1.00`). La app recordará su precio automáticamente en cada venta.
+   - **Guardar ubicación GPS:** Si estás en la puerta de la casa del cliente, toca el botón **"Fijar GPS"** y la app guardará las coordenadas exactas. Así el otro chofer puede tocar **"Mapa GPS"** y llegar directo con Google Maps sin perderse.
+   - **Foto de la casa:** Puedes tocar el icono de cámara para tomarle una foto a la fachada o reja.
+4. Toca **"Guardar Cliente"**.
+5. ¡Listo! El cliente queda sincronizado en la nube al instante para el Camión, la Camioneta y Don Rolando.
+
+### 2. ¿Cómo editar o cambiar el precio de un cliente?
+1. En la lista de **Clientes**, busca a la persona.
+2. Toca el icono del **lápiz ✏️** (Editar).
+3. Puedes cambiarle el precio acordado, su número de teléfono o sus días de visita.
+4. Toca **"Guardar"**.
+
+### 3. ¿Cómo ver el Historial del cliente?
+1. En la tarjeta del cliente, toca el botón **"Historial"** 📅.
+2. Verás cuántas compras ha hecho en el mes, qué carro le entregó (Camión o Camioneta), qué chofer lo atendió, cuántos botellones prestados tiene y si debe dinero.
+
+---
+
+## 🏭 PARTE 6: Al mediodía (Recargar en la planta)
 
 Cuando se te esté acabando el agua y regreses a la planta a recargar:
 1. Entra a la pantalla de **"Carga / Inventario"**.
@@ -104,7 +139,7 @@ Cuando se te esté acabando el agua y regreses a la planta a recargar:
 
 ---
 
-## ⛽ PARTE 6: Anotar gastos en el camino (Gasolina, almuerzo, etc.)
+## ⛽ PARTE 7: Anotar gastos en el camino (Gasolina, almuerzo, etc.)
 
 Si necesitas gastar dinero del cobro del agua para poner gasolina o pagar comida:
 1. En la pantalla de ventas, toca el botón **"Registrar Gasto"** 💸.
@@ -115,7 +150,7 @@ Si necesitas gastar dinero del cobro del agua para poner gasolina o pagar comida
 
 ---
 
-## 🌙 PARTE 7: Al terminar el día (Cierre de Caja Ciego)
+## 🌙 PARTE 8: Al terminar el día (Cierre de Caja Ciego)
 
 Al llegar a la planta en la tarde para entregar cuentas:
 1. En la pantalla principal, toca el botón **"Cierre de Caja"** 🔒.
@@ -126,7 +161,7 @@ Al llegar a la planta en la tarde para entregar cuentas:
 
 ---
 
-## 👑 PARTE 8: Para Don Rolando (Dueño / Administrador)
+## 👑 PARTE 9: Para Don Rolando (Dueño / Administrador)
 
 Desde su celular con la cuenta `rolando@rutaatenea.app`:
 1. Entra al menú lateral y abre **"Panel de Rolando"** 📊.
@@ -135,11 +170,24 @@ Desde su celular con la cuenta `rolando@rutaatenea.app`:
    - **Solo Camioneta**
    - **Consolidado (Ambos juntos)**
 3. Verá en tiempo real:
-   - Cuánta plata total se ha vendido hoy.
+   - Cuánta plata total se ha vendido hoy en la calle.
    - Cuánto dinero entró en efectivo y cuánto en transferencia bancaria.
    - Cuánto dinero hay en la calle fiado (créditos pendientes por cobrar).
-   - Cuánto costó el agua en la planta y cuál es la **Ganancia Neta Limpia** del día.
+   - Cuáles fueron los gastos de gasolina y comida de cada carro.
    - El resultado del Cierre de Caja de cada chofer para verificar que entregaron todo el dinero completo.
+
+### 💡 ¿A qué se refiere "Costo del agua en la planta"?
+En un negocio de distribución de agua purificada, cada botellón vendido tiene un pequeño costo interno de producción (lo que cuesta el llenado, la tapa plástica nueva, el sello de seguridad y la electricidad en la planta, por ejemplo `$0.35` por cada botellón):
+
+* **Ejemplo práctico:**
+  - El camión vende **100 botellones** a `$1.00` = Trae **`$100.00`** en plata cobrada.
+  - El costo de planta de esos 100 botellones fue de **`$35.00`** (100 botellones × $0.35 de tapas/sellos/llenado).
+  - Gastaron **`$10.00`** en gasolina.
+  - **Ganancia Neta Real de Don Rolando:** `$100.00 - $35.00 - $10.00 = $55.00` de ganancia libre.
+
+> 🔒 **Importante:**
+> 1. Este costo de planta es **completamente confidencial y secreto**: los choferes **NO lo pueden ver**, solo Don Rolando desde su cuenta.
+> 2. Si Don Rolando **no desea descontar el costo de planta** y solo quiere ver cuánto dinero cobraron los carros menos los gastos de gasolina, el costo de planta se puede poner en `$0.00` en los ajustes y así el sistema le mostrará el total de ventas menos gasolina directamente.
 
 ---
 
