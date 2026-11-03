@@ -131,32 +131,31 @@ El sistema resuelve la operación diaria de dos vehículos de ruta (**Camión Pr
 
 ---
 
-## 🔐 Roles y Credenciales de Prueba
+## 🔐 Cuentas de Firebase Authentication y Asignación de Roles
 
+El sistema utiliza **Firebase Authentication** (Email/Password) con asignación dinámica de roles y vehículo:
+- **Rolando (Administrador General):**
+  - Correo: `rolando@rutaatenea.app`
+  - Rol asignado: `ADMIN_ROLANDO`
+  - Acceso total a `PanelRolandoScreen` (utilidad neta, ventas brutas, costos unitarios de planta, auditoría RP3 y vista Consolidada).
 - **Camión Principal:**
-  - Vehículo: `CAMION`
-  - Capacidad: 250 unidades
-  - Rol: Chofer Operador de Camión
+  - Correo: `camion@rutaatenea.app`
+  - Rol asignado: `OPERADOR_RUTA` con vehículo predeterminado `CAMION`.
+  - Capacidad: 250 unidades.
+  - Privacidad estricta (oculta costos y utilidades de planta). Cierre ciego RP3.
 - **Camioneta de Reparto:**
-  - Vehículo: `CAMIONETA`
-  - Capacidad: 90 unidades
-  - Rol: Chofer Operador de Camioneta
-- **Administrador General (Rolando):**
-  - Rol: `ADMIN_ROLANDO`
-  - PIN de Acceso por defecto: `1234`
-  - Acceso total a Panel Contable, Auditoría RP3 y visualización Consolidada.
+  - Correo: `camioneta@rutaatenea.app`
+  - Rol asignado: `OPERADOR_RUTA` con vehículo predeterminado `CAMIONETA`.
+  - Capacidad: 90 unidades.
+  - Mismas restricciones de confidencialidad que el camión.
 
 ---
 
-## 🎯 Próximos Pasos para Integración en Gemini
+## 🎯 Control de Distribución y Versiones (App Distribution)
 
-El usuario conectará este repositorio con un chat de Gemini para implementar:
-1. **Firebase Authentication:**
-   - Reemplazar el selector local de roles/PIN con login de Firebase Auth (correo y contraseña o teléfono/SMS).
-   - Asignar Custom Claims (`role: "admin" | "chofer_camion" | "chofer_camioneta"`).
-2. **Firebase App Distribution:**
-   - Configuración del plugin de Gradle `com.google.firebase.appdistribution`.
-   - Automatización de subida de APK (`./gradlew appDistributionUploadDebug`) para enviar versiones de prueba OTA a los teléfonos de los choferes sin tener que pasar APKs manuales por chat.
+- **Firebase App Distribution:**
+  - Configuración del plugin de Gradle `com.google.firebase.appdistribution`.
+  - Automatización de subida de APK (`./gradlew appDistributionUploadDebug`) para enviar versiones de prueba OTA a los teléfonos de los choferes sin tener que pasar APKs manuales por chat.
 
 ---
 

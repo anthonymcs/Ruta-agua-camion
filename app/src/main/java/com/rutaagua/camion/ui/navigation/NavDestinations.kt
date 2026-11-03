@@ -1,6 +1,7 @@
 package com.rutaagua.camion.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.LocalShipping
@@ -16,6 +17,11 @@ enum class AppDestinations(
     val titulo: String,
     val icono: ImageVector
 ) {
+    LOGIN(
+        ruta = "login",
+        titulo = "Iniciar Sesión",
+        icono = Icons.AutoMirrored.Filled.Login
+    ),
     REGISTRO(
         ruta = "registro",
         titulo = "Caja / Hoy",

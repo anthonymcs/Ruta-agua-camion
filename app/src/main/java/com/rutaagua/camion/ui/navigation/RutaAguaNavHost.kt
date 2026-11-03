@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -69,11 +70,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.google.firebase.auth.FirebaseAuth
 import com.rutaagua.camion.data.local.RutaAguaDatabase
 import com.rutaagua.camion.data.local.model.TipoVehiculo
 import com.rutaagua.camion.data.local.prefs.AppPreferences
 import com.rutaagua.camion.data.local.prefs.RolUsuario
+import com.rutaagua.camion.data.local.prefs.resolverPerfilPorEmail
 import com.rutaagua.camion.data.repository.RutaAguaRepository
+import com.rutaagua.camion.ui.auth.LoginScreen
 import com.rutaagua.camion.ui.components.CamionIllustration
 import com.rutaagua.camion.ui.components.CamionetaIllustration
 import com.rutaagua.camion.ui.components.ClayBadge
@@ -81,7 +85,6 @@ import com.rutaagua.camion.ui.components.ClayButton
 import com.rutaagua.camion.ui.components.ClayCard
 import com.rutaagua.camion.ui.components.VehiculoThumbnail
 import com.rutaagua.camion.ui.components.obtenerClayThemePorVehiculo
-import com.rutaagua.camion.ui.screens.SeleccionVehiculoScreen
 import com.rutaagua.camion.ui.screens.calendario.CalendarioRutaScreen
 import com.rutaagua.camion.ui.screens.clientes.ClientesScreen
 import com.rutaagua.camion.ui.screens.clientes.ClientesViewModel
@@ -94,6 +97,8 @@ import com.rutaagua.camion.ui.screens.reportes.ReportesCamionetaScreen
 import com.rutaagua.camion.ui.screens.rolando.PanelRolandoScreen
 import com.rutaagua.camion.ui.theme.AzulCorporativo
 import com.rutaagua.camion.ui.theme.BordeSutil
+import com.rutaagua.camion.ui.theme.FondoGrisClaro
+import com.rutaagua.camion.ui.theme.PichinchaCanvas
 import com.rutaagua.camion.ui.theme.RojoAlerta
 import com.rutaagua.camion.ui.theme.RojoAlertaFondo
 import com.rutaagua.camion.ui.theme.TextoOscuro
@@ -132,10 +137,15 @@ fun RutaAguaNavHost(
     val appPreferences = remember { AppPreferences.getInstance(context) }
     val vehiculoActivo by appPreferences.vehiculoActivo.collectAsState()
     val rolActivo by appPreferences.rolActivo.collectAsState()
-    var vehiculoSeleccionado by rememberSaveable {
-        mutableStateOf<String?>(if (appPreferences.sesionIniciada()) appPreferences.obtenerVehiculoActivo().name else null)
+
+    val auth = remember { FirebaseAuth.getInstance() }
+    val usuarioInicial = auth.currentUser
+    val startDestination = remember {
+        if (usuarioInicial != null) AppDestinations.REGISTRO.ruta else AppDestinations.LOGIN.ruta
     }
+
     var mostrarModalAjustes by rememberSaveable { mutableStateOf(false) }
+    var mostrarDialogoConfirmarLogout by rememberSaveable { mutableStateOf(false) }
 
     val clayTheme = obtenerClayThemePorVehiculo(vehiculoActivo)
 
@@ -144,13 +154,27 @@ fun RutaAguaNavHost(
 
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route ?: AppDestinations.REGISTRO.ruta
+    val currentRoute = navBackStackEntry?.destination?.route ?: startDestination
 
     val factory = RutaAguaViewModelFactory(repository, appPreferences)
 
     val registroDiaViewModel: RegistroDiaViewModel = viewModel(factory = factory)
     val inventarioViewModel: InventarioCamionViewModel = viewModel(factory = factory)
     val clientesViewModel: ClientesViewModel = viewModel(factory = factory)
+
+    // Sincronización automática de rol y vehículo si hay sesión iniciada al arrancar la app
+    LaunchedEffect(Unit) {
+        val user = auth.currentUser
+        if (user != null) {
+            val (tipo, rol) = resolverPerfilPorEmail(user.email)
+            appPreferences.guardarVehiculoActivo(tipo)
+            appPreferences.guardarRolActivo(rol)
+            appPreferences.guardarSesionIniciada(true)
+            registroDiaViewModel.cambiarFiltroSegunVehiculo(tipo)
+        } else {
+            appPreferences.guardarSesionIniciada(false)
+        }
+    }
 
     // Autogeneración y autoprueba automática del respaldo mensual al iniciar la aplicación
     LaunchedEffect(Unit) {
@@ -161,23 +185,9 @@ fun RutaAguaNavHost(
         )
     }
 
-    // Si aún no ha iniciado sesión, mostramos la pantalla de Login (sin tuerca de ajustes)
-    if (vehiculoSeleccionado == null) {
-        SeleccionVehiculoScreen(
-            repository = repository,
-            onSeleccionarPerfil = { tipo, rol ->
-                appPreferences.guardarVehiculoActivo(tipo)
-                appPreferences.guardarRolActivo(rol)
-                registroDiaViewModel.cambiarFiltroSegunVehiculo(tipo)
-                vehiculoSeleccionado = tipo.name
-            }
-        )
-        return
-    }
-
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = true,
+        gesturesEnabled = currentRoute != AppDestinations.LOGIN.ruta,
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier.width(300.dp),
@@ -402,13 +412,13 @@ fun RutaAguaNavHost(
                         icon = {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Logout,
-                                contentDescription = "Salir",
+                                contentDescription = "Cerrar Sesión",
                                 tint = RojoAlerta
                             )
                         },
                         label = {
                             Text(
-                                text = "Cerrar Sesión / Salir",
+                                text = "Cerrar Sesión",
                                 fontWeight = FontWeight.Black,
                                 color = RojoAlerta,
                                 maxLines = 1,
@@ -419,8 +429,7 @@ fun RutaAguaNavHost(
                         selected = false,
                         onClick = {
                             coroutineScope.launch { drawerState.close() }
-                            appPreferences.guardarSesionIniciada(false)
-                            vehiculoSeleccionado = null
+                            mostrarDialogoConfirmarLogout = true
                         },
                         modifier = Modifier
                             .padding(horizontal = 12.dp, vertical = 4.dp)
@@ -434,6 +443,7 @@ fun RutaAguaNavHost(
         }
     ) {
         val tituloPantallaActual = when (currentRoute) {
+            AppDestinations.LOGIN.ruta -> "Iniciar Sesión"
             AppDestinations.REGISTRO.ruta -> "Ventas y Caja"
             AppDestinations.CAMION.ruta -> "Carga e Inventario"
             AppDestinations.CLIENTES.ruta -> "Clientes"
@@ -445,92 +455,110 @@ fun RutaAguaNavHost(
 
         Scaffold(
             modifier = modifier.fillMaxSize(),
-            containerColor = clayTheme.canvasColor,
+            containerColor = if (currentRoute == AppDestinations.LOGIN.ruta) PichinchaCanvas else clayTheme.canvasColor,
             topBar = {
-                // Top Bar limpia: solo el botón de menú lateral e identificación de unidad y pantalla actual
-                Surface(
-                    color = clayTheme.canvasColor,
-                    shadowElevation = 0.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                if (currentRoute != AppDestinations.LOGIN.ruta) {
+                    // Top Bar limpia: solo el botón de menú lateral e identificación de unidad y pantalla actual
+                    Surface(
+                        color = clayTheme.canvasColor,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Botón para abrir la barra lateral izquierda
-                            ClayCard(
-                                modifier = Modifier.size(44.dp),
-                                containerColor = clayTheme.cardColor,
-                                cornerRadius = 14.dp,
-                                elevation = 3.dp,
-                                contentPadding = PaddingValues(0.dp),
-                                onClick = { coroutineScope.launch { drawerState.open() } }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Menu,
-                                        contentDescription = "Menú",
-                                        tint = TextoOscuro,
-                                        modifier = Modifier.size(23.dp)
+                                // Botón para abrir la barra lateral izquierda
+                                ClayCard(
+                                    modifier = Modifier.size(44.dp),
+                                    containerColor = clayTheme.cardColor,
+                                    cornerRadius = 14.dp,
+                                    elevation = 3.dp,
+                                    contentPadding = PaddingValues(0.dp),
+                                    onClick = { coroutineScope.launch { drawerState.open() } }
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Menu,
+                                            contentDescription = "Menú",
+                                            tint = TextoOscuro,
+                                            modifier = Modifier.size(23.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                VehiculoThumbnail(
+                                    tipo = vehiculoActivo,
+                                    size = 38.dp
+                                )
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = clayTheme.vehicleTitle,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 16.sp,
+                                        color = TextoOscuro,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (rolActivo == RolUsuario.ADMIN_ROLANDO) "Modo Rolando" else clayTheme.capacityLabel,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = clayTheme.primaryColor,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.width(10.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
 
-                            VehiculoThumbnail(
-                                tipo = vehiculoActivo,
-                                size = 38.dp
+                            ClayBadge(
+                                text = tituloPantallaActual,
+                                backgroundColor = clayTheme.accentBgColor,
+                                textColor = clayTheme.primaryDarkColor
                             )
-
-                            Spacer(modifier = Modifier.width(10.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = clayTheme.vehicleTitle,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 16.sp,
-                                    color = TextoOscuro,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = if (rolActivo == RolUsuario.ADMIN_ROLANDO) "Modo Rolando" else clayTheme.capacityLabel,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = clayTheme.primaryColor,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
                         }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        ClayBadge(
-                            text = tituloPantallaActual,
-                            backgroundColor = clayTheme.accentBgColor,
-                            textColor = clayTheme.primaryDarkColor
-                        )
                     }
                 }
             }
         ) { innerPadding ->
+            val paddingContent = if (currentRoute == AppDestinations.LOGIN.ruta) PaddingValues(0.dp) else innerPadding
             NavHost(
                 navController = navController,
-                startDestination = AppDestinations.REGISTRO.ruta,
-                modifier = Modifier.padding(innerPadding)
+                startDestination = startDestination,
+                modifier = Modifier.padding(paddingContent)
             ) {
+                composable(AppDestinations.LOGIN.ruta) {
+                    LoginScreen(
+                        onLoginExitoso = { tipo, rol ->
+                            appPreferences.guardarVehiculoActivo(tipo)
+                            appPreferences.guardarRolActivo(rol)
+                            appPreferences.guardarSesionIniciada(true)
+                            registroDiaViewModel.cambiarFiltroSegunVehiculo(tipo)
+                            navController.navigate(AppDestinations.REGISTRO.ruta) {
+                                popUpTo(AppDestinations.LOGIN.ruta) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    )
+                }
+
                 composable(AppDestinations.REGISTRO.ruta) {
                     RegistroDiaScreen(viewModel = registroDiaViewModel)
                 }
@@ -539,8 +567,7 @@ fun RutaAguaNavHost(
                     InventarioCamionScreen(
                         viewModel = inventarioViewModel,
                         onCambiarVehiculoClick = {
-                            appPreferences.guardarSesionIniciada(false)
-                            vehiculoSeleccionado = null
+                            mostrarDialogoConfirmarLogout = true
                         }
                     )
                 }
@@ -578,6 +605,68 @@ fun RutaAguaNavHost(
                 ConfiguracionAjustesDialog(
                     database = database,
                     onDismissRequest = { mostrarModalAjustes = false }
+                )
+            }
+
+            if (mostrarDialogoConfirmarLogout) {
+                AlertDialog(
+                    onDismissRequest = { mostrarDialogoConfirmarLogout = false },
+                    shape = RoundedCornerShape(20.dp),
+                    containerColor = Color.White,
+                    icon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = null,
+                            tint = RojoAlerta,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    },
+                    title = {
+                        Text(
+                            text = "Cerrar Sesión",
+                            fontWeight = FontWeight.Black,
+                            color = TextoOscuro,
+                            fontSize = 18.sp
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "¿Estás seguro de que deseas cerrar la sesión actual de ${auth.currentUser?.email ?: "este dispositivo"}?",
+                            color = TextoSecundario,
+                            fontSize = 14.sp
+                        )
+                    },
+                    confirmButton = {
+                        ClayButton(
+                            onClick = {
+                                mostrarDialogoConfirmarLogout = false
+                                coroutineScope.launch { drawerState.close() }
+                                auth.signOut()
+                                appPreferences.guardarSesionIniciada(false)
+                                navController.navigate(AppDestinations.LOGIN.ruta) {
+                                    popUpTo(0) { inclusive = true }
+                                    launchSingleTop = true
+                                }
+                            },
+                            containerColor = RojoAlerta,
+                            contentColor = Color.White,
+                            height = 42.dp,
+                            cornerRadius = 12.dp
+                        ) {
+                            Text("Sí, Cerrar Sesión", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    },
+                    dismissButton = {
+                        ClayButton(
+                            onClick = { mostrarDialogoConfirmarLogout = false },
+                            containerColor = FondoGrisClaro,
+                            contentColor = TextoOscuro,
+                            height = 42.dp,
+                            cornerRadius = 12.dp
+                        ) {
+                            Text("Cancelar", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        }
+                    }
                 )
             }
         }

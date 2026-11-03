@@ -18,6 +18,36 @@ enum class RolUsuario(val titulo: String) {
 }
 
 /**
+ * Asigna dinámicamente el vehículo y el rol operativo según la cuenta autenticada en Firebase Auth.
+ * - rolando@rutaatenea.app -> ADMIN_ROLANDO
+ * - camion@rutaatenea.app  -> OPERADOR_RUTA con CAMION
+ * - camioneta@rutaatenea.app -> OPERADOR_RUTA con CAMIONETA
+ */
+fun resolverPerfilPorEmail(email: String?): Pair<TipoVehiculo, RolUsuario> {
+    val correo = email?.trim()?.lowercase().orEmpty()
+    return when {
+        correo == "rolando@rutaatenea.app" || correo.startsWith("rolando") -> {
+            Pair(TipoVehiculo.CAMION, RolUsuario.ADMIN_ROLANDO)
+        }
+        correo == "camioneta@rutaatenea.app" || correo.startsWith("camioneta") -> {
+            Pair(TipoVehiculo.CAMIONETA, RolUsuario.OPERADOR_RUTA)
+        }
+        correo == "camion@rutaatenea.app" || correo.startsWith("camion") -> {
+            Pair(TipoVehiculo.CAMION, RolUsuario.OPERADOR_RUTA)
+        }
+        else -> {
+            if (correo.contains("admin") || correo.contains("rolando")) {
+                Pair(TipoVehiculo.CAMION, RolUsuario.ADMIN_ROLANDO)
+            } else if (correo.contains("camioneta")) {
+                Pair(TipoVehiculo.CAMIONETA, RolUsuario.OPERADOR_RUTA)
+            } else {
+                Pair(TipoVehiculo.CAMION, RolUsuario.OPERADOR_RUTA)
+            }
+        }
+    }
+}
+
+/**
  * Gestor centralizado de preferencias locales para vehículo activo, roles, costos de planta y seguridad por PIN.
  */
 class AppPreferences(context: Context) {

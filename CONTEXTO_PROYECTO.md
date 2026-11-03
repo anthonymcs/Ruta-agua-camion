@@ -135,7 +135,7 @@
    - Todas las transacciones, recargas de planta, gastos e inventarios quedan asociados al vehículo operativo (`vehiculo: String`).
    - Filtro rápido en `RegistroDiaScreen`: `📊 Consolidado Ambos`, `🚚 Solo Camión`, `🛻 Solo Camioneta`.
 2. **Sincronización en Tiempo Real Offline-First (Cloud Firestore a $0.00)**:
-   - Autenticación transparente `FirebaseAuth.signInAnonymously()`.
+   - Autenticación formal de operadores y gerencia mediante `FirebaseAuth` (Email/Password). Se eliminó la autenticación anónima; los observadores remotos de Firestore (`addSnapshotListener`) se inicializan únicamente cuando se detecta un usuario autenticado verificado vía `AuthStateListener`.
    - Caché persistente offline activada (`persistentCacheSettings`) para funcionamiento ininterrumpido sin señal móvil en carretera.
    - 5 Observadores reactivos (`addSnapshotListener`) sincronizan bidireccionalmente: `clientes`, `transacciones`, `inventarios`, `recargas_planta` y `gastos`.
    - Directorio de clientes 100% compartido: las fotos de referencia se comprimen a miniaturas JPEG en Base64 (<20KB), eliminando la necesidad de Firebase Storage (costo $0.00 garantizado).
@@ -156,20 +156,19 @@
 
 ---
 
-## 10. Pantalla de Selección de Vehículo e Ilustraciones Vectoriales de Camión y Camioneta
+## 10. Sustitución de Selector Local por Autenticación Formal Firebase Auth (`LoginScreen.kt`)
 1. **Ilustraciones Vectoriales en Compose Canvas (`VehiculoIllustrations.kt`)**:
    - **`CamionIllustration`**: Camión repartidor moderno (cabina blanca/azul corporativo, ventanas con visera de protección solar, chasis, parachoques y carrocería trasera con múltiples estantes de bidones celestes PET y azules con tapones blancos, llantas dobles con aros de acero y sombra de apoyo).
    - **`CamionetaIllustration`**: Camioneta pickup de reparto (cabina deportiva en azul acero y plata, balde/paila de carga con barandas metálicas protectoras, bidones de 20L apilados en el platón, luces frontales y posteriores, rines deportivos y sombra).
    - **`VehiculoThumbnail`**: Componente compacto de miniatura vectorial (22.dp a 28.dp) para usar en badges y estados de entrega.
-2. **Pantalla de Entrada Obligatoria (`SeleccionVehiculoScreen.kt`)**:
-   - Al abrir la aplicación, antes de entrar al menú de pestañas, se presenta la pantalla de selección obligatoria.
-   - Muestra dos tarjetas interactivas de gran tamaño: **🚚 CAMIÓN REPARTIDOR (Capacidad 218)** y **🛻 CAMIONETA DE APOYO (Capacidad 80)**.
-   - Cada tarjeta muestra la ilustración vectorial, el stock actual de bidones llenos en tiempo real extraído de Room, la capacidad máxima configurada y un botón de entrada directo (`"Entrar al Camión →"` / `"Entrar a la Camioneta →"`).
-3. **Aislamiento Operativo de Sesión**:
-   - La sesión seleccionada queda fijada en `RutaAguaNavHost`.
-   - El TopBar muestra la miniatura vectorial del vehículo activo junto a su nombre y un botón de acceso rápido **"Cambiar"** para volver a la pantalla de selección.
-   - La pantalla de Inventario muestra la ilustración correspondiente del vehículo activo y un botón para alternar de vehículo.
-   - En `ClientesScreen` y `CalendarioRutaScreen`, las entregas realizadas hoy por cualquier vehículo muestran la miniatura gráfica del vehículo (`VehiculoThumbnail`) junto con la hora y los bidones entregados.
+2. **Sustitución Integral de `SeleccionVehiculoScreen.kt`**:
+   - Se eliminó el selector manual de vehículo y la clave PIN local en favor de una pantalla formal de login en la nube (`ui/auth/LoginScreen.kt`) respaldada por **Firebase Authentication** (Email/Password).
+   - El vehículo operativo y el rol de usuario ya no se seleccionan a discreción del usuario; se determinan dinámicamente mediante el correo electrónico autenticado en Firebase (`resolverPerfilPorEmail()`).
+3. **Aislamiento Operativo de Sesión y Persistencia**:
+   - La sesión autenticada se evalúa al arranque de la app mediante `FirebaseAuth.getInstance().currentUser`.
+   - Si no hay sesión activa, navega a la ruta `"login"`.
+   - Si hay sesión activa, resuelve el perfil operativo, fija el vehículo y rol en `AppPreferences` y entra directamente a la pantalla principal sin volver a pedir credenciales.
+   - La barra lateral incluye la opción de **"Cerrar Sesión"** con diálogo de confirmación, ejecutando `auth.signOut()` y redirigiendo a `"login"` limpiando el historial de navegación.
 
 ---
 
@@ -265,3 +264,29 @@
 4. **Privacidad Operativa y Arqueo Ciego RP3 por Perfil**:
    - Perfil `CAMION`: Interfaz simplificada sin acceso a costos unitarios de planta, utilidades ni descuadres de caja. El chofer realiza su cierre ciego declarando valores físicos y envía el balance a Rolando.
    - Perfil `CAMIONETA` (Rolando): Acceso total a auditorías, balances detallados, utilidad bruta/neta y control del negocio.
+
+---
+
+## 16. Autenticación con Firebase Authentication, Asignación Dinámica de Roles y Pantalla de Login Duolingo
+1. **Cuentas y Reglas de Asignación por Correo Electrónico (`resolverPerfilPorEmail`)**:
+   - **`rolando@rutaatenea.app`**:
+     - Rol: `ADMIN_ROLANDO`.
+     - Habilita acceso total al `PanelRolandoScreen` (utilidad neta, ventas brutas, costos unitarios de agua en planta y auditoría del Cierre RP3).
+     - Permite alternar entre visualización Consolidada, Camión o Camioneta.
+   - **`camion@rutaatenea.app`**:
+     - Rol: `OPERADOR_RUTA` con vehículo predeterminado `"CAMION"`.
+     - Oculta completamente costos de planta, márgenes de ganancia y balances confidenciales.
+     - Habilita exclusivamente el Cierre de Caja Ciego RP3 y el reporte operacional de botellones.
+   - **`camioneta@rutaatenea.app`**:
+     - Rol: `OPERADOR_RUTA` con vehículo predeterminado `"CAMIONETA"`.
+     - Mismas restricciones de confidencialidad que el camión, asociado a la camioneta de reparto.
+2. **Pantalla de Inicio de Sesión (`ui/auth/LoginScreen.kt`)**:
+   - Estética Duolingo / Banking UI con bordes redondeados táctiles (`RoundedCornerShape(14.dp)`).
+   - Encabezado: Título "Aqua Apolo • Atenea", subtítulo "Distribución de Agua Purificada" e ícono vectorial en degradado azul marino.
+   - Chips rápidos de autocompletado en 1 toque: `[🚚 Camión]`, `[🛻 Camioneta]`, `[👑 Rolando]` para evitar escribir correos largos en carretera.
+   - Campos de texto de alto contraste con soporte para alternar visibilidad de contraseña y teclado optimizado.
+   - Botón principal de acción "Iniciar Sesión" (54.dp, ergonómico) con spinner circular reactivo durante la llamada a Firebase y mensajes claros en español ante errores de credenciales o falta de red.
+3. **Gestión de Sesión Persistente y Logout en Navigation Drawer**:
+   - Al arrancar la aplicación, se evalúa `FirebaseAuth.getInstance().currentUser`. Si existe sesión, se configuran las preferencias locales y navega directo a la pantalla principal sin volver a solicitar credenciales.
+   - En `ModalNavigationDrawer`, el botón **"Cerrar Sesión"** despliega un diálogo de confirmación antes de ejecutar `auth.signOut()`, limpiando la pila de navegación y regresando a la pantalla de login.
+   - En `FirestoreSyncManager.kt`, se eliminó `signInAnonymously()`; los listeners en tiempo real se inicializan dinámicamente mediante `AuthStateListener` únicamente cuando se detecta un usuario autenticado verificado.

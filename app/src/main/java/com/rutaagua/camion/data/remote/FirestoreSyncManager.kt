@@ -59,34 +59,47 @@ class FirestoreSyncManager(
     private var sincronizandoDesdeRemoto = false
 
     fun iniciar() {
-        configurarPersistenciaYAutenticacion()
-        iniciarObservadoresRemotos()
+        configurarPersistencia()
+        // Escuchar cambios en la autenticación de Firebase (Login / Logout)
+        auth.addAuthStateListener { firebaseAuth ->
+            val user = firebaseAuth.currentUser
+            if (user != null) {
+                Log.d(TAG, "Usuario autenticado detectado (${user.email}): iniciando observadores de Firestore")
+                iniciarObservadoresRemotos()
+            } else {
+                Log.d(TAG, "Sin usuario autenticado: deteniendo observadores remotos de Firestore")
+                detener()
+            }
+        }
+
+        // Si ya existe sesión activa al arrancar la app, inicializar inmediatamente
+        if (auth.currentUser != null) {
+            iniciarObservadoresRemotos()
+        }
     }
 
-    private fun configurarPersistenciaYAutenticacion() {
+    private fun configurarPersistencia() {
         try {
-            // 1. Activar caché offline persistente de Firestore
+            // Activar caché offline persistente de Firestore
             val settings = firestoreSettings {
                 setLocalCacheSettings(persistentCacheSettings { })
             }
             firestore.firestoreSettings = settings
-
-            // 2. Autenticación Anónima transparente en segundo plano
-            if (auth.currentUser == null) {
-                auth.signInAnonymously()
-                    .addOnSuccessListener {
-                        Log.d(TAG, "Autenticación anónima exitosa: ${it.user?.uid}")
-                    }
-                    .addOnFailureListener { e ->
-                        Log.w(TAG, "Fallo auth anónima (modo offline continúa): ${e.message}")
-                    }
-            }
         } catch (e: Exception) {
             Log.w(TAG, "Error configurando Firestore: ${e.message}")
         }
     }
 
+    @Synchronized
     private fun iniciarObservadoresRemotos() {
+        if (auth.currentUser == null) {
+            Log.d(TAG, "iniciarObservadoresRemotos omitido: no hay usuario autenticado en Firebase Auth")
+            return
+        }
+        if (listenerClientes != null) {
+            Log.d(TAG, "iniciarObservadoresRemotos omitido: los observadores ya se encuentran activos")
+            return
+        }
         // --- 1. COLECCIÓN CLIENTES (Compartida 100% entre Camión y Camioneta) ---
         listenerClientes = firestore.collection("clientes")
             .addSnapshotListener { snapshot, error ->
@@ -688,14 +701,22 @@ class FirestoreSyncManager(
             .set(data, SetOptions.merge())
     }
 
+    @Synchronized
     fun detener() {
         listenerClientes?.remove()
+        listenerClientes = null
         listenerTransacciones?.remove()
+        listenerTransacciones = null
         listenerInventarios?.remove()
+        listenerInventarios = null
         listenerRecargas?.remove()
+        listenerRecargas = null
         listenerGastos?.remove()
+        listenerGastos = null
         listenerCierres?.remove()
+        listenerCierres = null
         listenerVisitasFallidas?.remove()
+        listenerVisitasFallidas = null
     }
 
     // =========================================================================
