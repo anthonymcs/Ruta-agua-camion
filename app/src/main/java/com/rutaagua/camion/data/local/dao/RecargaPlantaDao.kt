@@ -30,6 +30,9 @@ interface RecargaPlantaDao {
     @Query("SELECT * FROM recargas_planta ORDER BY fecha DESC")
     fun obtenerTodasFlow(): Flow<List<RecargaPlantaEntity>>
 
+    @Query("SELECT * FROM recargas_planta ORDER BY fecha DESC")
+    suspend fun obtenerTodasDirecto(): List<RecargaPlantaEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertar(recarga: RecargaPlantaEntity): Long
 

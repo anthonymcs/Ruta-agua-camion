@@ -304,3 +304,30 @@
    - Descarga en segundo plano utilizando `DownloadManager`.
    - Receptor broadcast dinámico (`ACTION_DOWNLOAD_COMPLETE`) que captura la finalización y lanza el instalador oficial de Android mediante `FileProvider` (`application/vnd.android.package-archive`).
    - Requiere permiso `REQUEST_INSTALL_PACKAGES` y rutas declaradas en `file_paths.xml`.
+
+---
+
+## 18. Actualización v1.2.0: Persistencia Anticolisión Offline-First, Cuadre Exacto de Cargas y Comprobantes Dinámicos
+1. **Prevención Absoluta de Pérdida de Datos en Multi-Dispositivo (`EntityIdGenerator.kt`)**:
+   - Se eliminó el riesgo de colisión de auto-incrementos `id: Long = 0` (1, 2, 3...) entre distintos celulares desconectados de internet.
+   - Generador de IDs únicos de 64 bits basados en microsegundos y sufijo aleatorio (`epochMicros * 1000 + random`), garantizando que registros creados en un celular jamás sobrescriban ni borren los registros de otro celular en Room o Firestore.
+2. **Sincronización Bidireccional Segura en Firestore (`FirestoreSyncManager.kt`)**:
+   - Sincronización offline-first robusta con reconciliación de datos pendientes (`sincronizarDatosPendientesHaciaRemoto`) al autenticarse o recuperar conexión.
+   - Las escuchas remotas de inventario comparan marcas de tiempo (`fechaUltimaActualizacion`) y respetan la carga local activa de la unidad si el remoto está vacío o desactualizado.
+   - Protección total de la base de datos Room: se preservó la versión 9 con `fallbackToDestructiveMigrationOnDowngrade(dropAllTables = false)`, garantizando que actualizar el APK nunca borre datos locales existentes.
+3. **Cuadre Exacto de Recarga en Planta y Ajuste Dinámico de Meta (`InventarioCamionScreen.kt`)**:
+   - Se eliminaron las insignias engañosas de "Salieron: X bidones" en las tarjetas de inventario físico (los consolidados de venta corresponden a la pestaña de ventas/caja).
+   - Selector de modo en recargas: "Sumar cargados (+X)" vs "Cuadrar salida (Total = X)", permitiendo al repartidor fijar con exactitud el total con el que sale el camión (ej. 80/80 o 189/189) descargando automáticamente los envases vacíos recolectados (`bidonesVacios = 0`).
+   - Contador de meta diaria editable en caliente durante la recarga (ej. pasar de 218 a 189 botellas).
+4. **Diálogo Obligatorio de Carga Inicial al Iniciar Sesión (`DialogoCargaInicialObligatoria.kt`)**:
+   - Si el vehículo amanece o inicia en 0 bidones, la aplicación despliega un diálogo modal ineludible solicitando la carga inicial exacta (transparentes, azules, marcados, galones, pacas y minis) y la meta de botellas para la ruta.
+   - Si el camión ya contaba con carga registrada del día anterior o de la jornada, la app abre directamente sin bloquear al operador.
+5. **Nuevo Formato Conversacional y Claro de Comprobante por WhatsApp (`WhatsAppHelper.kt`)**:
+   - Formato humanizado y directo para el cliente:
+     - "📦 *Hoy se dejó:*" (desglose unitario y total).
+     - "💵 *Total de hoy:*"
+     - "🔸 *Debía anterior:*" (únicamente si el cliente tenía saldo pendiente).
+     - "📊 *Más lo de hoy son:*"
+     - "💳 *Pagó / Abonó hoy:* / *Quedó a crédito (fiado):*"
+     - "✅ *Quedamos en: $0.00* (¡Cuenta al día!)" o "🔸 *Quedamos en: $X.XX*" según corresponda.
+     - Control transparente de envases prestados y devueltos.

@@ -8,6 +8,7 @@ import com.rutaagua.camion.data.local.entity.VisitaFallidaEntity
 import com.rutaagua.camion.data.local.model.DiaSemana
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.model.TipoCliente
+import com.rutaagua.camion.data.local.util.EntityIdGenerator
 import com.rutaagua.camion.data.repository.RutaAguaRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -397,7 +398,7 @@ class ClientesViewModel(
             val diasTexto = diasVisita.joinToString(",") { it.name }
 
             val cliente = ClienteEntity(
-                id = id,
+                id = if (id == 0L) EntityIdGenerator.generarId() else id,
                 nombre = nombre.trim(),
                 alias = alias.trim(),
                 telefono = telefono.trim(),
@@ -444,6 +445,7 @@ class ClientesViewModel(
         viewModelScope.launch {
             val horaActual = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
             val visita = VisitaFallidaEntity(
+                id = EntityIdGenerator.generarId(),
                 clienteId = cliente.id,
                 nombreCliente = cliente.nombre,
                 telefonoCliente = cliente.telefono,

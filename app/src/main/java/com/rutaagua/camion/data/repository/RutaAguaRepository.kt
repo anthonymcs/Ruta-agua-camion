@@ -15,6 +15,7 @@ import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.StockAlertas
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.model.calcularDesglosePorPrecio
+import com.rutaagua.camion.data.local.util.EntityIdGenerator
 import com.rutaagua.camion.data.remote.FirestoreSyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -66,12 +67,9 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         clienteDao.obtenerClientesConBidonesPrestadosFlow()
 
     suspend fun guardarCliente(cliente: ClienteEntity): Long = withContext(Dispatchers.IO) {
-        val id = if (cliente.id == 0L) {
-            clienteDao.insertar(cliente)
-        } else {
-            clienteDao.actualizar(cliente)
-            cliente.id
-        }
+        val id = if (cliente.id == 0L) EntityIdGenerator.generarId() else cliente.id
+        val clienteConId = cliente.copy(id = id)
+        clienteDao.insertar(clienteConId)
         clienteDao.obtenerPorIdDirecto(id)?.let {
             syncManager?.subirCliente(it)
         }
@@ -230,7 +228,17 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     // RECARGAS EN PLANTA (TRANSACCIÓN SEGURA)
     // ==========================================
 
-    suspend fun registrarRecargaPlanta(recarga: RecargaPlantaEntity): Long = withContext(Dispatchers.IO) {
+    suspend fun registrarRecargaPlanta(
+        recarga: RecargaPlantaEntity,
+        nuevaCapacidadTopeBidones: Int? = null,
+        fijarCargaFinalExacta: Boolean = false,
+        stockFinalTransparentes: Int? = null,
+        stockFinalAzules: Int? = null,
+        stockFinalMarcados: Int? = null,
+        stockFinalGalones: Int? = null,
+        stockFinalPacas: Int? = null,
+        stockFinalMinis: Int? = null
+    ): Long = withContext(Dispatchers.IO) {
         database.withTransaction {
             val actual = inventarioDao.obtenerInventarioPorVehiculoDirecto(recarga.vehiculo)
                 ?: InventarioCamionEntity(
@@ -238,15 +246,52 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
                     vehiculo = recarga.vehiculo
                 )
 
-            val nuevoTrans = actual.bidonesLlenosTransparentes + recarga.bidonesCargadosTransparentes
-            val nuevoAzul = actual.bidonesLlenosAzules + recarga.bidonesCargadosAzules
-            val nuevoMarc = actual.bidonesLlenosMarcados + recarga.bidonesCargadosMarcados
-            val nuevosVacios = maxOf(0, actual.bidonesVacios - recarga.bidonesVaciosDescargados)
-            val nuevosGalones = actual.galonesLlenos + recarga.galonesCargados
-            val nuevasPacas = actual.pacasLlenas + recarga.pacasCargadas
-            val nuevasMinis = actual.minisLlenas + recarga.minisCargadas
+            val nuevoTrans = if (fijarCargaFinalExacta && stockFinalTransparentes != null) {
+                stockFinalTransparentes
+            } else {
+                actual.bidonesLlenosTransparentes + recarga.bidonesCargadosTransparentes
+            }
+
+            val nuevoAzul = if (fijarCargaFinalExacta && stockFinalAzules != null) {
+                stockFinalAzules
+            } else {
+                actual.bidonesLlenosAzules + recarga.bidonesCargadosAzules
+            }
+
+            val nuevoMarc = if (fijarCargaFinalExacta && stockFinalMarcados != null) {
+                stockFinalMarcados
+            } else {
+                actual.bidonesLlenosMarcados + recarga.bidonesCargadosMarcados
+            }
+
+            val nuevosGalones = if (fijarCargaFinalExacta && stockFinalGalones != null) {
+                stockFinalGalones
+            } else {
+                actual.galonesLlenos + recarga.galonesCargados
+            }
+
+            val nuevasPacas = if (fijarCargaFinalExacta && stockFinalPacas != null) {
+                stockFinalPacas
+            } else {
+                actual.pacasLlenas + recarga.pacasCargadas
+            }
+
+            val nuevasMinis = if (fijarCargaFinalExacta && stockFinalMinis != null) {
+                stockFinalMinis
+            } else {
+                actual.minisLlenas + recarga.minisCargadas
+            }
+
+            val nuevosVacios = if (fijarCargaFinalExacta) 0 else maxOf(0, actual.bidonesVacios - recarga.bidonesVaciosDescargados)
+
+            val nuevoTope = if (nuevaCapacidadTopeBidones != null && nuevaCapacidadTopeBidones > 0) {
+                nuevaCapacidadTopeBidones
+            } else {
+                actual.capacidadTopeBidones
+            }
 
             val inventarioActualizado = actual.copy(
+                capacidadTopeBidones = nuevoTope,
                 bidonesLlenosTransparentes = nuevoTrans,
                 bidonesLlenosAzules = nuevoAzul,
                 bidonesLlenosMarcados = nuevoMarc,
@@ -258,13 +303,27 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
             )
 
             inventarioDao.insertarOActualizar(inventarioActualizado)
-            val idGenerado = recargaPlantaDao.insertar(recarga)
 
-            val recargaConId = recarga.copy(id = idGenerado)
+            // Si fijó la carga exacta, calcular cuántos bidones reales se cargaron para la auditoría de la recarga
+            val recargaAjustada = if (fijarCargaFinalExacta) {
+                recarga.copy(
+                    bidonesCargadosTransparentes = maxOf(0, nuevoTrans - actual.bidonesLlenosTransparentes),
+                    bidonesCargadosAzules = maxOf(0, nuevoAzul - actual.bidonesLlenosAzules),
+                    bidonesCargadosMarcados = maxOf(0, nuevoMarc - actual.bidonesLlenosMarcados),
+                    bidonesVaciosDescargados = actual.bidonesVacios
+                )
+            } else {
+                recarga
+            }
+
+            val idRecarga = if (recargaAjustada.id == 0L) EntityIdGenerator.generarId() else recargaAjustada.id
+            val recargaConId = recargaAjustada.copy(id = idRecarga)
+            recargaPlantaDao.insertar(recargaConId)
+
             syncManager?.subirRecarga(recargaConId)
             syncManager?.subirInventario(inventarioActualizado)
 
-            idGenerado
+            idRecarga
         }
     }
 
@@ -365,9 +424,10 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
 
     suspend fun registrarVenta(transaccion: TransaccionVentaEntity): Long = withContext(Dispatchers.IO) {
         database.withTransaction {
-            aplicarImpactoVenta(transaccion)
-            val idGenerado = transaccionDao.insertar(transaccion)
+            val idGenerado = if (transaccion.id == 0L) EntityIdGenerator.generarId() else transaccion.id
             val txConId = transaccion.copy(id = idGenerado)
+            aplicarImpactoVenta(txConId)
+            transaccionDao.insertar(txConId)
             syncManager?.subirTransaccion(txConId)
             idGenerado
         }
@@ -634,8 +694,9 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
     // ==========================================
 
     suspend fun registrarGastoExtra(gasto: GastoExtraEntity): Long = withContext(Dispatchers.IO) {
-        val id = gastoDao.insertar(gasto)
+        val id = if (gasto.id == 0L) EntityIdGenerator.generarId() else gasto.id
         val gastoConId = gasto.copy(id = id)
+        gastoDao.insertar(gastoConId)
         syncManager?.subirGasto(gastoConId)
         id
     }
@@ -780,12 +841,9 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         cierreCajaDao.obtenerTodosFlow()
 
     suspend fun guardarCierreCaja(cierre: CierreCajaEntity): Long = withContext(Dispatchers.IO) {
-        val id = if (cierre.id == 0L) {
-            cierreCajaDao.insertar(cierre)
-        } else {
-            cierreCajaDao.actualizar(cierre)
-            cierre.id
-        }
+        val id = if (cierre.id == 0L) EntityIdGenerator.generarId() else cierre.id
+        val cierreConId = cierre.copy(id = id)
+        cierreCajaDao.insertar(cierreConId)
         cierreCajaDao.obtenerPorId(id)?.let {
             syncManager?.subirCierreCaja(it)
         }
@@ -812,7 +870,9 @@ class RutaAguaRepository(private val database: RutaAguaDatabase) {
         visitaFallidaDao.obtenerVisitaPorClienteYFechaFlow(clienteId, fechaIso)
 
     suspend fun registrarVisitaFallida(visita: VisitaFallidaEntity): Long = withContext(Dispatchers.IO) {
-        val id = visitaFallidaDao.insertar(visita)
+        val id = if (visita.id == 0L) EntityIdGenerator.generarId() else visita.id
+        val visitaConId = visita.copy(id = id)
+        visitaFallidaDao.insertar(visitaConId)
         visitaFallidaDao.obtenerPorId(id)?.let {
             syncManager?.subirVisitaFallida(it)
         }

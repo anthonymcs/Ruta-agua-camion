@@ -132,7 +132,7 @@ abstract class RutaAguaDatabase : RoomDatabase() {
                 )
                     .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .addCallback(RutaAguaDatabaseCallback(scope))
-                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = false)
                     .build()
                 INSTANCE = instance
                 instance

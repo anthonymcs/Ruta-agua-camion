@@ -24,6 +24,9 @@ interface GastoDao {
     @Query("SELECT * FROM gastos_extras ORDER BY fecha DESC")
     fun obtenerTodosFlow(): Flow<List<GastoExtraEntity>>
 
+    @Query("SELECT * FROM gastos_extras ORDER BY fecha DESC")
+    suspend fun obtenerTodosDirecto(): List<GastoExtraEntity>
+
     @Query("SELECT COALESCE(SUM(monto), 0.0) FROM gastos_extras WHERE fechaTexto = :fechaTexto")
     fun sumarGastosPorFechaFlow(fechaTexto: String): Flow<Double>
 

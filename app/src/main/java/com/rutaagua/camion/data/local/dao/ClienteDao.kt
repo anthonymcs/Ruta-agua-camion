@@ -15,6 +15,9 @@ interface ClienteDao {
     @Query("SELECT * FROM clientes WHERE activo = 1 ORDER BY nombre ASC")
     fun obtenerTodosFlow(): Flow<List<ClienteEntity>>
 
+    @Query("SELECT * FROM clientes WHERE activo = 1 ORDER BY nombre ASC")
+    suspend fun obtenerTodosDirecto(): List<ClienteEntity>
+
     @Query("SELECT * FROM clientes WHERE activo = 1 AND (nombre LIKE '%' || :query || '%' OR alias LIKE '%' || :query || '%') ORDER BY nombre ASC")
     fun buscarPorNombreFlow(query: String): Flow<List<ClienteEntity>>
 

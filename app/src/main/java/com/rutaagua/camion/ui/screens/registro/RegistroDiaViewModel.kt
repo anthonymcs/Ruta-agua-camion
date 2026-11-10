@@ -14,6 +14,7 @@ import com.rutaagua.camion.data.local.model.ResumenCierreDia
 import com.rutaagua.camion.data.local.model.TipoBidon
 import com.rutaagua.camion.data.local.prefs.AppPreferences
 import com.rutaagua.camion.data.local.prefs.RolUsuario
+import com.rutaagua.camion.data.local.util.EntityIdGenerator
 import com.rutaagua.camion.data.repository.RutaAguaRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -448,7 +449,7 @@ class RegistroDiaViewModel(
             }
 
             val nuevaTransaccion = TransaccionVentaEntity(
-                id = transaccionPrevia?.id ?: 0L,
+                id = transaccionPrevia?.id ?: EntityIdGenerator.generarId(),
                 vehiculo = vehiculoVenta,
                 clienteId = clienteId,
                 nombreClientePaso = nombreClientePaso,
@@ -514,6 +515,7 @@ class RegistroDiaViewModel(
         viewModelScope.launch {
             val vehiculoOperativo = appPreferences.obtenerVehiculoActivo().name
             val gasto = GastoExtraEntity(
+                id = EntityIdGenerator.generarId(),
                 vehiculo = vehiculoOperativo,
                 fecha = System.currentTimeMillis(),
                 fechaTexto = fechaHoyTexto,
@@ -566,7 +568,7 @@ class RegistroDiaViewModel(
 
             val cierreExistente = cierreHoyState.value
             val cierreEntity = CierreCajaEntity(
-                id = cierreExistente?.id ?: 0L,
+                id = cierreExistente?.id ?: EntityIdGenerator.generarId(),
                 fechaIso = fechaHoyTexto,
                 timestamp = System.currentTimeMillis(),
                 vehiculo = vehiculoActual,

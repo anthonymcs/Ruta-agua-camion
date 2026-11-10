@@ -360,8 +360,26 @@ fun InventarioCamionScreen(
                 recargaEnEdicion = recargaEnEdicion,
                 siguienteNumeroCarga = if (recargaEnEdicion != null) recargaEnEdicion!!.numeroVuelta else (recargasHoy.size + 1),
                 clayTheme = clayTheme,
-                onConfirmarRecarga = { v, t, a, m, vac, gal, pac, min, obs ->
-                    viewModel.registrarRecargaPlanta(v, t, a, m, vac, gal, pac, min, obs)
+                onConfirmarRecarga = { v, t, a, m, vac, gal, pac, min, obs, nMeta, fijarFinal, fT, fA, fM, fG, fP, fMin ->
+                    viewModel.registrarRecargaPlanta(
+                        numeroVuelta = v,
+                        cargadosTransparentes = t,
+                        cargadosAzules = a,
+                        cargadosMarcados = m,
+                        vaciosDescargados = vac,
+                        galonesCargados = gal,
+                        pacasCargadas = pac,
+                        minisCargadas = min,
+                        observaciones = obs,
+                        nuevaMetaBidones = nMeta,
+                        fijarStockFinalDirecto = fijarFinal,
+                        finalTransparentes = fT,
+                        finalAzules = fA,
+                        finalMarcados = fM,
+                        finalGalones = fG,
+                        finalPacas = fP,
+                        finalMinis = fMin
+                    )
                 },
                 onCancelar = { viewModel.cerrarModalRecarga() }
             )
@@ -1122,24 +1140,6 @@ private fun TarjetaBidonIndividualClay(
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Surface(
-                color = Color.White.copy(alpha = 0.85f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(
-                    text = "Salieron: $vendidosHoy",
-                    color = TextoSecundario,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
         }
     }
 }
@@ -1243,24 +1243,6 @@ private fun TarjetaProductoSecundarioClay(
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Surface(
-                color = clayTheme.insetColor,
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(
-                    text = "Salieron: $vendidos",
-                    color = TextoSecundario,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
         }
     }
 }
@@ -1284,14 +1266,35 @@ private fun ModalRecargaPlantaContentClay(
         galones: Int,
         pacas: Int,
         minis: Int,
-        observaciones: String
+        observaciones: String,
+        nuevaMeta: Int?,
+        fijarStockFinal: Boolean,
+        finalTrans: Int?,
+        finalAzul: Int?,
+        finalMarc: Int?,
+        finalGal: Int?,
+        finalPac: Int?,
+        finalMin: Int?
     ) -> Unit,
     onCancelar: () -> Unit
 ) {
     val editId = recargaEnEdicion?.id ?: -1L
     var numeroVuelta by rememberSaveable(editId) { mutableIntStateOf(recargaEnEdicion?.numeroVuelta ?: siguienteNumeroCarga) }
 
-    val faltantes = calculoRecarga?.bidonesFaltantesParaTope ?: 0
+    val metaActual = calculoRecarga?.capacidadTopeBidones ?: (inventario?.capacidadTopeBidones ?: clayTheme.capacidadDefault)
+    var metaSalida by rememberSaveable(editId) { mutableIntStateOf(metaActual) }
+    var modoFijarTotal by rememberSaveable(editId) { mutableStateOf(false) }
+
+    val transEnUnidad = inventario?.bidonesLlenosTransparentes ?: 0
+    val azulEnUnidad = inventario?.bidonesLlenosAzules ?: 0
+    val marcEnUnidad = inventario?.bidonesLlenosMarcados ?: 0
+    val galEnUnidad = inventario?.galonesLlenos ?: 0
+    val pacEnUnidad = inventario?.pacasLlenas ?: 0
+    val minEnUnidad = inventario?.minisLlenas ?: 0
+    val totalLlenosEnUnidad = transEnUnidad + azulEnUnidad + marcEnUnidad
+    val faltantes = maxOf(0, metaSalida - totalLlenosEnUnidad)
+
+    // Valores para Modo Aditivo (+X)
     var cantTrans by rememberSaveable(editId) {
         mutableIntStateOf(recargaEnEdicion?.bidonesCargadosTransparentes ?: 0)
     }
@@ -1315,9 +1318,25 @@ private fun ModalRecargaPlantaContentClay(
         mutableIntStateOf(recargaEnEdicion?.minisCargadas ?: 0)
     }
 
+    // Valores para Modo Carga Total Cuadrada (con lo que sale)
+    var finalTrans by rememberSaveable(editId) { mutableIntStateOf(transEnUnidad) }
+    var finalAzul by rememberSaveable(editId) {
+        mutableIntStateOf(if (metaSalida > (transEnUnidad + marcEnUnidad)) metaSalida - transEnUnidad - marcEnUnidad else azulEnUnidad)
+    }
+    var finalMarc by rememberSaveable(editId) { mutableIntStateOf(marcEnUnidad) }
+    var finalGal by rememberSaveable(editId) { mutableIntStateOf(inventario?.galonesLlenos ?: 0) }
+    var finalPac by rememberSaveable(editId) { mutableIntStateOf(inventario?.pacasLlenas ?: 0) }
+    var finalMin by rememberSaveable(editId) { mutableIntStateOf(inventario?.minisLlenas ?: 0) }
+
     val observaciones by rememberSaveable(editId) { mutableStateOf(recargaEnEdicion?.observaciones ?: "") }
 
-    val totalCargados = cantTrans + cantAzul + cantMarc
+    val totalCargadosAditivo = cantTrans + cantAzul + cantMarc
+    val totalFinalCuadrado = finalTrans + finalAzul + finalMarc
+
+    val diffTrans = maxOf(0, finalTrans - transEnUnidad)
+    val diffAzul = maxOf(0, finalAzul - azulEnUnidad)
+    val diffMarc = maxOf(0, finalMarc - marcEnUnidad)
+    val totalCargadosCalculados = diffTrans + diffAzul + diffMarc
 
     val galonesFaltan = maxOf(0, (inventario?.capacidadTopeGalones ?: 90) - (inventario?.galonesLlenos ?: 0))
     val pacasFaltan = maxOf(0, (inventario?.capacidadTopePacas ?: 6) - (inventario?.pacasLlenas ?: 0))
@@ -1345,7 +1364,7 @@ private fun ModalRecargaPlantaContentClay(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "Ingresa los productos que subes al vehículo",
+                        text = "Recarga y cuadre de stock para la jornada",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextoSecundario,
                         maxLines = 1,
@@ -1406,7 +1425,72 @@ private fun ModalRecargaPlantaContentClay(
             }
         }
 
-        // Resumen de espacios libres
+        // Modo de Recarga: Cuadrar Carga Total de Salida vs Sumar Unidades
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = !modoFijarTotal,
+                    onClick = { modoFijarTotal = false },
+                    label = { Text("Sumar cargados (+X)", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = clayTheme.accentBgColor,
+                        selectedLabelColor = clayTheme.primaryDarkColor
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+                FilterChip(
+                    selected = modoFijarTotal,
+                    onClick = { modoFijarTotal = true },
+                    label = { Text("Cuadrar salida ($metaSalida)", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = VerdeEfectivoFondo,
+                        selectedLabelColor = VerdeEfectivo
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        // Ajuste directo de Meta/Tope para esta salida (ej. cambiar a 189 o 218 o 80)
+        item {
+            ClayCard(
+                modifier = Modifier.fillMaxWidth(),
+                containerColor = Color.White,
+                cornerRadius = 14.dp,
+                elevation = 2.dp,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Meta / Límite de carga para esta salida",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextoOscuro
+                        )
+                        Text(
+                            text = "Tope usual: $metaActual (puedes ajustarlo a 189, 218, etc.)",
+                            fontSize = 10.sp,
+                            color = TextoSecundario
+                        )
+                    }
+                    ClayEditableCounter(
+                        valor = metaSalida,
+                        onCambio = { nuevo -> if (nuevo > 0) metaSalida = nuevo },
+                        accentColor = clayTheme.primaryColor
+                    )
+                }
+            }
+        }
+
+        // Resumen Informativo de la Carga
         item {
             ClayInsetBox(
                 modifier = Modifier.fillMaxWidth(),
@@ -1420,16 +1504,30 @@ private fun ModalRecargaPlantaContentClay(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
+                        val textoEncabezado = if (modoFijarTotal) {
+                            "SALDRÁ CON: $totalFinalCuadrado / $metaSalida BIDONES"
+                        } else {
+                            val saldra = totalLlenosEnUnidad + totalCargadosAditivo
+                            "SALDRÁ CON: $saldra / $metaSalida BIDONES"
+                        }
+
                         Text(
-                            text = "TOPE META: ${calculoRecarga?.capacidadTopeBidones ?: clayTheme.capacidadDefault} BIDONES",
+                            text = textoEncabezado,
                             style = MaterialTheme.typography.labelSmall,
                             color = VerdeEfectivo,
                             fontWeight = FontWeight.Black,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+
+                        val textoDetalle = if (modoFijarTotal) {
+                            "Llegó a fábrica con $totalLlenosEnUnidad • Se suben +$totalCargadosCalculados en planta"
+                        } else {
+                            "En unidad: $totalLlenosEnUnidad • Subiendo: +$totalCargadosAditivo (Faltan $faltantes)"
+                        }
+
                         Text(
-                            text = "En unidad: ${calculoRecarga?.bidonesLlenosActuales ?: 0} • Faltan: $faltantes bidones para tope",
+                            text = textoDetalle,
                             style = MaterialTheme.typography.bodySmall,
                             color = TextoOscuro,
                             fontWeight = FontWeight.SemiBold,
@@ -1438,7 +1536,7 @@ private fun ModalRecargaPlantaContentClay(
                         )
                     }
                     ClayBadge(
-                        text = "+$totalCargados",
+                        text = if (modoFijarTotal) "$totalFinalCuadrado / $metaSalida" else "+$totalCargadosAditivo",
                         backgroundColor = VerdeEfectivo,
                         textColor = Color.White
                     )
@@ -1448,7 +1546,7 @@ private fun ModalRecargaPlantaContentClay(
 
         item {
             Text(
-                text = "BIDONES DE 20L A SUBIR ($totalCargados)",
+                text = if (modoFijarTotal) "BIDONES TOTALES CON LOS QUE SALE ($totalFinalCuadrado)" else "BIDONES A SUBIR AL VEHÍCULO ($totalCargadosAditivo)",
                 style = MaterialTheme.typography.labelLarge,
                 color = TextoSecundario,
                 fontWeight = FontWeight.Black,
@@ -1456,43 +1554,78 @@ private fun ModalRecargaPlantaContentClay(
             )
         }
 
-        item {
-            FilaRecargaManualClay(
-                label = "Transparentes (PET)",
-                subtitulo = "En unidad: ${inventario?.bidonesLlenosTransparentes ?: 0}",
-                cantidad = cantTrans,
-                accentColor = BidonTransparenteColor,
-                ilustracion = { BidonIllustration(TipoBidon.TRANSPARENTE, size = 34.dp) },
-                onCambio = { cantTrans = it }
-            )
-        }
+        if (modoFijarTotal) {
+            item {
+                FilaRecargaManualClay(
+                    label = "Transparentes (PET)",
+                    subtitulo = "Llegó con: $transEnUnidad • Se suben: +$diffTrans",
+                    cantidad = finalTrans,
+                    accentColor = BidonTransparenteColor,
+                    ilustracion = { BidonIllustration(TipoBidon.TRANSPARENTE, size = 34.dp) },
+                    onCambio = { finalTrans = it }
+                )
+            }
 
-        item {
-            FilaRecargaManualClay(
-                label = "Azules",
-                subtitulo = "En unidad: ${inventario?.bidonesLlenosAzules ?: 0}",
-                cantidad = cantAzul,
-                accentColor = BidonAzulColor,
-                ilustracion = { BidonIllustration(TipoBidon.AZUL, size = 34.dp) },
-                onCambio = { cantAzul = it }
-            )
-        }
+            item {
+                FilaRecargaManualClay(
+                    label = "Azules Estándar",
+                    subtitulo = "Llegó con: $azulEnUnidad • Se suben: +$diffAzul",
+                    cantidad = finalAzul,
+                    accentColor = BidonAzulColor,
+                    ilustracion = { BidonIllustration(TipoBidon.AZUL, size = 34.dp) },
+                    onCambio = { finalAzul = it }
+                )
+            }
 
-        item {
-            FilaRecargaManualClay(
-                label = "Marcadas",
-                subtitulo = "En unidad: ${inventario?.bidonesLlenosMarcados ?: 0}",
-                cantidad = cantMarc,
-                accentColor = BidonMarcadoColor,
-                ilustracion = { BidonIllustration(TipoBidon.MARCADO, size = 34.dp) },
-                onCambio = { cantMarc = it }
-            )
+            item {
+                FilaRecargaManualClay(
+                    label = "Marcadas",
+                    subtitulo = "Llegó con: $marcEnUnidad • Se suben: +$diffMarc",
+                    cantidad = finalMarc,
+                    accentColor = BidonMarcadoColor,
+                    ilustracion = { BidonIllustration(TipoBidon.MARCADO, size = 34.dp) },
+                    onCambio = { finalMarc = it }
+                )
+            }
+        } else {
+            item {
+                FilaRecargaManualClay(
+                    label = "Transparentes (PET)",
+                    subtitulo = "En unidad: $transEnUnidad",
+                    cantidad = cantTrans,
+                    accentColor = BidonTransparenteColor,
+                    ilustracion = { BidonIllustration(TipoBidon.TRANSPARENTE, size = 34.dp) },
+                    onCambio = { cantTrans = it }
+                )
+            }
+
+            item {
+                FilaRecargaManualClay(
+                    label = "Azules Estándar",
+                    subtitulo = "En unidad: $azulEnUnidad",
+                    cantidad = cantAzul,
+                    accentColor = BidonAzulColor,
+                    ilustracion = { BidonIllustration(TipoBidon.AZUL, size = 34.dp) },
+                    onCambio = { cantAzul = it }
+                )
+            }
+
+            item {
+                FilaRecargaManualClay(
+                    label = "Marcadas",
+                    subtitulo = "En unidad: $marcEnUnidad",
+                    cantidad = cantMarc,
+                    accentColor = BidonMarcadoColor,
+                    ilustracion = { BidonIllustration(TipoBidon.MARCADO, size = 34.dp) },
+                    onCambio = { cantMarc = it }
+                )
+            }
         }
 
         item {
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "GALONES, PACAS Y MINIS A SUBIR",
+                text = "GALONES, PACAS Y MINIS",
                 style = MaterialTheme.typography.labelLarge,
                 color = TextoSecundario,
                 fontWeight = FontWeight.Black,
@@ -1500,37 +1633,72 @@ private fun ModalRecargaPlantaContentClay(
             )
         }
 
-        item {
-            FilaRecargaManualClay(
-                label = "Galones (4L)",
-                subtitulo = "En unidad: ${inventario?.galonesLlenos ?: 0} / ${inventario?.capacidadTopeGalones ?: 90} • Faltan: $galonesFaltan para tope",
-                cantidad = cantGalones,
-                accentColor = clayTheme.primaryColor,
-                ilustracion = { GalonIllustration(size = 34.dp) },
-                onCambio = { cantGalones = it }
-            )
-        }
+        if (modoFijarTotal) {
+            item {
+                FilaRecargaManualClay(
+                    label = "Galones (4L)",
+                    subtitulo = "Llegó con: $galEnUnidad / ${inventario?.capacidadTopeGalones ?: 90}",
+                    cantidad = finalGal,
+                    accentColor = clayTheme.primaryColor,
+                    ilustracion = { GalonIllustration(size = 34.dp) },
+                    onCambio = { finalGal = it }
+                )
+            }
 
-        item {
-            FilaRecargaManualClay(
-                label = "Pacas (24x500ml)",
-                subtitulo = "En unidad: ${inventario?.pacasLlenas ?: 0} / ${inventario?.capacidadTopePacas ?: 6} • Faltan: $pacasFaltan para tope",
-                cantidad = cantPacas,
-                accentColor = clayTheme.primaryColor,
-                ilustracion = { PacaIllustration(size = 34.dp) },
-                onCambio = { cantPacas = it }
-            )
-        }
+            item {
+                FilaRecargaManualClay(
+                    label = "Pacas (24x500ml)",
+                    subtitulo = "Llegó con: $pacEnUnidad / ${inventario?.capacidadTopePacas ?: 6}",
+                    cantidad = finalPac,
+                    accentColor = clayTheme.primaryColor,
+                    ilustracion = { PacaIllustration(size = 34.dp) },
+                    onCambio = { finalPac = it }
+                )
+            }
 
-        item {
-            FilaRecargaManualClay(
-                label = "Minis (12x500ml)",
-                subtitulo = "En unidad: ${inventario?.minisLlenas ?: 0} / ${inventario?.capacidadTopeMinis ?: 2} • Faltan: $minisFaltan para tope",
-                cantidad = cantMinis,
-                accentColor = clayTheme.primaryColor,
-                ilustracion = { MiniIllustration(size = 34.dp) },
-                onCambio = { cantMinis = it }
-            )
+            item {
+                FilaRecargaManualClay(
+                    label = "Minis (12x500ml)",
+                    subtitulo = "Llegó con: $minEnUnidad / ${inventario?.capacidadTopeMinis ?: 2}",
+                    cantidad = finalMin,
+                    accentColor = clayTheme.primaryColor,
+                    ilustracion = { MiniIllustration(size = 34.dp) },
+                    onCambio = { finalMin = it }
+                )
+            }
+        } else {
+            item {
+                FilaRecargaManualClay(
+                    label = "Galones (4L)",
+                    subtitulo = "En unidad: $galEnUnidad / ${inventario?.capacidadTopeGalones ?: 90} • Faltan: $galonesFaltan para tope",
+                    cantidad = cantGalones,
+                    accentColor = clayTheme.primaryColor,
+                    ilustracion = { GalonIllustration(size = 34.dp) },
+                    onCambio = { cantGalones = it }
+                )
+            }
+
+            item {
+                FilaRecargaManualClay(
+                    label = "Pacas (24x500ml)",
+                    subtitulo = "En unidad: $pacEnUnidad / ${inventario?.capacidadTopePacas ?: 6} • Faltan: $pacasFaltan para tope",
+                    cantidad = cantPacas,
+                    accentColor = clayTheme.primaryColor,
+                    ilustracion = { PacaIllustration(size = 34.dp) },
+                    onCambio = { cantPacas = it }
+                )
+            }
+
+            item {
+                FilaRecargaManualClay(
+                    label = "Minis (12x500ml)",
+                    subtitulo = "En unidad: $minEnUnidad / ${inventario?.capacidadTopeMinis ?: 2} • Faltan: $minisFaltan para tope",
+                    cantidad = cantMinis,
+                    accentColor = clayTheme.primaryColor,
+                    ilustracion = { MiniIllustration(size = 34.dp) },
+                    onCambio = { cantMinis = it }
+                )
+            }
         }
 
         item {
@@ -1547,7 +1715,7 @@ private fun ModalRecargaPlantaContentClay(
         item {
             FilaRecargaManualClay(
                 label = "Vacíos dejados en planta",
-                subtitulo = "Vacíos arriba: ${inventario?.bidonesVacios ?: 0}",
+                subtitulo = if (modoFijarTotal) "Se descargan todos los vacíos recolectados (${inventario?.bidonesVacios ?: 0})" else "Vacíos arriba: ${inventario?.bidonesVacios ?: 0}",
                 cantidad = cantVaciosBajar,
                 accentColor = Color(0xFF476278),
                 ilustracion = {
@@ -1565,17 +1733,42 @@ private fun ModalRecargaPlantaContentClay(
             Spacer(modifier = Modifier.height(6.dp))
             ClayButton(
                 onClick = {
-                    onConfirmarRecarga(
-                        numeroVuelta,
-                        cantTrans,
-                        cantAzul,
-                        cantMarc,
-                        cantVaciosBajar,
-                        cantGalones,
-                        cantPacas,
-                        cantMinis,
-                        observaciones
-                    )
+                    if (modoFijarTotal) {
+                        onConfirmarRecarga(
+                            numeroVuelta,
+                            diffTrans,
+                            diffAzul,
+                            diffMarc,
+                            cantVaciosBajar,
+                            maxOf(0, finalGal - galEnUnidad),
+                            maxOf(0, finalPac - pacEnUnidad),
+                            maxOf(0, finalMin - minEnUnidad),
+                            observaciones,
+                            metaSalida,
+                            true,
+                            finalTrans,
+                            finalAzul,
+                            finalMarc,
+                            finalGal,
+                            finalPac,
+                            finalMin
+                        )
+                    } else {
+                        onConfirmarRecarga(
+                            numeroVuelta,
+                            cantTrans,
+                            cantAzul,
+                            cantMarc,
+                            cantVaciosBajar,
+                            cantGalones,
+                            cantPacas,
+                            cantMinis,
+                            observaciones,
+                            metaSalida,
+                            false,
+                            null, null, null, null, null, null
+                        )
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1586,12 +1779,15 @@ private fun ModalRecargaPlantaContentClay(
             ) {
                 Icon(imageVector = Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
+                val etiquetaBoton = if (recargaEnEdicion != null) {
+                    "Guardar Cambios"
+                } else if (modoFijarTotal) {
+                    "Confirmar Salida ($totalFinalCuadrado / $metaSalida bidones)"
+                } else {
+                    "Confirmar Carga (+$totalCargadosAditivo bidones)"
+                }
                 Text(
-                    text = if (recargaEnEdicion != null) {
-                        "Guardar Cambios (+$totalCargados bidones)"
-                    } else {
-                        "Confirmar Carga (+$totalCargados bidones)"
-                    },
+                    text = etiquetaBoton,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Black,
                     maxLines = 1,

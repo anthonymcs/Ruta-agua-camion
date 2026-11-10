@@ -32,6 +32,9 @@ interface CierreCajaDao {
     @Query("SELECT * FROM cierres_caja ORDER BY timestamp DESC")
     fun obtenerTodosFlow(): Flow<List<CierreCajaEntity>>
 
+    @Query("SELECT * FROM cierres_caja ORDER BY timestamp DESC")
+    suspend fun obtenerTodosDirecto(): List<CierreCajaEntity>
+
     @Query("SELECT * FROM cierres_caja WHERE sincronizado = 0")
     suspend fun obtenerPendientesDeSincronizar(): List<CierreCajaEntity>
 

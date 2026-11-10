@@ -19,6 +19,9 @@ interface VisitaFallidaDao {
     @Query("SELECT * FROM visitas_fallidas ORDER BY timestamp DESC")
     fun obtenerTodasVisitasFlow(): Flow<List<VisitaFallidaEntity>>
 
+    @Query("SELECT * FROM visitas_fallidas ORDER BY timestamp DESC")
+    suspend fun obtenerTodasDirecto(): List<VisitaFallidaEntity>
+
     @Query("SELECT * FROM visitas_fallidas WHERE clienteId = :clienteId ORDER BY timestamp DESC")
     fun obtenerVisitasPorClienteFlow(clienteId: Long): Flow<List<VisitaFallidaEntity>>
 

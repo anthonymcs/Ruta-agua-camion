@@ -93,6 +93,7 @@ import com.rutaagua.camion.ui.screens.calendario.CalendarioRutaScreen
 import com.rutaagua.camion.ui.screens.clientes.ClientesScreen
 import com.rutaagua.camion.ui.screens.clientes.ClientesViewModel
 import com.rutaagua.camion.ui.screens.configuracion.ConfiguracionAjustesDialog
+import com.rutaagua.camion.ui.screens.inventario.DialogoCargaInicialObligatoria
 import com.rutaagua.camion.ui.screens.inventario.InventarioCamionScreen
 import com.rutaagua.camion.ui.screens.inventario.InventarioCamionViewModel
 import com.rutaagua.camion.ui.screens.registro.RegistroDiaScreen
@@ -154,6 +155,7 @@ fun RutaAguaNavHost(
     var mostrarDialogoConfirmarLogout by rememberSaveable { mutableStateOf(false) }
     var infoActualizacionOta by remember { mutableStateOf<InfoActualizacionOta?>(null) }
     var mostrarDialogoActualizacion by rememberSaveable { mutableStateOf(false) }
+    var cargaInicialYaConfirmada by rememberSaveable { mutableStateOf(false) }
 
     val clayTheme = obtenerClayThemePorVehiculo(vehiculoActivo)
 
@@ -169,6 +171,16 @@ fun RutaAguaNavHost(
     val registroDiaViewModel: RegistroDiaViewModel = viewModel(factory = factory)
     val inventarioViewModel: InventarioCamionViewModel = viewModel(factory = factory)
     val clientesViewModel: ClientesViewModel = viewModel(factory = factory)
+
+    val inventarioActual by inventarioViewModel.inventarioState.collectAsState()
+
+    // Si el vehículo ya tiene carga registrada (de días anteriores o de una recarga previa), marcar como confirmada
+    LaunchedEffect(inventarioActual) {
+        val inv = inventarioActual
+        if (inv != null && (inv.totalBidonesLlenos() > 0 || inv.galonesLlenos > 0 || inv.pacasLlenas > 0 || inv.minisLlenas > 0)) {
+            cargaInicialYaConfirmada = true
+        }
+    }
 
     // Sincronización automática de rol y vehículo si hay sesión iniciada al arrancar la app
     LaunchedEffect(Unit) {
@@ -568,6 +580,7 @@ fun RutaAguaNavHost(
                 composable(AppDestinations.LOGIN.ruta) {
                     LoginScreen(
                         onLoginExitoso = { tipo, rol ->
+                            cargaInicialYaConfirmada = false
                             appPreferences.guardarVehiculoActivo(tipo)
                             appPreferences.guardarRolActivo(rol)
                             appPreferences.guardarSesionIniciada(true)
@@ -629,6 +642,33 @@ fun RutaAguaNavHost(
                 )
             }
 
+            // Diálogo obligatorio de registro de carga inicial si la unidad arranca en 0
+            val debePedirCargaInicial = currentRoute != AppDestinations.LOGIN.ruta &&
+                rolActivo != RolUsuario.ADMIN_ROLANDO &&
+                !cargaInicialYaConfirmada &&
+                inventarioActual != null &&
+                (inventarioActual?.let { it.totalBidonesLlenos() == 0 && it.galonesLlenos == 0 && it.pacasLlenas == 0 && it.minisLlenas == 0 } == true)
+
+            if (debePedirCargaInicial) {
+                DialogoCargaInicialObligatoria(
+                    inventario = inventarioActual,
+                    clayTheme = clayTheme,
+                    onConfirmarCargaInicial = { meta, trans, azul, marc, galones, pacas, minis ->
+                        cargaInicialYaConfirmada = true
+                        inventarioViewModel.cambiarCapacidadTope(meta)
+                        inventarioViewModel.establecerCargaActual(
+                            transparentes = trans,
+                            azules = azul,
+                            marcados = marc,
+                            vacios = 0,
+                            galones = galones,
+                            pacas = pacas,
+                            minis = minis
+                        )
+                    }
+                )
+            }
+
             if (mostrarDialogoConfirmarLogout) {
                 AlertDialog(
                     onDismissRequest = { mostrarDialogoConfirmarLogout = false },
@@ -662,6 +702,7 @@ fun RutaAguaNavHost(
                             onClick = {
                                 mostrarDialogoConfirmarLogout = false
                                 coroutineScope.launch { drawerState.close() }
+                                cargaInicialYaConfirmada = false
                                 auth.signOut()
                                 appPreferences.guardarSesionIniciada(false)
                                 navController.navigate(AppDestinations.LOGIN.ruta) {

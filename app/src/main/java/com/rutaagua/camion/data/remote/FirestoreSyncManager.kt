@@ -325,6 +325,7 @@ class FirestoreSyncManager(
                         for (doc in snapshot.documents) {
                             val vehiculo = doc.getString("vehiculo") ?: doc.id
                             val id = if (vehiculo == "CAMIONETA") 2 else 1
+                            val remoteFecha = doc.getLong("fechaUltimaActualizacion") ?: 0L
                             val inv = InventarioCamionEntity(
                                 id = id,
                                 vehiculo = vehiculo,
@@ -339,9 +340,26 @@ class FirestoreSyncManager(
                                 galonesLlenos = doc.getLong("galonesLlenos")?.toInt() ?: 0,
                                 pacasLlenas = doc.getLong("pacasLlenas")?.toInt() ?: 0,
                                 minisLlenas = doc.getLong("minisLlenas")?.toInt() ?: 0,
-                                fechaUltimaActualizacion = doc.getLong("fechaUltimaActualizacion") ?: System.currentTimeMillis()
+                                fechaUltimaActualizacion = if (remoteFecha > 0L) remoteFecha else System.currentTimeMillis()
                             )
-                            database.inventarioDao().insertarOActualizar(inv)
+
+                            // PROTECCIÓN CRÍTICA DE INTEGRIDAD:
+                            // Comparamos contra el inventario local para evitar que un dispositivo vacío o desactualizado
+                            // borre la carga real y activa del camión en ruta.
+                            val local = database.inventarioDao().obtenerInventarioPorVehiculoDirecto(vehiculo)
+                            val localFecha = local?.fechaUltimaActualizacion ?: 0L
+                            val localTieneCarga = local != null && local.totalBidonesLlenos() > 0
+                            val remotoEsVacio = inv.totalBidonesLlenos() == 0
+
+                            if (local != null && localFecha > remoteFecha) {
+                                Log.d(TAG, "Inventario local de $vehiculo es más reciente ($localFecha > $remoteFecha). Conservando local y sincronizando hacia Firestore.")
+                                subirInventario(local)
+                            } else if (localTieneCarga && remotoEsVacio && (System.currentTimeMillis() - localFecha < 24 * 3600 * 1000L)) {
+                                Log.w(TAG, "Alerta: Firestore reporta 0 bidones pero el vehículo $vehiculo tiene carga activa local (${local?.totalBidonesLlenos()} bidones). Rechazando borrado accidental y re-subiendo a Firestore.")
+                                subirInventario(local!!)
+                            } else {
+                                database.inventarioDao().insertarOActualizar(inv)
+                            }
                         }
                     } finally {
                         sincronizandoDesdeRemoto = false
@@ -498,6 +516,68 @@ class FirestoreSyncManager(
                     }
                 }
             }
+        // Al inicializar los observadores remotos, reconciliar y subir pendientes locales hacia Firestore
+        sincronizarDatosPendientesHaciaRemoto()
+    }
+
+    /**
+     * Reconcilia la base de datos local SQLite (Room) con Cloud Firestore.
+     * Sube cualquier venta, carga, gasto, cierre o cliente que haya sido creado sin conexión
+     * para asegurar que el 100% de los datos estén siempre respaldados en la nube y visibles en todos los teléfonos.
+     */
+    fun sincronizarDatosPendientesHaciaRemoto() {
+        if (auth.currentUser == null) return
+        scope.launch {
+            try {
+                Log.d(TAG, "Reconciliación: Subiendo datos locales a Firestore...")
+
+                // 1. Inventarios locales de ambos vehículos
+                val invCamion = database.inventarioDao().obtenerInventarioPorVehiculoDirecto("CAMION")
+                if (invCamion != null) subirInventario(invCamion)
+                val invCamioneta = database.inventarioDao().obtenerInventarioPorVehiculoDirecto("CAMIONETA")
+                if (invCamioneta != null) subirInventario(invCamioneta)
+
+                // 2. Transacciones locales completas
+                val transacciones = database.transaccionDao().obtenerTodasDirecto()
+                for (t in transacciones) {
+                    subirTransaccion(t)
+                }
+
+                // 3. Recargas en planta
+                val recargas = database.recargaPlantaDao().obtenerTodasDirecto()
+                for (r in recargas) {
+                    subirRecarga(r)
+                }
+
+                // 4. Gastos
+                val gastos = database.gastoDao().obtenerTodosDirecto()
+                for (g in gastos) {
+                    subirGasto(g)
+                }
+
+                // 5. Cierres de caja
+                val cierres = database.cierreCajaDao().obtenerTodosDirecto()
+                for (c in cierres) {
+                    subirCierreCaja(c)
+                }
+
+                // 6. Visitas fallidas
+                val visitas = database.visitaFallidaDao().obtenerTodasDirecto()
+                for (v in visitas) {
+                    subirVisitaFallida(v)
+                }
+
+                // 7. Clientes
+                val clientes = database.clienteDao().obtenerTodosDirecto()
+                for (c in clientes) {
+                    subirCliente(c)
+                }
+
+                Log.d(TAG, "Reconciliación completada exitosamente (${transacciones.size} ventas, ${clientes.size} clientes respaldados).")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error durante reconciliación hacia Firestore: ${e.message}")
+            }
+        }
     }
 
     // =========================================================================
@@ -505,7 +585,6 @@ class FirestoreSyncManager(
     // =========================================================================
 
     fun subirCliente(cliente: ClienteEntity) {
-        if (sincronizandoDesdeRemoto) return
         scope.launch {
             val fotoMiniaturaBase64 = cliente.fotoReferenciaPath?.let { comprimirFotoABase64(it) }
             val vehiculoActual = com.rutaagua.camion.data.local.prefs.AppPreferences.getInstance(context).obtenerVehiculoActivo().name
@@ -538,12 +617,10 @@ class FirestoreSyncManager(
     }
 
     fun eliminarCliente(clienteId: Long) {
-        if (sincronizandoDesdeRemoto) return
         firestore.collection("clientes").document(clienteId.toString()).delete()
     }
 
     fun subirTransaccion(transaccion: TransaccionVentaEntity) {
-        if (sincronizandoDesdeRemoto) return
         val data = hashMapOf(
             "id" to transaccion.id,
             "vehiculo" to transaccion.vehiculo,
@@ -589,12 +666,10 @@ class FirestoreSyncManager(
     }
 
     fun eliminarTransaccion(transaccionId: Long) {
-        if (sincronizandoDesdeRemoto) return
         firestore.collection("transacciones").document(transaccionId.toString()).delete()
     }
 
     fun subirInventario(inventario: InventarioCamionEntity) {
-        if (sincronizandoDesdeRemoto) return
         val data = hashMapOf(
             "id" to inventario.id,
             "vehiculo" to inventario.vehiculo,
@@ -617,7 +692,6 @@ class FirestoreSyncManager(
     }
 
     fun subirRecarga(recarga: RecargaPlantaEntity) {
-        if (sincronizandoDesdeRemoto) return
         val data = hashMapOf(
             "id" to recarga.id,
             "vehiculo" to recarga.vehiculo,
@@ -639,12 +713,10 @@ class FirestoreSyncManager(
     }
 
     fun eliminarRecarga(recargaId: Long) {
-        if (sincronizandoDesdeRemoto) return
         firestore.collection("recargas_planta").document(recargaId.toString()).delete()
     }
 
     fun subirGasto(gasto: GastoExtraEntity) {
-        if (sincronizandoDesdeRemoto) return
         val data = hashMapOf(
             "id" to gasto.id,
             "vehiculo" to gasto.vehiculo,
@@ -660,12 +732,10 @@ class FirestoreSyncManager(
     }
 
     fun eliminarGasto(gastoId: Long) {
-        if (sincronizandoDesdeRemoto) return
         firestore.collection("gastos").document(gastoId.toString()).delete()
     }
 
     fun subirCierreCaja(cierre: CierreCajaEntity) {
-        if (sincronizandoDesdeRemoto) return
         val data = hashMapOf(
             "id" to cierre.id,
             "fechaIso" to cierre.fechaIso,
@@ -696,7 +766,6 @@ class FirestoreSyncManager(
     }
 
     fun subirVisitaFallida(visita: VisitaFallidaEntity) {
-        if (sincronizandoDesdeRemoto) return
         val miniaturaBase64 = visita.fotoEvidenciaPath?.let { comprimirFotoABase64(it) }
         val data = hashMapOf(
             "id" to visita.id,

@@ -139,113 +139,116 @@ object WhatsAppHelper {
         fechaDisplay: String = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(transaccion.fecha))
     ): String {
         val horaTexto = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(transaccion.fecha))
-        val nombre = cliente?.nombre ?: transaccion.nombreClientePaso ?: "Estimado(a) Cliente"
+        val nombre = cliente?.nombreVisual ?: cliente?.nombre ?: transaccion.nombreClientePaso ?: "Estimado(a) Cliente"
 
         return buildString {
-            appendLine("💧 RECIBO DE ENTREGA 🚚")
-            appendLine("Hola *$nombre*, confirmamos su entrega de hoy.")
-            appendLine("📅 *Fecha:* $fechaDisplay • ⏰ *Hora:* $horaTexto")
-            appendLine("─────────────────────────")
-            appendLine("📦 *PRODUCTOS ENTREGADOS:*")
+            appendLine("💧 *Aqua Apolo - Comprobante de Entrega* 🚚")
+            appendLine("Hola *$nombre*, detalle de su entrega hoy ($fechaDisplay $horaTexto):")
+            appendLine()
 
+            // 1. Productos dejados hoy
+            val itemsDejados = mutableListOf<String>()
             val tieneMulti = (transaccion.recargaTransparentes + transaccion.recargaAzules + transaccion.recargaMarcados) > 0
             if (tieneMulti) {
                 if (transaccion.recargaTransparentes > 0) {
-                    appendLine("  • Recarga Bidón 20L (PET Transparente): *${transaccion.recargaTransparentes} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)}")
+                    val sub = transaccion.recargaTransparentes * transaccion.precioUnitarioBidon
+                    itemsDejados.add("${transaccion.recargaTransparentes} bidones transparentes ($${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)} c/u): $${String.format(Locale.US, "%.2f", sub)}")
                 }
                 if (transaccion.recargaAzules > 0) {
-                    appendLine("  • Recarga Bidón 20L (Azul Estándar): *${transaccion.recargaAzules} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)}")
+                    val sub = transaccion.recargaAzules * transaccion.precioUnitarioBidon
+                    itemsDejados.add("${transaccion.recargaAzules} bidones azules ($${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)} c/u): $${String.format(Locale.US, "%.2f", sub)}")
                 }
                 if (transaccion.recargaMarcados > 0) {
-                    appendLine("  • Recarga Bidón 20L (Marcado): *${transaccion.recargaMarcados} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)}")
+                    val sub = transaccion.recargaMarcados * transaccion.precioUnitarioBidon
+                    itemsDejados.add("${transaccion.recargaMarcados} bidones marcados ($${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)} c/u): $${String.format(Locale.US, "%.2f", sub)}")
                 }
-                if (transaccion.cantidadBidonesVendidosEnvase > 0) {
-                    appendLine("  • Bidón con Todo / Nuevo: *${transaccion.cantidadBidonesVendidosEnvase} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidonVendido)}")
-                }
-            } else {
-                val totalBidones = transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesVendidosEnvase
-                if (totalBidones > 0) {
-                    val tipoNombre = when (transaccion.tipoBidon) {
-                        TipoBidon.TRANSPARENTE -> "PET Transparente"
-                        TipoBidon.AZUL -> "Azul Estándar"
-                        TipoBidon.MARCADO -> "Marcado"
-                    }
-                    if (transaccion.cantidadBidonesRecarga > 0) {
-                        appendLine("  • Recarga Bidón 20L ($tipoNombre): *${transaccion.cantidadBidonesRecarga} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)}")
-                    }
-                    if (transaccion.cantidadBidonesVendidosEnvase > 0) {
-                        appendLine("  • Bidón Nuevo + Agua ($tipoNombre): *${transaccion.cantidadBidonesVendidosEnvase} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidonVendido)}")
-                    }
-                }
+            } else if (transaccion.cantidadBidonesRecarga > 0) {
+                val sub = transaccion.cantidadBidonesRecarga * transaccion.precioUnitarioBidon
+                itemsDejados.add("${transaccion.cantidadBidonesRecarga} bidones ($${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)} c/u): $${String.format(Locale.US, "%.2f", sub)}")
+            }
+
+            if (transaccion.cantidadBidonesVendidosEnvase > 0) {
+                val sub = transaccion.cantidadBidonesVendidosEnvase * transaccion.precioUnitarioBidonVendido
+                itemsDejados.add("${transaccion.cantidadBidonesVendidosEnvase} envases con agua ($${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidonVendido)} c/u): $${String.format(Locale.US, "%.2f", sub)}")
             }
 
             if (transaccion.cantidadGalones > 0) {
-                appendLine("  • Galones (4L): *${transaccion.cantidadGalones} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioGalon)}")
+                val sub = transaccion.cantidadGalones * transaccion.precioUnitarioGalon
+                itemsDejados.add("${transaccion.cantidadGalones} galones 4L ($${String.format(Locale.US, "%.2f", transaccion.precioUnitarioGalon)} c/u): $${String.format(Locale.US, "%.2f", sub)}")
             }
+
             if (transaccion.cantidadPacas > 0) {
-                appendLine("  • Pacas (24x500ml): *${transaccion.cantidadPacas} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioPaca)}")
+                val sub = transaccion.cantidadPacas * transaccion.precioUnitarioPaca
+                itemsDejados.add("${transaccion.cantidadPacas} paquetes de botellas de agua ($${String.format(Locale.US, "%.2f", transaccion.precioUnitarioPaca)} c/u): $${String.format(Locale.US, "%.2f", sub)}")
             }
+
             if (transaccion.cantidadMinis > 0) {
-                appendLine("  • Minis (12x500ml): *${transaccion.cantidadMinis} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioMini)}")
+                val sub = transaccion.cantidadMinis * transaccion.precioUnitarioMini
+                itemsDejados.add("${transaccion.cantidadMinis} paquetes minis ($${String.format(Locale.US, "%.2f", transaccion.precioUnitarioMini)} c/u): $${String.format(Locale.US, "%.2f", sub)}")
             }
 
-            // Movimiento de envases prestados/devueltos y cortesías
-            if (transaccion.cantidadBidonesPrestados > 0) {
-                appendLine("  • Envases prestados hoy: *+${transaccion.cantidadBidonesPrestados} un.* x $${String.format(Locale.US, "%.2f", transaccion.precioUnitarioBidon)} (queda debiendo envase)")
-            }
             if (transaccion.cantidadBidonesGratis > 0) {
-                val cobrados = maxOf(0, transaccion.cantidadBidonesRecarga + transaccion.cantidadBidonesPrestados - transaccion.cantidadBidonesGratis)
-                appendLine("  • Cortesía (${cobrados}+${transaccion.cantidadBidonesGratis}): *${transaccion.cantidadBidonesGratis} bidón gratis*")
-            }
-            if (transaccion.cantidadBidonesDevueltos > 0) {
-                appendLine("  • Envases devueltos hoy: *-${transaccion.cantidadBidonesDevueltos} un.* (recolectados)")
+                itemsDejados.add("${transaccion.cantidadBidonesGratis} bidón de cortesía (gratis)")
             }
 
-            appendLine("─────────────────────────")
-            appendLine("💰 *TOTAL DE LA ENTREGA:* *$${String.format(Locale.US, "%.2f", transaccion.totalImporte)}*")
+            if (itemsDejados.isNotEmpty()) {
+                appendLine("📦 *Hoy se dejó:*")
+                itemsDejados.forEach { appendLine("• $it") }
+                appendLine("💵 *Total de hoy:* *$${String.format(Locale.US, "%.2f", transaccion.totalImporte)}*")
+            } else if (transaccion.montoAbono > 0 || transaccion.montoCanceladoDeuda > 0) {
+                appendLine("📦 *Despacho de hoy:* Gestión de cobro / abono a cuenta")
+            }
 
-            val partesPago = mutableListOf<String>()
-            if (transaccion.montoEfectivo > 0) partesPago.add("Efectivo: $${String.format(Locale.US, "%.2f", transaccion.montoEfectivo)}")
-            if (transaccion.montoTransferencia > 0) partesPago.add("Transferencia: $${String.format(Locale.US, "%.2f", transaccion.montoTransferencia)}")
-            if (transaccion.montoCredito > 0) partesPago.add("Crédito: $${String.format(Locale.US, "%.2f", transaccion.montoCredito)}")
-            if (transaccion.montoAbono > 0) partesPago.add("Abono Deuda: $${String.format(Locale.US, "%.2f", transaccion.montoAbono)}")
+            // 2. Movimiento de envases prestados/devueltos si aplica
+            if (transaccion.cantidadBidonesPrestados > 0 || transaccion.cantidadBidonesDevueltos > 0) {
+                appendLine()
+                if (transaccion.cantidadBidonesPrestados > 0) {
+                    appendLine("🍾 *Envases prestados hoy:* +${transaccion.cantidadBidonesPrestados} (pendiente devolución)")
+                }
+                if (transaccion.cantidadBidonesDevueltos > 0) {
+                    appendLine("🔄 *Envases devueltos hoy:* -${transaccion.cantidadBidonesDevueltos}")
+                }
+            }
 
-            val detallePago = if (partesPago.size > 1) {
-                partesPago.joinToString(" + ")
+            // 3. Cuenta y Liquidación de Deudas
+            appendLine()
+            val deudaActual = cliente?.deudaMonetaria ?: transaccion.montoCredito
+            val deudaAnterior = maxOf(0.0, deudaActual - transaccion.montoCredito + transaccion.montoAbono + transaccion.montoCanceladoDeuda)
+            val totalPagadoHoy = transaccion.montoEfectivo + transaccion.montoTransferencia
+
+            if (deudaAnterior > 0.05) {
+                appendLine("🔸 *Debía anterior:* $${String.format(Locale.US, "%.2f", deudaAnterior)}")
+                val totalConDeuda = deudaAnterior + transaccion.totalImporte
+                appendLine("📊 *Más lo de hoy son:* $${String.format(Locale.US, "%.2f", totalConDeuda)}")
+            }
+
+            if (totalPagadoHoy > 0.05) {
+                val metodo = when {
+                    transaccion.montoEfectivo > 0 && transaccion.montoTransferencia > 0 -> "Efectivo $${String.format(Locale.US, "%.2f", transaccion.montoEfectivo)} + Transf $${String.format(Locale.US, "%.2f", transaccion.montoTransferencia)}"
+                    transaccion.montoTransferencia > 0 -> "Transferencia"
+                    else -> "Efectivo"
+                }
+                appendLine("💳 *Pagó / Abonó hoy:* $${String.format(Locale.US, "%.2f", totalPagadoHoy)} ($metodo)")
+            } else if (transaccion.montoCredito > 0.05) {
+                appendLine("💳 *Quedó a crédito (fiado):* $${String.format(Locale.US, "%.2f", transaccion.montoCredito)}")
+            }
+
+            if (deudaActual <= 0.05) {
+                appendLine("✅ *Quedamos en: $0.00* (¡Cuenta al día!)")
             } else {
-                when (transaccion.formaPagoPrincipal) {
-                    FormaPago.EFECTIVO -> "Efectivo ($${String.format(Locale.US, "%.2f", transaccion.totalImporte)})"
-                    FormaPago.TRANSFERENCIA -> "Transferencia bancaria ($${String.format(Locale.US, "%.2f", transaccion.totalImporte)})"
-                    FormaPago.CREDITO -> "Crédito pendiente ($${String.format(Locale.US, "%.2f", transaccion.totalImporte)})"
-                    FormaPago.ABONO -> "Abono a cuenta ($${String.format(Locale.US, "%.2f", transaccion.montoAbono)})"
-                    FormaPago.CANCELADO -> "Deuda cancelada ($${String.format(Locale.US, "%.2f", transaccion.montoCanceladoDeuda)})"
-                }
+                appendLine("🔸 *Quedamos en:* *$${String.format(Locale.US, "%.2f", deudaActual)}*")
             }
-            appendLine("💳 *Forma de Pago:* $detallePago")
 
-            if (cliente != null) {
-                appendLine("─────────────────────────")
-                appendLine("📊 *ESTADO ACTUAL DE SU CUENTA:*")
-                if (cliente.deudaMonetaria <= 0.0) {
-                    appendLine("• Saldo en dinero: *✅ Al día ($0.00)*")
-                } else {
-                    appendLine("• Saldo en dinero: *🔸 Debe: $${String.format(Locale.US, "%.2f", cliente.deudaMonetaria)}*")
-                }
-
-                if (cliente.bidonesPrestados <= 0) {
-                    appendLine("• Envases prestados: *✅ 0 envases*")
-                } else {
-                    appendLine("• Envases prestados: *🍾 Debe: ${cliente.bidonesPrestados} bidones*")
-                }
+            if (cliente != null && cliente.bidonesPrestados > 0) {
+                appendLine("🍾 *Envases prestados pendientes:* ${cliente.bidonesPrestados} bidones")
             }
 
             if (transaccion.nota.isNotBlank()) {
                 appendLine("📝 *Nota:* ${transaccion.nota}")
             }
 
-            appendLine("─────────────────────────")
-            appendLine("¡Muchas gracias por su compra! Que tenga un excelente día.")
-            appendLine("Gracias por confiar en nosotros. 💧🚚")
+            appendLine()
+            append("¡Muchas gracias por su preferencia! 💧🚚")
         }
     }
 

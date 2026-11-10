@@ -50,7 +50,7 @@ class WhatsAppHelperTest {
 
         val mensaje = WhatsAppHelper.generarMensajeEstadoCuenta(cliente, fechaDisplay = "19/10/2026")
 
-        assertTrue(mensaje.contains("ESTADO DE CUENTA - ATENEA") || mensaje.contains("ESTADO DE CUENTA - AQUA APOLO") || mensaje.contains("ESTADO DE CUENTA - RUTA AGUA"))
+        assertTrue(mensaje.contains("ESTADO DE CUENTA"))
         assertTrue(mensaje.contains("Restaurante El Marino"))
         assertTrue(mensaje.contains("19/10/2026"))
         assertTrue(mensaje.contains("Pendiente de pago: $5.00"))
@@ -115,15 +115,14 @@ class WhatsAppHelperTest {
 
         val recibo = WhatsAppHelper.generarMensajeReciboEntrega(transaccion, cliente, fechaDisplay = "19/10/2026")
 
-        assertTrue(recibo.contains("RECIBO DE ENTREGA - ATENEA") || recibo.contains("RECIBO DE ENTREGA - AQUA APOLO") || recibo.contains("RECIBO DE ENTREGA - RUTA AGUA"))
+        assertTrue(recibo.contains("Aqua Apolo") || recibo.contains("Comprobante de Entrega"))
         assertTrue(recibo.contains("Panadería La Espiga"))
-        assertTrue(recibo.contains("Recarga Bidón 20L (Azul Estándar): *2 un.*"))
-        assertTrue(recibo.contains("Galones (4L): *2 un.*"))
-        assertTrue(recibo.contains("Envases prestados hoy: *+1 un.*"))
-        assertTrue(recibo.contains("TOTAL DE LA ENTREGA:* *$3.50*"))
-        assertTrue(recibo.contains("Efectivo ($3.50)"))
-        assertTrue(recibo.contains("Debe: $2.00"))
-        assertTrue(recibo.contains("Debe: 1 bidones"))
+        assertTrue(recibo.contains("Hoy se dejó:"))
+        assertTrue(recibo.contains("2 bidones"))
+        assertTrue(recibo.contains("2 galones 4L"))
+        assertTrue(recibo.contains("Envases prestados hoy:* +1"))
+        assertTrue(recibo.contains("Total de hoy:* *$3.50*"))
+        assertTrue(recibo.contains("Quedamos en:"))
         assertTrue(recibo.contains("Dejar en la bodega trasera"))
     }
 
@@ -157,8 +156,44 @@ class WhatsAppHelperTest {
 
         val recibo = WhatsAppHelper.generarMensajeReciboEntrega(transaccion, cliente, fechaDisplay = "24/10/2026")
         assertTrue(recibo.contains("Restaurante El Marino"))
-        assertTrue(recibo.contains("Envases prestados hoy: *+20 un.*"))
-        assertTrue(recibo.contains("Cortesía (35+1): *1 bidón gratis*"))
-        assertTrue(recibo.contains("TOTAL DE LA ENTREGA:* *$35.00*"))
+        assertTrue(recibo.contains("Envases prestados hoy:* +20"))
+        assertTrue(recibo.contains("1 bidón de cortesía (gratis)"))
+        assertTrue(recibo.contains("Total de hoy:* *$35.00*"))
+        assertTrue(recibo.contains("Quedamos en: $0.00"))
+    }
+
+    @Test
+    fun testReciboConDeudaPreviaYSaldosUsuario() {
+        // Caso exacto del usuario: 10 bidones ($2.45 c/u) + 2 paquetes de botellas ($3.75 c/u) = $32.00
+        // Cliente debía $10.00. Total con deuda = $42.00.
+        val cliente = ClienteEntity(
+            id = 30,
+            nombre = "Tienda Don Pepe",
+            telefono = "0995544332",
+            deudaMonetaria = 42.00 // Deuda actual tras compra a crédito
+        )
+
+        val transaccion = TransaccionVentaEntity(
+            id = 3,
+            clienteId = cliente.id,
+            fechaTexto = "2026-11-10",
+            cantidadBidonesRecarga = 10,
+            precioUnitarioBidon = 2.45,
+            cantidadPacas = 2,
+            precioUnitarioPaca = 3.75,
+            totalImporte = 32.00,
+            formaPagoPrincipal = FormaPago.CREDITO,
+            montoCredito = 32.00
+        )
+
+        val recibo = WhatsAppHelper.generarMensajeReciboEntrega(transaccion, cliente, fechaDisplay = "10/11/2026")
+        assertTrue(recibo.contains("Hoy se dejó:"))
+        assertTrue(recibo.contains("10 bidones"))
+        assertTrue(recibo.contains("2 paquetes de botellas de agua"))
+        assertTrue(recibo.contains("Total de hoy:* *$32.00*"))
+        assertTrue(recibo.contains("Debía anterior:* $10.00"))
+        assertTrue(recibo.contains("Más lo de hoy son:* $42.00"))
+        assertTrue(recibo.contains("Quedó a crédito (fiado):* $32.00"))
+        assertTrue(recibo.contains("Quedamos en:* *$42.00*"))
     }
 }

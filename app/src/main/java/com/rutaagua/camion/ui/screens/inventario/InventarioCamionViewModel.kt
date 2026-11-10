@@ -9,6 +9,7 @@ import com.rutaagua.camion.data.local.model.RecargaCalculada
 import com.rutaagua.camion.data.local.model.StockAlertas
 import com.rutaagua.camion.data.local.model.TipoVehiculo
 import com.rutaagua.camion.data.local.prefs.AppPreferences
+import com.rutaagua.camion.data.local.util.EntityIdGenerator
 import com.rutaagua.camion.data.repository.RutaAguaRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -230,14 +231,22 @@ class InventarioCamionViewModel(
         galonesCargados: Int = 0,
         pacasCargadas: Int = 0,
         minisCargadas: Int = 0,
-        observaciones: String = ""
+        observaciones: String = "",
+        nuevaMetaBidones: Int? = null,
+        fijarStockFinalDirecto: Boolean = false,
+        finalTransparentes: Int? = null,
+        finalAzules: Int? = null,
+        finalMarcados: Int? = null,
+        finalGalones: Int? = null,
+        finalPacas: Int? = null,
+        finalMinis: Int? = null
     ) {
         viewModelScope.launch {
             val vehiculo = appPreferences.obtenerVehiculoActivo().name
             val recargaPrevia = _recargaEnEdicion.value
 
             val recarga = RecargaPlantaEntity(
-                id = recargaPrevia?.id ?: 0L,
+                id = recargaPrevia?.id ?: EntityIdGenerator.generarId(),
                 vehiculo = recargaPrevia?.vehiculo ?: vehiculo,
                 fecha = recargaPrevia?.fecha ?: System.currentTimeMillis(),
                 fechaTexto = recargaPrevia?.fechaTexto ?: fechaHoyTexto,
@@ -256,9 +265,27 @@ class InventarioCamionViewModel(
                 repository.editarRecargaPlanta(recargaPrevia, recarga)
                 _mensajeSnackbar.value = "Recarga actualizada en $vehiculo (Vuelta $numeroVuelta)"
             } else {
-                repository.registrarRecargaPlanta(recarga)
-                val total = cargadosTransparentes + cargadosAzules + cargadosMarcados
-                _mensajeSnackbar.value = "Recarga Planta $vehiculo (Vuelta $numeroVuelta): +$total bidones"
+                repository.registrarRecargaPlanta(
+                    recarga = recarga,
+                    nuevaCapacidadTopeBidones = nuevaMetaBidones,
+                    fijarCargaFinalExacta = fijarStockFinalDirecto,
+                    stockFinalTransparentes = finalTransparentes,
+                    stockFinalAzules = finalAzules,
+                    stockFinalMarcados = finalMarcados,
+                    stockFinalGalones = finalGalones,
+                    stockFinalPacas = finalPacas,
+                    stockFinalMinis = finalMinis
+                )
+                val total = if (fijarStockFinalDirecto) {
+                    (finalTransparentes ?: 0) + (finalAzules ?: 0) + (finalMarcados ?: 0)
+                } else {
+                    cargadosTransparentes + cargadosAzules + cargadosMarcados
+                }
+                _mensajeSnackbar.value = if (fijarStockFinalDirecto) {
+                    "Carga $vehiculo integrada a $total bidones"
+                } else {
+                    "Recarga Planta $vehiculo (Vuelta $numeroVuelta): +$total bidones"
+                }
             }
 
             _recargaEnEdicion.value = null

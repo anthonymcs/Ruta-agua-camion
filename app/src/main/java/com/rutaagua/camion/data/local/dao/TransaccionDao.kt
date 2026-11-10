@@ -25,6 +25,9 @@ interface TransaccionDao {
     @Query("SELECT * FROM transacciones_ventas ORDER BY fecha DESC")
     fun obtenerTodasFlow(): Flow<List<TransaccionVentaEntity>>
 
+    @Query("SELECT * FROM transacciones_ventas ORDER BY fecha DESC")
+    suspend fun obtenerTodasDirecto(): List<TransaccionVentaEntity>
+
     @Query("SELECT * FROM transacciones_ventas WHERE (:vehiculo IS NULL OR vehiculo = :vehiculo) ORDER BY fecha DESC")
     fun obtenerTodasPorVehiculoFlow(vehiculo: String?): Flow<List<TransaccionVentaEntity>>
 
