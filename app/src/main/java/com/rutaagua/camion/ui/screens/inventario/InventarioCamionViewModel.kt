@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -30,7 +31,21 @@ class InventarioCamionViewModel(
 ) : ViewModel() {
 
     private val formatoFecha = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val fechaHoyTexto: String = formatoFecha.format(Date())
+    fun obtenerFechaHoyIso(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+
+    private val _fechaActivaState = MutableStateFlow(obtenerFechaHoyIso())
+    val fechaActivaState: StateFlow<String> = _fechaActivaState.asStateFlow()
+
+    val fechaHoyTexto: String get() = _fechaActivaState.value
+
+    fun verificarYActualizarFechaActual(): Boolean {
+        val hoyReal = obtenerFechaHoyIso()
+        if (_fechaActivaState.value != hoyReal) {
+            _fechaActivaState.value = hoyReal
+            return true
+        }
+        return false
+    }
 
     val vehiculoActivoState: StateFlow<TipoVehiculo> = appPreferences.vehiculoActivo
 
@@ -68,37 +83,46 @@ class InventarioCamionViewModel(
         )
 
     // Historial de recargas de hoy en planta para el vehículo activo
-    val recargasHoyState: StateFlow<List<RecargaPlantaEntity>> = vehiculoActivoState
-        .flatMapLatest { vehiculo ->
-            repository.obtenerRecargasPorFecha(fechaHoyTexto, vehiculo.name)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val recargasHoyState: StateFlow<List<RecargaPlantaEntity>> = combine(
+        vehiculoActivoState,
+        _fechaActivaState
+    ) { vehiculo, fecha ->
+        Pair(vehiculo, fecha)
+    }.flatMapLatest { (vehiculo, fecha) ->
+        repository.obtenerRecargasPorFecha(fecha, vehiculo.name)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     // Carga dejada al final del día anterior (lista para iniciar la jornada)
-    val ultimaRecargaAnteriorState: StateFlow<RecargaPlantaEntity?> = vehiculoActivoState
-        .flatMapLatest { vehiculo ->
-            repository.obtenerUltimaRecargaAnterior(fechaHoyTexto, vehiculo.name)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
+    val ultimaRecargaAnteriorState: StateFlow<RecargaPlantaEntity?> = combine(
+        vehiculoActivoState,
+        _fechaActivaState
+    ) { vehiculo, fecha ->
+        Pair(vehiculo, fecha)
+    }.flatMapLatest { (vehiculo, fecha) ->
+        repository.obtenerUltimaRecargaAnterior(fecha, vehiculo.name)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
 
     // Estadísticas de ventas de hoy por tipo de bidón y producto para el vehículo activo
-    val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = vehiculoActivoState
-        .flatMapLatest { vehiculo ->
-            repository.obtenerEstadisticasVentasPorTipo(fechaHoyTexto, vehiculo.name)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = EstadisticasVentasTipo()
-        )
+    val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = combine(
+        vehiculoActivoState,
+        _fechaActivaState
+    ) { vehiculo, fecha ->
+        Pair(vehiculo, fecha)
+    }.flatMapLatest { (vehiculo, fecha) ->
+        repository.obtenerEstadisticasVentasPorTipo(fecha, vehiculo.name)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = EstadisticasVentasTipo()
+    )
 
     // Control de diálogos UI
     private val _mostrarDialogoAjusteCapacidad = MutableStateFlow(false)
@@ -241,6 +265,7 @@ class InventarioCamionViewModel(
         finalPacas: Int? = null,
         finalMinis: Int? = null
     ) {
+        verificarYActualizarFechaActual()
         viewModelScope.launch {
             val vehiculo = appPreferences.obtenerVehiculoActivo().name
             val recargaPrevia = _recargaEnEdicion.value

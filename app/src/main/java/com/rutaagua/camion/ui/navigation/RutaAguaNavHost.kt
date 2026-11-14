@@ -48,6 +48,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -64,8 +65,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -110,6 +114,9 @@ import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 import com.rutaagua.camion.ui.theme.VerdeEfectivo
 import com.rutaagua.camion.ui.theme.VerdeEfectivoFondo
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 class RutaAguaViewModelFactory(
@@ -174,12 +181,36 @@ fun RutaAguaNavHost(
 
     val inventarioActual by inventarioViewModel.inventarioState.collectAsState()
 
-    // Si el vehículo ya tiene carga registrada (de días anteriores o de una recarga previa), marcar como confirmada
-    LaunchedEffect(inventarioActual) {
-        val inv = inventarioActual
-        if (inv != null && (inv.totalBidonesLlenos() > 0 || inv.galonesLlenos > 0 || inv.pacasLlenas > 0 || inv.minisLlenas > 0)) {
-            cargaInicialYaConfirmada = true
+    // Observador de ciclo de vida para sincronizar la fecha real en cuanto el chofer desbloquea o abre la app
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                registroDiaViewModel.verificarYActualizarFechaActual()
+                inventarioViewModel.verificarYActualizarFechaActual()
+                clientesViewModel.verificarYActualizarFechaActual()
+            }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // Ticker periódico que cada 30 segundos comprueba si pasó la medianoche (24h) para reiniciar a 0 la pantalla
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(30_000L)
+            registroDiaViewModel.verificarYActualizarFechaActual()
+            inventarioViewModel.verificarYActualizarFechaActual()
+            clientesViewModel.verificarYActualizarFechaActual()
+        }
+    }
+
+    // Sincronizar el estado de jornada iniciada con las preferencias guardadas por fecha y vehículo
+    LaunchedEffect(registroDiaViewModel.fechaHoyTexto, vehiculoActivo) {
+        val fecha = registroDiaViewModel.fechaHoyTexto
+        cargaInicialYaConfirmada = appPreferences.esJornadaIniciada(fecha, vehiculoActivo.name)
     }
 
     // Sincronización automática de rol y vehículo si hay sesión iniciada al arrancar la app
@@ -642,19 +673,42 @@ fun RutaAguaNavHost(
                 )
             }
 
-            // Diálogo obligatorio de registro de carga inicial si la unidad arranca en 0
+            val fechaHoyIso = registroDiaViewModel.fechaHoyTexto
+            val jornadaIniciadaHoy = appPreferences.esJornadaIniciada(fechaHoyIso, vehiculoActivo.name)
+            val ultimaRecargaAnterior by inventarioViewModel.ultimaRecargaAnteriorState.collectAsState()
+
+            val diasDesdeUltimaRecarga = remember(ultimaRecargaAnterior, fechaHoyIso) {
+                try {
+                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    val dRec = sdf.parse(ultimaRecargaAnterior?.fechaTexto ?: "")
+                    val dHoy = sdf.parse(fechaHoyIso)
+                    if (dRec != null && dHoy != null) {
+                        ((dHoy.time - dRec.time) / (1000 * 60 * 60 * 24)).toInt()
+                    } else 99
+                } catch (_: Exception) {
+                    99
+                }
+            }
+            val tuvoRecargaFinalAyer = (diasDesdeUltimaRecarga <= 2) && (inventarioActual?.let { it.totalBidonesLlenos() > 0 } == true)
+
+            // Diálogo obligatorio de registro de carga inicial y fondo para vuelto al comenzar la jornada
             val debePedirCargaInicial = currentRoute != AppDestinations.LOGIN.ruta &&
                 rolActivo != RolUsuario.ADMIN_ROLANDO &&
+                !jornadaIniciadaHoy &&
                 !cargaInicialYaConfirmada &&
-                inventarioActual != null &&
-                (inventarioActual?.let { it.totalBidonesLlenos() == 0 && it.galonesLlenos == 0 && it.pacasLlenas == 0 && it.minisLlenas == 0 } == true)
+                inventarioActual != null
 
             if (debePedirCargaInicial) {
                 DialogoCargaInicialObligatoria(
                     inventario = inventarioActual,
                     clayTheme = clayTheme,
-                    onConfirmarCargaInicial = { meta, trans, azul, marc, galones, pacas, minis ->
+                    tuvoRecargaFinalAyer = tuvoRecargaFinalAyer,
+                    fondoInicialSugerido = appPreferences.obtenerFondoInicialCaja(fechaHoyIso, vehiculoActivo.name),
+                    onConfirmarJornadaInicial = { meta, trans, azul, marc, galones, pacas, minis, fondoCaja ->
                         cargaInicialYaConfirmada = true
+                        appPreferences.guardarJornadaIniciada(fechaHoyIso, vehiculoActivo.name, true)
+                        appPreferences.guardarFondoInicialCaja(fechaHoyIso, vehiculoActivo.name, fondoCaja)
+                        registroDiaViewModel.actualizarFondoInicialCaja(fondoCaja)
                         inventarioViewModel.cambiarCapacidadTope(meta)
                         inventarioViewModel.establecerCargaActual(
                             transparentes = trans,

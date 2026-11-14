@@ -133,6 +133,7 @@ fun RegistroDiaScreen(
     val rolActivo by viewModel.rolActivo.collectAsState()
     val cierreHoy by viewModel.cierreHoyState.collectAsState()
     val mostrarDialogoCierre by viewModel.mostrarDialogoCierre.collectAsState()
+    val fondoInicial by viewModel.fondoInicialCajaState.collectAsState()
 
     val mostrarModalVenta by viewModel.mostrarModalNuevaVenta.collectAsState()
     val clientePreseleccionado by viewModel.clientePreseleccionado.collectAsState()
@@ -208,7 +209,8 @@ fun RegistroDiaScreen(
                 TarjetaHeroBanca(
                     resumen = resumen,
                     inventario = inventario,
-                    clayTheme = clayTheme
+                    clayTheme = clayTheme,
+                    fondoInicial = fondoInicial
                 )
             }
 
@@ -531,13 +533,15 @@ fun RegistroDiaScreen(
 private fun TarjetaHeroBanca(
     resumen: ResumenCierreDia,
     inventario: InventarioCamionEntity?,
-    clayTheme: VehicleClayTheme
+    clayTheme: VehicleClayTheme,
+    fondoInicial: Double = 0.0
 ) {
     var ocultarMontos by rememberSaveable { mutableStateOf(false) }
     var verDetalleStock by rememberSaveable { mutableStateOf(false) }
 
     val llenos = inventario?.totalBidonesLlenos() ?: 0
     val tope = inventario?.capacidadTopeBidones ?: clayTheme.topeBidonesDefault
+    val efectivoNetoTotal = resumen.efectivoNetoCaja + fondoInicial
 
     Box(
         modifier = Modifier
@@ -559,7 +563,7 @@ private fun TarjetaHeroBanca(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Efectivo en caja",
+                        text = "Efectivo en caja (con vuelto)",
                         color = Color.White.copy(alpha = 0.85f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
@@ -612,12 +616,22 @@ private fun TarjetaHeroBanca(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
             ) {
-                Text(
-                    text = if (ocultarMontos) "$ ••••••" else "$${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}",
-                    color = Color.White,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Black
-                )
+                Column {
+                    Text(
+                        text = if (ocultarMontos) "$ ••••••" else "$${String.format(Locale.US, "%.2f", efectivoNetoTotal)}",
+                        color = Color.White,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    if (!ocultarMontos && fondoInicial > 0) {
+                        Text(
+                            text = "Ventas: $${String.format(Locale.US, "%.2f", resumen.efectivoNetoCaja)}  •  Fondo vuelto: $${String.format(Locale.US, "%.2f", fondoInicial)}",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(

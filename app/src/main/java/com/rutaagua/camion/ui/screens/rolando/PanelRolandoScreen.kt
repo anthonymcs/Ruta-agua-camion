@@ -2,10 +2,17 @@ package com.rutaagua.camion.ui.screens.rolando
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +35,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Share
@@ -63,6 +72,11 @@ import com.rutaagua.camion.data.local.model.calcularDesglosePorPrecio
 import com.rutaagua.camion.ui.components.BankingSegmentedTabs
 import com.rutaagua.camion.ui.components.ClayBadge
 import com.rutaagua.camion.ui.components.ClayButton
+import com.rutaagua.camion.ui.theme.AmbarAdvertencia
+import com.rutaagua.camion.ui.theme.FondoGrisClaro
+import com.rutaagua.camion.ui.theme.RojoAlerta
+import com.rutaagua.camion.ui.theme.TextoOscuro
+import com.rutaagua.camion.ui.theme.VerdeEfectivo
 import com.rutaagua.camion.ui.components.ClayCard
 import com.rutaagua.camion.ui.screens.registro.AuditoriaCierreRP3Card
 import com.rutaagua.camion.ui.screens.registro.FiltroVehiculoRegistro
@@ -158,6 +172,10 @@ fun PanelRolandoScreen(
     var periodoSeleccionado by rememberSaveable { mutableStateOf(PeriodoReporte.DIA) }
     var offsetMeses by rememberSaveable { mutableIntStateOf(0) }
     var filtroVehiculo by rememberSaveable { mutableStateOf(FiltroVehiculoRegistro.CONSOLIDADO) }
+    var preciosExpandidos by rememberSaveable { mutableStateOf(setOf<Double>()) }
+
+    val todosLosClientes by viewModel.todosLosClientesState.collectAsState()
+    val mapaClientes = remember(todosLosClientes) { todosLosClientes.associateBy { it.id } }
 
     val costoBidon = viewModel.costoPlantaBidon
     val costoGalon = viewModel.costoPlantaGalon
@@ -860,17 +878,30 @@ fun PanelRolandoScreen(
             }
         }
 
-        // 7. Desglose de Clientes por Precio Unitario de Agua
+        // 7. Desglose de Clientes por Precio Unitario de Agua (Auditoría Desplegable)
         if (resumen.desglosePorPrecio.isNotEmpty()) {
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    Text(
-                        text = "CLIENTES POR PRECIO DE AGUA (${periodoSeleccionado.titulo.uppercase()})",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextoSecundario,
-                        fontWeight = FontWeight.Black,
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "CLIENTES POR PRECIO DE AGUA (${periodoSeleccionado.titulo.uppercase()})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextoSecundario,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            text = "Toca para auditar lista",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AzulCorporativo,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
                     Card(
                         shape = RoundedCornerShape(18.dp),
@@ -880,13 +911,136 @@ fun PanelRolandoScreen(
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             resumen.desglosePorPrecio.forEachIndexed { idx, item ->
+                                val estaExpandido = preciosExpandidos.contains(item.precioUnitario)
                                 val cliLabel = if (item.cantidadClientes == 1) "1 cliente" else "${item.cantidadClientes} clientes"
-                                FilaFlujoCaja(
-                                    etiqueta = "Clientes $${String.format(Locale.US, "%.2f", item.precioUnitario)}: $cliLabel (${item.cantidadBidonesCobrados} bid.)",
-                                    valor = "Total $${String.format(Locale.US, "%.2f", item.totalImporteAgua)}",
-                                    color = AzulCorporativo,
-                                    negrita = true
-                                )
+
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                preciosExpandidos = if (estaExpandido) {
+                                                    preciosExpandidos - item.precioUnitario
+                                                } else {
+                                                    preciosExpandidos + item.precioUnitario
+                                                }
+                                            }
+                                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Clientes $${String.format(Locale.US, "%.2f", item.precioUnitario)}: $cliLabel (${item.cantidadBidonesCobrados} bid.)",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = AzulCorporativo
+                                            )
+                                            Text(
+                                                text = "Total $${String.format(Locale.US, "%.2f", item.totalImporteAgua)}",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = VerdeEfectivo
+                                            )
+                                        }
+
+                                        Icon(
+                                            imageVector = if (estaExpandido) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = if (estaExpandido) "Ocultar clientes" else "Ver clientes",
+                                            tint = TextoSecundario,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+
+                                    AnimatedVisibility(
+                                        visible = estaExpandido,
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(top = 4.dp, bottom = 8.dp)
+                                                .background(FondoGrisClaro.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                                .padding(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            if (item.transacciones.isEmpty()) {
+                                                Text(
+                                                    text = "No se encontraron detalles de transacciones para este rango.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = TextoSecundario,
+                                                    modifier = Modifier.padding(4.dp)
+                                                )
+                                            } else {
+                                                item.transacciones.forEach { t ->
+                                                    val nombreCli = if (t.clienteId != null) {
+                                                        mapaClientes[t.clienteId]?.nombre ?: "Cliente #${t.clienteId}"
+                                                    } else {
+                                                        t.nombreClientePaso?.ifBlank { "Cliente Ocasional" } ?: "Cliente Ocasional"
+                                                    }
+                                                    val bidonesT = if (t.recargaTransparentes + t.recargaAzules + t.recargaMarcados > 0) {
+                                                        t.recargaTransparentes + t.recargaAzules + t.recargaMarcados
+                                                    } else {
+                                                        t.cantidadBidonesRecarga
+                                                    }
+                                                    val horaFmt = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(t.fecha))
+                                                    val fechaFmt = SimpleDateFormat("dd/MM", Locale.getDefault()).format(Date(t.fecha))
+                                                    val fechaDisplay = if (periodoSeleccionado == PeriodoReporte.DIA) horaFmt else "$fechaFmt $horaFmt"
+                                                    val tagPago = when {
+                                                        t.montoCredito > 0 -> "Crédito"
+                                                        t.montoTransferencia > 0 -> "Transf."
+                                                        else -> "Efectivo"
+                                                    }
+
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .background(SuperficieBlanca, RoundedCornerShape(8.dp))
+                                                            .border(BorderStroke(0.5.dp, BordeSutil), RoundedCornerShape(8.dp))
+                                                            .padding(8.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(
+                                                                text = nombreCli,
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = TextoOscuro
+                                                            )
+                                                            Text(
+                                                                text = "$bidonesT bidones • $fechaDisplay • ${t.vehiculo.lowercase().replaceFirstChar { it.uppercase() }}",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = TextoSecundario
+                                                            )
+                                                        }
+
+                                                        Column(horizontalAlignment = Alignment.End) {
+                                                            Text(
+                                                                text = "$${String.format(Locale.US, "%.2f", t.totalImporte)}",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                fontWeight = FontWeight.Black,
+                                                                color = if (t.montoCredito > 0) RojoAlerta else VerdeEfectivo
+                                                            )
+                                                            Text(
+                                                                text = tagPago,
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = if (t.montoCredito > 0) RojoAlerta else AzulCorporativo
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
                                 if (idx < resumen.desglosePorPrecio.lastIndex) {
                                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = BordeSutil)
                                 }

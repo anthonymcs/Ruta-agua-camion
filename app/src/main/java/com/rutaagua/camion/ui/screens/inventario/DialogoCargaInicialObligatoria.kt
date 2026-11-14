@@ -1,6 +1,8 @@
 package com.rutaagua.camion.ui.screens.inventario
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.BasicAlertDialog
@@ -25,11 +28,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,41 +56,52 @@ import com.rutaagua.camion.ui.components.PacaIllustration
 import com.rutaagua.camion.ui.theme.BidonAzulColor
 import com.rutaagua.camion.ui.theme.BidonMarcadoColor
 import com.rutaagua.camion.ui.theme.BidonTransparenteColor
+import com.rutaagua.camion.ui.theme.BordeSutil
+import com.rutaagua.camion.ui.theme.RojoAlerta
+import com.rutaagua.camion.ui.theme.SuperficieBlanca
 import com.rutaagua.camion.ui.theme.TextoOscuro
 import com.rutaagua.camion.ui.theme.TextoSecundario
 import com.rutaagua.camion.ui.theme.VerdeEfectivo
 import com.rutaagua.camion.ui.theme.VerdeEfectivoFondo
+import java.util.Locale
 
 /**
  * Diálogo interactivo y obligatorio de inicio de jornada:
- * Se muestra si la unidad arranca en 0 bidones para obligar el registro
- * exacto de la carga física con la que sale el vehículo (evitando discrepancias).
- * Si el vehículo ya tenía carga del día anterior, no bloquea y permite continuar.
+ * - Valida y solicita el registro de la carga física inicial con la que sale la unidad.
+ * - Detecta si se olvidó registrar la recarga de cierre ayer para alertar al chofer.
+ * - Solicita de forma obligatoria el Fondo Inicial en Caja para Vuelto (ej. $25 - $30).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DialogoCargaInicialObligatoria(
     inventario: InventarioCamionEntity?,
     clayTheme: ClayVehicleTheme,
-    onConfirmarCargaInicial: (
+    tuvoRecargaFinalAyer: Boolean = true,
+    fondoInicialSugerido: Double = 30.0,
+    onConfirmarJornadaInicial: (
         metaBidones: Int,
         trans: Int,
         azul: Int,
         marc: Int,
         galones: Int,
         pacas: Int,
-        minis: Int
+        minis: Int,
+        fondoCajaVuelto: Double
     ) -> Unit
 ) {
     val metaInicial = inventario?.capacidadTopeBidones ?: clayTheme.capacidadDefault
     var metaBidones by rememberSaveable { mutableIntStateOf(metaInicial) }
-    var cantTrans by rememberSaveable { mutableIntStateOf(0) }
-    var cantAzul by rememberSaveable { mutableIntStateOf(0) }
-    var cantMarc by rememberSaveable { mutableIntStateOf(0) }
 
-    var cantGalones by rememberSaveable { mutableIntStateOf(0) }
-    var cantPacas by rememberSaveable { mutableIntStateOf(0) }
-    var cantMinis by rememberSaveable { mutableIntStateOf(0) }
+    // Pre-poblar con el inventario guardado si ya tenía carga del día anterior
+    var cantTrans by rememberSaveable { mutableIntStateOf(inventario?.bidonesLlenosTransparentes ?: 0) }
+    var cantAzul by rememberSaveable { mutableIntStateOf(inventario?.bidonesLlenosAzules ?: 0) }
+    var cantMarc by rememberSaveable { mutableIntStateOf(inventario?.bidonesLlenosMarcados ?: 0) }
+
+    var cantGalones by rememberSaveable { mutableIntStateOf(inventario?.galonesLlenos ?: 0) }
+    var cantPacas by rememberSaveable { mutableIntStateOf(inventario?.pacasLlenas ?: 0) }
+    var cantMinis by rememberSaveable { mutableIntStateOf(inventario?.minisLlenas ?: 0) }
+
+    var fondoCaja by rememberSaveable { mutableDoubleStateOf(fondoInicialSugerido) }
 
     val totalBidones = cantTrans + cantAzul + cantMarc
 
@@ -132,16 +148,130 @@ fun DialogoCargaInicialObligatoria(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "CARGA INICIAL DE RUTA",
+                                text = "INICIO DE JORNADA",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Black,
                                 color = clayTheme.primaryDarkColor
                             )
                             Text(
-                                text = "Ingresa con cuántos bidones sale ${clayTheme.vehicleTitle} hoy",
+                                text = "Carga física y dinero para vuelto • ${clayTheme.vehicleTitle}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextoSecundario
                             )
+                        }
+                    }
+                }
+
+                // Alerta si ayer se olvidó registrar la recarga de cierre
+                if (!tuvoRecargaFinalAyer) {
+                    item {
+                        ClayInsetBox(
+                            modifier = Modifier.fillMaxWidth(),
+                            containerColor = Color(0xFFFEF2F2),
+                            cornerRadius = 14.dp,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = RojoAlerta,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "⚠️ SIN RECARGA DE CIERRE AYER",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = RojoAlerta
+                                    )
+                                    Text(
+                                        text = "No se detectó registro de recarga al finalizar ayer. Por favor cuenta físicamente los bidones e ingresa la carga real con la que sales hoy.",
+                                        fontSize = 11.sp,
+                                        color = TextoOscuro
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // SECCIÓN: Dinero en Caja para Vuelto (Fondo Inicial)
+                item {
+                    ClayCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = SuperficieBlanca,
+                        cornerRadius = 16.dp,
+                        elevation = 2.dp,
+                        contentPadding = PaddingValues(14.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AttachMoney,
+                                        contentDescription = null,
+                                        tint = VerdeEfectivo,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(
+                                            text = "Dinero en caja para vuelto",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextoOscuro
+                                        )
+                                        Text(
+                                            text = "Fondo para dar cambio a clientes",
+                                            fontSize = 11.sp,
+                                            color = TextoSecundario
+                                        )
+                                    }
+                                }
+                                ClayEditableCounter(
+                                    valor = fondoCaja.toInt(),
+                                    onCambio = { nuevo -> if (nuevo >= 0) fondoCaja = nuevo.toDouble() },
+                                    accentColor = VerdeEfectivo
+                                )
+                            }
+
+                            // Botones rápidos de selección usual ($20, $25, $30)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(20.0, 25.0, 30.0).forEach { monto ->
+                                    val seleccionado = (fondoCaja == monto)
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (seleccionado) VerdeEfectivo else Color(0xFFF1F5F9))
+                                            .clickable { fondoCaja = monto }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "$${String.format(Locale.US, "%.0f", monto)}",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (seleccionado) Color.White else TextoOscuro
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -299,14 +429,15 @@ fun DialogoCargaInicialObligatoria(
                     Spacer(modifier = Modifier.height(6.dp))
                     ClayButton(
                         onClick = {
-                            onConfirmarCargaInicial(
+                            onConfirmarJornadaInicial(
                                 metaBidones,
                                 cantTrans,
                                 cantAzul,
                                 cantMarc,
                                 cantGalones,
                                 cantPacas,
-                                cantMinis
+                                cantMinis,
+                                fondoCaja
                             )
                         },
                         modifier = Modifier
@@ -317,8 +448,8 @@ fun DialogoCargaInicialObligatoria(
                         cornerRadius = 16.dp
                     ) {
                         Text(
-                            text = if (totalBidones > 0) "Confirmar Carga ($totalBidones bidones)" else "Ingresar Carga y Salir a Ruta",
-                            fontSize = 15.sp,
+                            text = if (totalBidones > 0) "Confirmar Inicio de Jornada ($totalBidones bid. + $$fondoCaja vuelto)" else "Ingresar Carga y Salir a Ruta",
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Black,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -378,4 +509,7 @@ private fun FilaCargaSimple(
         }
     }
 }
+
+
+
 

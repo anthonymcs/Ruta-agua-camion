@@ -50,8 +50,37 @@ class RegistroDiaViewModel(
     private val formatoFechaIso = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val formatoFechaDisplay = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
 
-    val fechaHoyTexto: String = formatoFechaIso.format(Date())
-    val fechaHoyDisplay: String = formatoFechaDisplay.format(Date())
+    fun obtenerFechaHoyIso(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    fun obtenerFechaHoyDisplay(): String = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+
+    // Estado reactivo de la fecha actual: permite que el día cambie automáticamente a las 24h
+    private val _fechaActivaState = MutableStateFlow(obtenerFechaHoyIso())
+    val fechaActivaState: StateFlow<String> = _fechaActivaState.asStateFlow()
+
+    val fechaHoyTexto: String get() = _fechaActivaState.value
+    val fechaHoyDisplay: String
+        get() {
+            val iso = _fechaActivaState.value
+            return try {
+                val d = formatoFechaIso.parse(iso)
+                if (d != null) formatoFechaDisplay.format(d) else obtenerFechaHoyDisplay()
+            } catch (_: Exception) {
+                obtenerFechaHoyDisplay()
+            }
+        }
+
+    /**
+     * Verifica si la fecha del calendario ha cambiado (ej. paso de medianoche o reinicio de jornada).
+     * Si cambió, actualiza el flujo reactivo y reinicia limpiamente la lista de transacciones del día a 0.
+     */
+    fun verificarYActualizarFechaActual(): Boolean {
+        val hoyReal = obtenerFechaHoyIso()
+        if (_fechaActivaState.value != hoyReal) {
+            _fechaActivaState.value = hoyReal
+            return true
+        }
+        return false
+    }
 
     // Filtro rápido de vista: Inicializado directamente con el vehículo activo para aislar operaciones
     val filtroVehiculoState = MutableStateFlow(
@@ -66,27 +95,33 @@ class RegistroDiaViewModel(
     // ESTADOS REACTIVOS
     // -------------------------------------------------------------
 
-    // Transacciones del día en vivo según filtro seleccionado
-    val transaccionesHoyState: StateFlow<List<TransaccionVentaEntity>> = filtroVehiculoState
-        .flatMapLatest { filtro ->
-            repository.obtenerTransaccionesPorFecha(fechaHoyTexto, filtro.vehiculoKey)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    // Transacciones del día en vivo según filtro y fecha activa (se reinicia a 0 a la medianoche)
+    val transaccionesHoyState: StateFlow<List<TransaccionVentaEntity>> = combine(
+        filtroVehiculoState,
+        _fechaActivaState
+    ) { filtro, fecha ->
+        Pair(filtro, fecha)
+    }.flatMapLatest { (filtro, fecha) ->
+        repository.obtenerTransaccionesPorFecha(fecha, filtro.vehiculoKey)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
-    // Gastos extras del día según filtro seleccionado
-    val gastosHoyState: StateFlow<List<GastoExtraEntity>> = filtroVehiculoState
-        .flatMapLatest { filtro ->
-            repository.obtenerGastosPorFecha(fechaHoyTexto, filtro.vehiculoKey)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    // Gastos extras del día según filtro y fecha activa
+    val gastosHoyState: StateFlow<List<GastoExtraEntity>> = combine(
+        filtroVehiculoState,
+        _fechaActivaState
+    ) { filtro, fecha ->
+        Pair(filtro, fecha)
+    }.flatMapLatest { (filtro, fecha) ->
+        repository.obtenerGastosPorFecha(fecha, filtro.vehiculoKey)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     // Histórico completo de transacciones del vehículo activo para Reportes (Día / Semanal / Mensual)
     val todasLasTransaccionesVehiculoState: StateFlow<List<TransaccionVentaEntity>> = appPreferences.vehiculoActivo
@@ -131,37 +166,67 @@ class RegistroDiaViewModel(
         )
 
     // Resumen diario de arqueo de caja y totales (Consolidado o por Vehículo)
-    val resumenCierreDiaState: StateFlow<ResumenCierreDia> = filtroVehiculoState
-        .flatMapLatest { filtro ->
-            repository.obtenerResumenCierreDia(fechaHoyTexto, filtro.vehiculoKey)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ResumenCierreDia(fechaTexto = fechaHoyTexto)
-        )
+    val resumenCierreDiaState: StateFlow<ResumenCierreDia> = combine(
+        filtroVehiculoState,
+        _fechaActivaState
+    ) { filtro, fecha ->
+        Pair(filtro, fecha)
+    }.flatMapLatest { (filtro, fecha) ->
+        repository.obtenerResumenCierreDia(fecha, filtro.vehiculoKey)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ResumenCierreDia(fechaTexto = obtenerFechaHoyIso())
+    )
 
     // Estadísticas detalladas de ventas por tipo de producto
-    val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = filtroVehiculoState
-        .flatMapLatest { filtro ->
-            repository.obtenerEstadisticasVentasPorTipo(fechaHoyTexto, filtro.vehiculoKey)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = EstadisticasVentasTipo()
-        )
+    val estadisticasVentasHoyState: StateFlow<EstadisticasVentasTipo> = combine(
+        filtroVehiculoState,
+        _fechaActivaState
+    ) { filtro, fecha ->
+        Pair(filtro, fecha)
+    }.flatMapLatest { (filtro, fecha) ->
+        repository.obtenerEstadisticasVentasPorTipo(fecha, filtro.vehiculoKey)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = EstadisticasVentasTipo()
+    )
 
     // Recargas en planta de hoy según filtro de vehículo
-    val recargasHoyState: StateFlow<List<RecargaPlantaEntity>> = filtroVehiculoState
-        .flatMapLatest { filtro ->
-            repository.obtenerRecargasPorFecha(fechaHoyTexto, filtro.vehiculoKey)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val recargasHoyState: StateFlow<List<RecargaPlantaEntity>> = combine(
+        filtroVehiculoState,
+        _fechaActivaState
+    ) { filtro, fecha ->
+        Pair(filtro, fecha)
+    }.flatMapLatest { (filtro, fecha) ->
+        repository.obtenerRecargasPorFecha(fecha, filtro.vehiculoKey)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    // Fondo inicial en caja para vuelto del día según fecha activa y vehículo
+    private val _fondoInicialTrigger = MutableStateFlow(0)
+    val fondoInicialCajaState: StateFlow<Double> = combine(
+        filtroVehiculoState,
+        _fechaActivaState,
+        _fondoInicialTrigger
+    ) { filtro, fecha, _ ->
+        val vehiculoKey = filtro.vehiculoKey ?: com.rutaagua.camion.data.local.model.TipoVehiculo.CAMION.name
+        appPreferences.obtenerFondoInicialCaja(fecha, vehiculoKey)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 30.0
+    )
+
+    fun actualizarFondoInicialCaja(monto: Double) {
+        val vehiculoKey = filtroVehiculoState.value.vehiculoKey ?: com.rutaagua.camion.data.local.model.TipoVehiculo.CAMION.name
+        appPreferences.guardarFondoInicialCaja(_fechaActivaState.value, vehiculoKey, monto)
+        _fondoInicialTrigger.value += 1
+    }
 
     // Lista de clientes para autocompletado en el modal de venta
     val todosLosClientesState: StateFlow<List<ClienteEntity>> = repository
@@ -238,19 +303,22 @@ class RegistroDiaViewModel(
     val costoPlantaMini: Double get() = appPreferences.obtenerCostoPlantaMini()
 
     // Cierre de caja de hoy en vivo
-    val cierreHoyState: StateFlow<CierreCajaEntity?> = filtroVehiculoState
-        .flatMapLatest { filtro ->
-            if (filtro.vehiculoKey != null) {
-                repository.obtenerCierrePorFechaYVehiculo(fechaHoyTexto, filtro.vehiculoKey)
-            } else {
-                repository.obtenerUltimoCierrePorFecha(fechaHoyTexto)
-            }
+    val cierreHoyState: StateFlow<CierreCajaEntity?> = combine(
+        filtroVehiculoState,
+        _fechaActivaState
+    ) { filtro, fecha ->
+        Pair(filtro, fecha)
+    }.flatMapLatest { (filtro, fecha) ->
+        if (filtro.vehiculoKey != null) {
+            repository.obtenerCierrePorFechaYVehiculo(fecha, filtro.vehiculoKey)
+        } else {
+            repository.obtenerUltimoCierrePorFecha(fecha)
         }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
 
     // -------------------------------------------------------------
     // DIÁLOGOS Y MODALES
@@ -375,6 +443,7 @@ class RegistroDiaViewModel(
         precioUnitarioPaca: Double = 3.75,
         precioUnitarioMini: Double = 1.90
     ) {
+        verificarYActualizarFechaActual()
         viewModelScope.launch {
             val vehiculoOperativo = appPreferences.obtenerVehiculoActivo().name
             val transaccionPrevia = _transaccionEnEdicion.value
@@ -512,6 +581,7 @@ class RegistroDiaViewModel(
             return
         }
 
+        verificarYActualizarFechaActual()
         viewModelScope.launch {
             val vehiculoOperativo = appPreferences.obtenerVehiculoActivo().name
             val gasto = GastoExtraEntity(
@@ -549,6 +619,7 @@ class RegistroDiaViewModel(
         transferenciasDeclaradas: Double,
         observaciones: String
     ) {
+        verificarYActualizarFechaActual()
         viewModelScope.launch {
             val resumen = resumenCierreDiaState.value
             val vehiculoActual = appPreferences.obtenerVehiculoActivo().name

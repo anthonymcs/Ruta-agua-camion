@@ -11,7 +11,8 @@ data class ResumenPrecioCliente(
     val precioUnitario: Double,
     val cantidadClientes: Int,
     val cantidadBidonesCobrados: Int,
-    val totalImporteAgua: Double
+    val totalImporteAgua: Double,
+    val transacciones: List<TransaccionVentaEntity> = emptyList()
 )
 
 /**
@@ -53,7 +54,8 @@ fun calcularDesglosePorPrecio(transacciones: List<TransaccionVentaEntity>): List
                 precioUnitario = precio,
                 cantidadClientes = clientesUnicos,
                 cantidadBidonesCobrados = bidonesCobrados,
-                totalImporteAgua = totalAgua
+                totalImporteAgua = totalAgua,
+                transacciones = lista.sortedByDescending { it.fecha }
             )
         }
         .sortedBy { it.precioUnitario }

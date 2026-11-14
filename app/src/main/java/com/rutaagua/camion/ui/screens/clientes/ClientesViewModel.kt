@@ -58,8 +58,28 @@ class ClientesViewModel(
 
     private val formatoFechaIso = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val formatoMesIso = SimpleDateFormat("yyyy-MM", Locale.getDefault())
-    val fechaHoyIso: String = formatoFechaIso.format(Date())
-    val mesActualIso: String = formatoMesIso.format(Date())
+
+    fun obtenerFechaHoyIso(): String = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    fun obtenerMesActualIso(): String = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(Date())
+
+    private val _fechaActivaState = MutableStateFlow(obtenerFechaHoyIso())
+    val fechaActivaState: StateFlow<String> = _fechaActivaState.asStateFlow()
+
+    val fechaHoyIso: String get() = _fechaActivaState.value
+    val mesActualIso: String get() = _fechaActivaState.value.take(7)
+
+    fun verificarYActualizarFechaActual(): Boolean {
+        val hoyReal = obtenerFechaHoyIso()
+        if (_fechaActivaState.value != hoyReal) {
+            _fechaActivaState.value = hoyReal
+            val nuevoDia = obtenerDiaSemanaActual()
+            if (diaSeleccionadoCalendario.value != nuevoDia) {
+                diaSeleccionadoCalendario.value = nuevoDia
+            }
+            return true
+        }
+        return false
+    }
 
     // Lista completa de clientes para mapear nombres e información en el historial
     val todosLosClientesState: StateFlow<List<ClienteEntity>> = repository
@@ -105,8 +125,10 @@ class ClientesViewModel(
     )
 
     // Mapa de entregas de hoy para mostrar badges cruzados de qué vehículo atendió al cliente
-    val transaccionesHoyClientesState: StateFlow<Map<Long, TransaccionVentaEntity>> = repository
-        .obtenerTransaccionesPorFecha(fechaHoyIso)
+    val transaccionesHoyClientesState: StateFlow<Map<Long, TransaccionVentaEntity>> = _fechaActivaState
+        .flatMapLatest { fecha ->
+            repository.obtenerTransaccionesPorFecha(fecha)
+        }
         .map { transacciones ->
             transacciones.filter { it.clienteId != null }.associateBy { it.clienteId!! }
         }
@@ -117,8 +139,10 @@ class ClientesViewModel(
         )
 
     // Mapa de visitas fallidas de hoy ("No estaba en casa")
-    val visitasFallidasHoyState: StateFlow<Map<Long, VisitaFallidaEntity>> = repository
-        .obtenerVisitasFallidasPorFecha(fechaHoyIso)
+    val visitasFallidasHoyState: StateFlow<Map<Long, VisitaFallidaEntity>> = _fechaActivaState
+        .flatMapLatest { fecha ->
+            repository.obtenerVisitasFallidasPorFecha(fecha)
+        }
         .map { visitas ->
             visitas.associateBy { it.clienteId }
         }
@@ -245,17 +269,21 @@ class ClientesViewModel(
     val diaSeleccionadoCalendario = MutableStateFlow(obtenerDiaSemanaActual())
 
     // Clientes asignados al día seleccionado (Ruta + Llamada agendados o despachados en esa fecha)
-    val clientesRutaDiaState: StateFlow<List<ClienteRutaItem>> = diaSeleccionadoCalendario
-        .flatMapLatest { dia ->
-            val fechaDia = obtenerFechaParaDiaSemana(dia)
-            val esDiaFuturo = fechaDia > fechaHoyIso
+    val clientesRutaDiaState: StateFlow<List<ClienteRutaItem>> = combine(
+        diaSeleccionadoCalendario,
+        _fechaActivaState
+    ) { dia, hoy ->
+        Pair(dia, hoy)
+    }.flatMapLatest { (dia, hoy) ->
+        val fechaDia = obtenerFechaParaDiaSemana(dia)
+        val esDiaFuturo = fechaDia > hoy
 
-            combine(
-                todosLosClientesState,
-                repository.obtenerClientesPorDiaRuta(dia.name),
-                repository.obtenerTransaccionesPorFecha(fechaDia),
-                repository.obtenerVisitasFallidasPorFecha(fechaDia)
-            ) { todosLosClientes, clientesRuta, transaccionesDelDia, visitasDelDia ->
+        combine(
+            todosLosClientesState,
+            repository.obtenerClientesPorDiaRuta(dia.name),
+            repository.obtenerTransaccionesPorFecha(fechaDia),
+            repository.obtenerVisitasFallidasPorFecha(fechaDia)
+        ) { todosLosClientes, clientesRuta, transaccionesDelDia, visitasDelDia ->
                 val horaFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
                 // Incluir tanto los clientes programados para este día (RUTA o LLAMADA)
@@ -442,6 +470,7 @@ class ClientesViewModel(
     }
 
     fun registrarVisitaFallida(cliente: ClienteEntity, fotoPath: String?, vehiculo: String = "CAMION") {
+        verificarYActualizarFechaActual()
         viewModelScope.launch {
             val horaActual = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
             val visita = VisitaFallidaEntity(

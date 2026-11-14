@@ -204,6 +204,28 @@ class AppPreferences(context: Context) {
             .apply()
     }
 
+    // Control de Inicio de Jornada Diaria Obligatoria y Fondo Inicial de Caja (Vuelto)
+    fun guardarFondoInicialCaja(fechaIso: String, vehiculo: String, monto: Double) {
+        prefs.edit().putFloat("key_fondo_inicial_${fechaIso}_${vehiculo.uppercase()}", monto.toFloat()).apply()
+    }
+
+    fun obtenerFondoInicialCaja(fechaIso: String, vehiculo: String): Double {
+        val clave = "key_fondo_inicial_${fechaIso}_${vehiculo.uppercase()}"
+        return if (prefs.contains(clave)) {
+            prefs.getFloat(clave, 30.0f).toDouble()
+        } else {
+            30.0 // Valor sugerido estándar ($30)
+        }
+    }
+
+    fun guardarJornadaIniciada(fechaIso: String, vehiculo: String, iniciada: Boolean) {
+        prefs.edit().putBoolean("key_jornada_iniciada_${fechaIso}_${vehiculo.uppercase()}", iniciada).apply()
+    }
+
+    fun esJornadaIniciada(fechaIso: String, vehiculo: String): Boolean {
+        return prefs.getBoolean("key_jornada_iniciada_${fechaIso}_${vehiculo.uppercase()}", false)
+    }
+
     /**
      * Valida credenciales únicas de inicio de sesión y devuelve el par (TipoVehiculo, RolUsuario)
      * o null si las credenciales no coinciden.
